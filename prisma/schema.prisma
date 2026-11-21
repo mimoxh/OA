@@ -1,0 +1,1062 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ───────────────────────────── 平台：组织 / 权限 / 通知 / 评论 ─────────────────────────────
+
+model Role {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  name        String
+  description String?
+  // JSON 字符串数组，例如 ["crm:view","crm:edit","admin"]
+  permissions String   @default("[]")
+  system      Boolean  @default(false)
+  users       User[]
+  createdAt   DateTime @default(now())
+}
+
+model Department {
+  id        String       @id @default(cuid())
+  name      String
+  parentId  String?
+  parent    Department?  @relation("DeptTree", fields: [parentId], references: [id])
+  children  Department[] @relation("DeptTree")
+  managerId String?
+  manager   User?        @relation("DeptManager", fields: [managerId], references: [id])
+  members   User[]       @relation("DeptMembers")
+  sortOrder Int          @default(0)
+  createdAt DateTime     @default(now())
+}
+
+model User {
+  id           String      @id @default(cuid())
+  email        String      @unique
+  name         String
+  passwordHash String
+  avatarColor  String      @default("#6b7280")
+  title        String?
+  phone        String?
+  active       Boolean     @default(true)
+  roleId       String
+  role         Role        @relation(fields: [roleId], references: [id])
+  departmentId String?
+  department   Department? @relation("DeptMembers", fields: [departmentId], references: [id])
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  managedDepartments Department[]   @relation("DeptManager")
+  notifications      Notification[] @relation("NotifyTarget")
+  notificationsSent  Notification[] @relation("NotifyActor")
+  comments           Comment[]
+  auditLogs          AuditLog[]
+
+  spacesCreated   Space[]
+  spaceMembers    SpaceMember[]
+  docsCreated     Document[]         @relation("DocCreator")
+  docsUpdated     Document[]         @relation("DocUpdater")
+  docFavorites    DocumentFavorite[]
+  docVersions     DocumentVersion[]
+
+  approvalsApplied  ApprovalInstance[] @relation("Applicant")
+  approvalTasks     ApprovalTask[]
+  announcements     Announcement[]
+  announcementReads AnnouncementRead[]
+  eventsOrganized   CalendarEvent[]
+  eventAttendances  EventAttendee[]
+
+  customersOwned     Customer[]
+  opportunitiesOwned Opportunity[]
+  followUps          FollowUp[]
+
+  purchaseOrders PurchaseOrder[]
+  salesOrders    SalesOrder[]
+  journalEntries JournalEntry[]
+  payments       Payment[]
+
+  warehousesManaged Warehouse[]
+  inboundOrders     InboundOrder[]
+  outboundOrders    OutboundOrder[]
+  stockMovements    StockMovement[]
+
+  driverProfile   Driver?
+  transportEvents TransportEvent[]
+
+  projectsOwned  Project[]
+  projectMembers ProjectMember[]
+  tasksAssigned  Task[]          @relation("TaskAssignee")
+  tasksReported  Task[]          @relation("TaskReporter")
+  timeLogs       TimeLog[]
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation("NotifyTarget", fields: [userId], references: [id], onDelete: Cascade)
+  actorId   String?
+  actor     User?    @relation("NotifyActor", fields: [actorId], references: [id])
+  // mention | comment | approval | task | system | announcement | order
+  type      String
+  title     String
+  body      String?
+  link      String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, read])
+}
+
+// 通用评论：targetType = document | task | customer | approval | project | ...
+model Comment {
+  id         String    @id @default(cuid())
+  targetType String
+  targetId   String
+  authorId   String
+  author     User      @relation(fields: [authorId], references: [id])
+  content    String
+  // 文档内划词评论时引用的原文
+  quote      String?
+  parentId   String?
+  parent     Comment?  @relation("CommentThread", fields: [parentId], references: [id], onDelete: Cascade)
+  replies    Comment[] @relation("CommentThread")
+  resolved   Boolean   @default(false)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([targetType, targetId])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  entityType String
+  entityId   String
+  action     String
+  detail     String?
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+}
+
+// 单据编号序列
+model Sequence {
+  key   String @id
+  value Int    @default(0)
+}
+
+// ───────────────────────────── 文档 ─────────────────────────────
+
+enum SpaceVisibility {
+  PUBLIC
+  PRIVATE
+}
+
+model Space {
+  id          String          @id @default(cuid())
+  name        String
+  icon        String          @default("📁")
+  description String?
+  visibility  SpaceVisibility @default(PUBLIC)
+  sortOrder   Int             @default(0)
+  createdById String
+  createdBy   User            @relation(fields: [createdById], references: [id])
+  members     SpaceMember[]
+  documents   Document[]
+  createdAt   DateTime        @default(now())
+}
+
+model SpaceMember {
+  id      String @id @default(cuid())
+  spaceId String
+  space   Space  @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  userId  String
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // owner | editor | viewer
+  role    String @default("editor")
+
+  @@unique([spaceId, userId])
+}
+
+model Document {
+  id          String     @id @default(cuid())
+  spaceId     String
+  space       Space      @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  parentId    String?
+  parent      Document?  @relation("DocTree", fields: [parentId], references: [id])
+  children    Document[] @relation("DocTree")
+  title       String     @default("")
+  icon        String?
+  cover       String?
+  // Tiptap JSON（字符串）
+  content     String     @default("{\"type\":\"doc\",\"content\":[]}")
+  // 纯文本，用于搜索
+  text        String     @default("")
+  // Yjs 文档二进制状态（实时协同持久化）
+  ydoc        Bytes?
+  sortOrder   Int        @default(0)
+  isTemplate  Boolean    @default(false)
+  fullWidth   Boolean    @default(false)
+  createdById String
+  createdBy   User       @relation("DocCreator", fields: [createdById], references: [id])
+  updatedById String?
+  updatedBy   User?      @relation("DocUpdater", fields: [updatedById], references: [id])
+  deletedAt   DateTime?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  favorites DocumentFavorite[]
+  versions  DocumentVersion[]
+
+  @@index([spaceId, parentId])
+}
+
+model DocumentFavorite {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  documentId String
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([userId, documentId])
+}
+
+model DocumentVersion {
+  id          String   @id @default(cuid())
+  documentId  String
+  document    Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  title       String
+  content     String
+  createdById String
+  createdBy   User     @relation(fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+}
+
+// ───────────────────────────── OA ─────────────────────────────
+
+model ApprovalFlow {
+  id          String             @id @default(cuid())
+  key         String             @unique
+  name        String
+  category    String             @default("通用")
+  icon        String             @default("📝")
+  description String?
+  // 表单字段 JSON：[{ name, label, type: text|textarea|number|date|select|user, required, options? }]
+  formSchema  String             @default("[]")
+  // 审批节点 JSON：[{ name, approverType: user|role|manager|deptManager, approverId?, roleKey? }]
+  steps       String             @default("[]")
+  // 是否为业务单据专用（采购单等），专用流程不出现在“发起审批”列表
+  system      Boolean            @default(false)
+  enabled     Boolean            @default(true)
+  instances   ApprovalInstance[]
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  WITHDRAWN
+}
+
+model ApprovalInstance {
+  id          String         @id @default(cuid())
+  no          String         @unique
+  flowId      String
+  flow        ApprovalFlow   @relation(fields: [flowId], references: [id])
+  title       String
+  applicantId String
+  applicant   User           @relation("Applicant", fields: [applicantId], references: [id])
+  formData    String         @default("{}")
+  status      ApprovalStatus @default(PENDING)
+  currentStep Int            @default(0)
+  // 关联业务单据，如 bizType=purchase_order
+  bizType     String?
+  bizId       String?
+  tasks       ApprovalTask[]
+  createdAt   DateTime       @default(now())
+  finishedAt  DateTime?
+
+  @@index([applicantId])
+  @@index([bizType, bizId])
+}
+
+enum ApprovalTaskStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SKIPPED
+}
+
+model ApprovalTask {
+  id         String             @id @default(cuid())
+  instanceId String
+  instance   ApprovalInstance   @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+  step       Int
+  stepName   String
+  approverId String
+  approver   User               @relation(fields: [approverId], references: [id])
+  status     ApprovalTaskStatus @default(PENDING)
+  comment    String?
+  actedAt    DateTime?
+  createdAt  DateTime           @default(now())
+
+  @@index([approverId, status])
+}
+
+model Announcement {
+  id          String             @id @default(cuid())
+  title       String
+  content     String
+  category    String             @default("通知")
+  pinned      Boolean            @default(false)
+  authorId    String
+  author      User               @relation(fields: [authorId], references: [id])
+  reads       AnnouncementRead[]
+  publishedAt DateTime           @default(now())
+  createdAt   DateTime           @default(now())
+}
+
+model AnnouncementRead {
+  id             String       @id @default(cuid())
+  announcementId String
+  announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  readAt         DateTime     @default(now())
+
+  @@unique([announcementId, userId])
+}
+
+model CalendarEvent {
+  id          String          @id @default(cuid())
+  title       String
+  description String?
+  location    String?
+  startAt     DateTime
+  endAt       DateTime
+  allDay      Boolean         @default(false)
+  color       String          @default("#2383e2")
+  organizerId String
+  organizer   User            @relation(fields: [organizerId], references: [id])
+  attendees   EventAttendee[]
+  createdAt   DateTime        @default(now())
+}
+
+model EventAttendee {
+  id      String        @id @default(cuid())
+  eventId String
+  event   CalendarEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  userId  String
+  user    User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // pending | accepted | declined
+  status  String        @default("pending")
+
+  @@unique([eventId, userId])
+}
+
+// ───────────────────────────── CRM ─────────────────────────────
+
+enum CustomerStatus {
+  LEAD
+  PROSPECT
+  CUSTOMER
+  LOST
+}
+
+model Customer {
+  id        String         @id @default(cuid())
+  code      String         @unique
+  name      String
+  industry  String?
+  // A / B / C
+  level     String         @default("B")
+  status    CustomerStatus @default(LEAD)
+  source    String?
+  phone     String?
+  email     String?
+  address   String?
+  remark    String?
+  ownerId   String?
+  owner     User?          @relation(fields: [ownerId], references: [id])
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  contacts        Contact[]
+  opportunities   Opportunity[]
+  followUps       FollowUp[]
+  salesOrders     SalesOrder[]
+  invoices        Invoice[]
+  transportOrders TransportOrder[]
+  projects        Project[]
+}
+
+model Contact {
+  id         String   @id @default(cuid())
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  name       String
+  title      String?
+  phone      String?
+  email      String?
+  isPrimary  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+}
+
+enum OpportunityStage {
+  QUALIFY
+  NEEDS
+  PROPOSAL
+  NEGOTIATION
+  WON
+  LOST
+}
+
+model Opportunity {
+  id                String           @id @default(cuid())
+  name              String
+  customerId        String
+  customer          Customer         @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  amount            Float            @default(0)
+  stage             OpportunityStage @default(QUALIFY)
+  probability       Int              @default(10)
+  expectedCloseDate DateTime?
+  lostReason        String?
+  ownerId           String?
+  owner             User?            @relation(fields: [ownerId], references: [id])
+  sortOrder         Int              @default(0)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  followUps   FollowUp[]
+  salesOrders SalesOrder[]
+}
+
+model FollowUp {
+  id            String       @id @default(cuid())
+  customerId    String
+  customer      Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  opportunityId String?
+  opportunity   Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  // call | visit | email | meeting | wechat
+  type          String       @default("call")
+  content       String
+  nextAt        DateTime?
+  userId        String
+  user          User         @relation(fields: [userId], references: [id])
+  createdAt     DateTime     @default(now())
+}
+
+// ───────────────────────────── ERP ─────────────────────────────
+
+model Product {
+  id          String   @id @default(cuid())
+  sku         String   @unique
+  name        String
+  category    String?
+  unit        String   @default("件")
+  spec        String?
+  price       Float    @default(0)
+  cost        Float    @default(0)
+  // 单位重量 kg，用于运输
+  weight      Float    @default(0)
+  safetyStock Int      @default(0)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  purchaseItems  PurchaseOrderItem[]
+  salesItems     SalesOrderItem[]
+  inventories    Inventory[]
+  inboundItems   InboundItem[]
+  outboundItems  OutboundItem[]
+  stockMovements StockMovement[]
+}
+
+model Supplier {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  name      String
+  contact   String?
+  phone     String?
+  email     String?
+  address   String?
+  // 1-5
+  rating    Int      @default(3)
+  remark    String?
+  createdAt DateTime @default(now())
+
+  purchaseOrders PurchaseOrder[]
+  invoices       Invoice[]
+}
+
+enum PurchaseStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  PARTIAL_RECEIVED
+  RECEIVED
+  CLOSED
+  CANCELLED
+}
+
+model PurchaseOrder {
+  id                 String              @id @default(cuid())
+  no                 String              @unique
+  supplierId         String
+  supplier           Supplier            @relation(fields: [supplierId], references: [id])
+  warehouseId        String
+  warehouse          Warehouse           @relation(fields: [warehouseId], references: [id])
+  status             PurchaseStatus      @default(DRAFT)
+  totalAmount        Float               @default(0)
+  expectedDate       DateTime?
+  remark             String?
+  approvalInstanceId String?
+  createdById        String
+  createdBy          User                @relation(fields: [createdById], references: [id])
+  items              PurchaseOrderItem[]
+  inboundOrders      InboundOrder[]
+  invoices           Invoice[]
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+}
+
+model PurchaseOrderItem {
+  id          String        @id @default(cuid())
+  orderId     String
+  order       PurchaseOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId   String
+  product     Product       @relation(fields: [productId], references: [id])
+  quantity    Int
+  price       Float
+  receivedQty Int           @default(0)
+}
+
+enum SalesStatus {
+  DRAFT
+  CONFIRMED
+  SHIPPED
+  DELIVERED
+  COMPLETED
+  CANCELLED
+}
+
+model SalesOrder {
+  id              String           @id @default(cuid())
+  no              String           @unique
+  customerId      String
+  customer        Customer         @relation(fields: [customerId], references: [id])
+  opportunityId   String?
+  opportunity     Opportunity?     @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  warehouseId     String
+  warehouse       Warehouse        @relation(fields: [warehouseId], references: [id])
+  status          SalesStatus      @default(DRAFT)
+  totalAmount     Float            @default(0)
+  shippingAddress String?
+  consignee       String?
+  consigneePhone  String?
+  orderDate       DateTime         @default(now())
+  remark          String?
+  createdById     String
+  createdBy       User             @relation(fields: [createdById], references: [id])
+  items           SalesOrderItem[]
+  outboundOrders  OutboundOrder[]
+  transportOrders TransportOrder[]
+  invoices        Invoice[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+}
+
+model SalesOrderItem {
+  id         String     @id @default(cuid())
+  orderId    String
+  order      SalesOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId  String
+  product    Product    @relation(fields: [productId], references: [id])
+  quantity   Int
+  price      Float
+  shippedQty Int        @default(0)
+}
+
+enum AccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  REVENUE
+  EXPENSE
+}
+
+model Account {
+  id     String        @id @default(cuid())
+  code   String        @unique
+  name   String
+  type   AccountType
+  lines  JournalLine[]
+}
+
+model JournalEntry {
+  id          String        @id @default(cuid())
+  no          String        @unique
+  date        DateTime      @default(now())
+  memo        String
+  // purchase_inbound | sales_shipment | sales_delivery | payment | expense | freight | manual
+  sourceType  String        @default("manual")
+  sourceId    String?
+  createdById String
+  createdBy   User          @relation(fields: [createdById], references: [id])
+  lines       JournalLine[]
+  createdAt   DateTime      @default(now())
+}
+
+model JournalLine {
+  id        String       @id @default(cuid())
+  entryId   String
+  entry     JournalEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  accountId String
+  account   Account      @relation(fields: [accountId], references: [id])
+  debit     Float        @default(0)
+  credit    Float        @default(0)
+  memo      String?
+}
+
+enum InvoiceType {
+  RECEIVABLE
+  PAYABLE
+}
+
+enum InvoiceStatus {
+  UNPAID
+  PARTIAL
+  PAID
+  VOID
+}
+
+model Invoice {
+  id              String         @id @default(cuid())
+  no              String         @unique
+  type            InvoiceType
+  customerId      String?
+  customer        Customer?      @relation(fields: [customerId], references: [id])
+  supplierId      String?
+  supplier        Supplier?      @relation(fields: [supplierId], references: [id])
+  salesOrderId    String?
+  salesOrder      SalesOrder?    @relation(fields: [salesOrderId], references: [id])
+  purchaseOrderId String?
+  purchaseOrder   PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id])
+  amount          Float
+  paidAmount      Float          @default(0)
+  status          InvoiceStatus  @default(UNPAID)
+  dueDate         DateTime?
+  memo            String?
+  payments        Payment[]
+  createdAt       DateTime       @default(now())
+}
+
+model Payment {
+  id          String   @id @default(cuid())
+  no          String   @unique
+  invoiceId   String
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  amount      Float
+  method      String   @default("银行转账")
+  paidAt      DateTime @default(now())
+  memo        String?
+  createdById String
+  createdBy   User     @relation(fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+}
+
+// ───────────────────────────── WMS ─────────────────────────────
+
+model Warehouse {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  name      String
+  address   String?
+  managerId String?
+  manager   User?    @relation(fields: [managerId], references: [id])
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  locations      Location[]
+  inventories    Inventory[]
+  inboundOrders  InboundOrder[]
+  outboundOrders OutboundOrder[]
+  stockMovements StockMovement[]
+  purchaseOrders PurchaseOrder[]
+  salesOrders    SalesOrder[]
+}
+
+model Location {
+  id          String        @id @default(cuid())
+  warehouseId String
+  warehouse   Warehouse     @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  code        String
+  zone        String?
+  // storage | picking | staging
+  type        String        @default("storage")
+  inventories Inventory[]
+  inboundItems InboundItem[]
+
+  @@unique([warehouseId, code])
+}
+
+model Inventory {
+  id          String    @id @default(cuid())
+  productId   String
+  product     Product   @relation(fields: [productId], references: [id])
+  warehouseId String
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
+  // 默认库位
+  locationId  String?
+  location    Location? @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  quantity    Int       @default(0)
+  // 已被销售订单预占
+  reservedQty Int       @default(0)
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([productId, warehouseId])
+}
+
+enum InboundType {
+  PURCHASE
+  RETURN
+  OTHER
+}
+
+enum InboundStatus {
+  PENDING
+  COMPLETED
+  CANCELLED
+}
+
+model InboundOrder {
+  id              String         @id @default(cuid())
+  no              String         @unique
+  warehouseId     String
+  warehouse       Warehouse      @relation(fields: [warehouseId], references: [id])
+  type            InboundType    @default(PURCHASE)
+  purchaseOrderId String?
+  purchaseOrder   PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id])
+  status          InboundStatus  @default(PENDING)
+  expectedDate    DateTime?
+  receivedAt      DateTime?
+  remark          String?
+  createdById     String
+  createdBy       User           @relation(fields: [createdById], references: [id])
+  items           InboundItem[]
+  createdAt       DateTime       @default(now())
+}
+
+model InboundItem {
+  id          String       @id @default(cuid())
+  inboundId   String
+  inbound     InboundOrder @relation(fields: [inboundId], references: [id], onDelete: Cascade)
+  productId   String
+  product     Product      @relation(fields: [productId], references: [id])
+  expectedQty Int
+  receivedQty Int          @default(0)
+  // 采购单行，用于回写已收数量
+  purchaseItemId String?
+  locationId  String?
+  location    Location?    @relation(fields: [locationId], references: [id], onDelete: SetNull)
+}
+
+enum OutboundType {
+  SALES
+  OTHER
+}
+
+enum OutboundStatus {
+  PENDING
+  PICKING
+  SHIPPED
+  CANCELLED
+}
+
+model OutboundOrder {
+  id              String           @id @default(cuid())
+  no              String           @unique
+  warehouseId     String
+  warehouse       Warehouse        @relation(fields: [warehouseId], references: [id])
+  type            OutboundType     @default(SALES)
+  salesOrderId    String?
+  salesOrder      SalesOrder?      @relation(fields: [salesOrderId], references: [id])
+  status          OutboundStatus   @default(PENDING)
+  shippedAt       DateTime?
+  remark          String?
+  createdById     String
+  createdBy       User             @relation(fields: [createdById], references: [id])
+  items           OutboundItem[]
+  transportOrders TransportOrder[]
+  createdAt       DateTime         @default(now())
+}
+
+model OutboundItem {
+  id          String        @id @default(cuid())
+  outboundId  String
+  outbound    OutboundOrder @relation(fields: [outboundId], references: [id], onDelete: Cascade)
+  productId   String
+  product     Product       @relation(fields: [productId], references: [id])
+  quantity    Int
+  pickedQty   Int           @default(0)
+  salesItemId String?
+}
+
+enum MovementType {
+  IN
+  OUT
+  TRANSFER_IN
+  TRANSFER_OUT
+  ADJUST
+}
+
+model StockMovement {
+  id          String       @id @default(cuid())
+  productId   String
+  product     Product      @relation(fields: [productId], references: [id])
+  warehouseId String
+  warehouse   Warehouse    @relation(fields: [warehouseId], references: [id])
+  type        MovementType
+  // 有符号数量：入库为正，出库为负
+  quantity    Int
+  balance     Int
+  refType     String?
+  refId       String?
+  refNo       String?
+  memo        String?
+  userId      String?
+  user        User?        @relation(fields: [userId], references: [id])
+  createdAt   DateTime     @default(now())
+
+  @@index([productId, warehouseId])
+}
+
+// ───────────────────────────── TMS ─────────────────────────────
+
+enum VehicleStatus {
+  AVAILABLE
+  IN_USE
+  MAINTENANCE
+}
+
+model Vehicle {
+  id        String           @id @default(cuid())
+  plateNo   String           @unique
+  type      String           @default("厢式货车")
+  // 载重 kg
+  capacity  Float            @default(5000)
+  status    VehicleStatus    @default(AVAILABLE)
+  remark    String?
+  orders    TransportOrder[]
+  createdAt DateTime         @default(now())
+}
+
+enum DriverStatus {
+  AVAILABLE
+  ON_DUTY
+  OFF
+}
+
+model Driver {
+  id        String           @id @default(cuid())
+  name      String
+  phone     String
+  licenseNo String?
+  status    DriverStatus     @default(AVAILABLE)
+  userId    String?          @unique
+  user      User?            @relation(fields: [userId], references: [id])
+  orders    TransportOrder[]
+  createdAt DateTime         @default(now())
+}
+
+model Route {
+  id             String           @id @default(cuid())
+  name           String
+  origin         String
+  destination    String
+  distanceKm     Float            @default(0)
+  estimatedHours Float            @default(0)
+  // JSON 字符串数组：途经点
+  stops          String           @default("[]")
+  orders         TransportOrder[]
+  createdAt      DateTime         @default(now())
+}
+
+enum TransportStatus {
+  PENDING
+  ASSIGNED
+  IN_TRANSIT
+  DELIVERED
+  CANCELLED
+}
+
+model TransportOrder {
+  id              String           @id @default(cuid())
+  no              String           @unique
+  outboundOrderId String?
+  outboundOrder   OutboundOrder?   @relation(fields: [outboundOrderId], references: [id])
+  salesOrderId    String?
+  salesOrder      SalesOrder?      @relation(fields: [salesOrderId], references: [id])
+  customerId      String?
+  customer        Customer?        @relation(fields: [customerId], references: [id])
+  origin          String
+  destination     String
+  consignee       String?
+  consigneePhone  String?
+  weight          Float            @default(0)
+  status          TransportStatus  @default(PENDING)
+  vehicleId       String?
+  vehicle         Vehicle?         @relation(fields: [vehicleId], references: [id])
+  driverId        String?
+  driver          Driver?          @relation(fields: [driverId], references: [id])
+  routeId         String?
+  route           Route?           @relation(fields: [routeId], references: [id])
+  plannedAt       DateTime?
+  departedAt      DateTime?
+  deliveredAt     DateTime?
+  freightCost     Float            @default(0)
+  remark          String?
+  events          TransportEvent[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+}
+
+model TransportEvent {
+  id        String         @id @default(cuid())
+  orderId   String
+  order     TransportOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  status    String
+  location  String?
+  note      String?
+  userId    String?
+  user      User?          @relation(fields: [userId], references: [id])
+  createdAt DateTime       @default(now())
+}
+
+// ───────────────────────────── PMS ─────────────────────────────
+
+enum ProjectStatus {
+  PLANNING
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  CANCELLED
+}
+
+model Project {
+  id          String          @id @default(cuid())
+  code        String          @unique
+  name        String
+  description String?
+  icon        String          @default("🚀")
+  color       String          @default("#2383e2")
+  status      ProjectStatus   @default(PLANNING)
+  ownerId     String
+  owner       User            @relation(fields: [ownerId], references: [id])
+  customerId  String?
+  customer    Customer?       @relation(fields: [customerId], references: [id])
+  // 关联的项目文档
+  documentId  String?
+  startDate   DateTime?
+  endDate     DateTime?
+  budget      Float           @default(0)
+  members     ProjectMember[]
+  milestones  Milestone[]
+  tasks       Task[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+}
+
+model ProjectMember {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // owner | member | viewer
+  role      String  @default("member")
+
+  @@unique([projectId, userId])
+}
+
+enum MilestoneStatus {
+  OPEN
+  DONE
+}
+
+model Milestone {
+  id          String          @id @default(cuid())
+  projectId   String
+  project     Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  dueDate     DateTime?
+  status      MilestoneStatus @default(OPEN)
+  tasks       Task[]
+  createdAt   DateTime        @default(now())
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  REVIEW
+  DONE
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+model Task {
+  id            String       @id @default(cuid())
+  no            Int
+  projectId     String
+  project       Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  milestoneId   String?
+  milestone     Milestone?   @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+  parentId      String?
+  parent        Task?        @relation("SubTasks", fields: [parentId], references: [id], onDelete: Cascade)
+  subtasks      Task[]       @relation("SubTasks")
+  title         String
+  description   String?
+  status        TaskStatus   @default(TODO)
+  priority      TaskPriority @default(MEDIUM)
+  assigneeId    String?
+  assignee      User?        @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  reporterId    String
+  reporter      User         @relation("TaskReporter", fields: [reporterId], references: [id])
+  startDate     DateTime?
+  dueDate       DateTime?
+  estimateHours Float?
+  sortOrder     Float        @default(0)
+  completedAt   DateTime?
+  timeLogs      TimeLog[]
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@unique([projectId, no])
+}
+
+model TimeLog {
+  id        String   @id @default(cuid())
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  hours     Float
+  date      DateTime @default(now())
+  note      String?
+  createdAt DateTime @default(now())
+}
