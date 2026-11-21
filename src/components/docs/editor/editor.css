@@ -1,0 +1,290 @@
+.doc-prose {
+  outline: none;
+  color: #37352f;
+  font-size: 16px;
+  line-height: 1.65;
+  word-break: break-word;
+  caret-color: #37352f;
+  padding-bottom: 30vh;
+}
+.doc-prose > * + * {
+  margin-top: 2px;
+}
+.doc-prose p {
+  margin: 0;
+  padding: 3px 2px;
+  min-height: 1.65em;
+}
+.doc-prose h1,
+.doc-prose h2,
+.doc-prose h3 {
+  font-weight: 650;
+  line-height: 1.3;
+  padding: 3px 2px;
+  margin-bottom: 1px;
+}
+.doc-prose h1 {
+  font-size: 1.875em;
+  margin-top: 1.1em;
+}
+.doc-prose h2 {
+  font-size: 1.5em;
+  margin-top: 0.9em;
+}
+.doc-prose h3 {
+  font-size: 1.25em;
+  margin-top: 0.6em;
+}
+.doc-prose > h1:first-child,
+.doc-prose > h2:first-child,
+.doc-prose > h3:first-child {
+  margin-top: 0.2em;
+}
+.doc-prose strong {
+  font-weight: 600;
+}
+.doc-prose a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: rgba(55, 53, 47, 0.4);
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.doc-prose a:hover {
+  text-decoration-color: #37352f;
+}
+.doc-prose a[href^="/docs/"] {
+  font-weight: 500;
+  text-decoration-color: rgba(55, 53, 47, 0.25);
+}
+.doc-prose a[href^="/docs/"]::before {
+  content: "📄";
+  display: inline-block;
+  margin-right: 3px;
+  font-size: 0.95em;
+  text-decoration: none;
+}
+.doc-prose ul,
+.doc-prose ol {
+  padding-left: 1.6em;
+  margin: 2px 0;
+}
+.doc-prose ul {
+  list-style: disc;
+}
+.doc-prose ul ul {
+  list-style: circle;
+}
+.doc-prose ul ul ul {
+  list-style: square;
+}
+.doc-prose ol {
+  list-style: decimal;
+}
+.doc-prose li > p {
+  padding: 2px 0;
+}
+.doc-prose li::marker {
+  color: #37352f;
+}
+.doc-prose ul[data-type="taskList"] {
+  list-style: none;
+  padding-left: 2px;
+}
+.doc-prose ul[data-type="taskList"] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.doc-prose ul[data-type="taskList"] li > label {
+  flex-shrink: 0;
+  user-select: none;
+  margin-top: 6px;
+}
+.doc-prose ul[data-type="taskList"] li > label input {
+  width: 16px;
+  height: 16px;
+  accent-color: #2383e2;
+  cursor: pointer;
+}
+.doc-prose ul[data-type="taskList"] li > div {
+  flex: 1;
+  min-width: 0;
+}
+.doc-prose ul[data-type="taskList"] li[data-checked="true"] > div > p {
+  color: #a5a29c;
+  text-decoration: line-through;
+  text-decoration-color: rgba(55, 53, 47, 0.25);
+}
+.doc-prose blockquote {
+  border-left: 3px solid #37352f;
+  padding: 0 0 0 14px;
+  margin: 6px 0;
+}
+.doc-prose code {
+  font-family: "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+  background: rgba(135, 131, 120, 0.15);
+  color: #eb5757;
+  border-radius: 4px;
+  padding: 0.15em 0.35em;
+  font-size: 85%;
+}
+.doc-prose pre {
+  background: #f7f6f3;
+  border-radius: 6px;
+  padding: 18px 20px;
+  margin: 6px 0;
+  overflow-x: auto;
+  font-family: "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 13.5px;
+  line-height: 1.6;
+  tab-size: 2;
+}
+.doc-prose pre code {
+  background: none;
+  color: #37352f;
+  padding: 0;
+  font-size: inherit;
+}
+.doc-prose hr {
+  border: none;
+  border-top: 1px solid #e9e9e7;
+  margin: 14px 0;
+  padding: 0;
+}
+.doc-prose hr.ProseMirror-selectednode {
+  border-top-color: #2383e2;
+}
+.doc-prose mark {
+  background: #fbecb8;
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+.doc-prose img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+  margin: 6px 0;
+  display: block;
+}
+.doc-prose img.ProseMirror-selectednode {
+  outline: 3px solid rgba(35, 131, 226, 0.45);
+}
+.doc-prose .tableWrapper {
+  overflow-x: auto;
+  margin: 8px 0;
+}
+.doc-prose table {
+  border-collapse: collapse;
+  table-layout: fixed;
+  width: 100%;
+  margin: 8px 0;
+  overflow: hidden;
+}
+.doc-prose .tableWrapper table {
+  margin: 0;
+}
+.doc-prose th,
+.doc-prose td {
+  border: 1px solid #e9e9e7;
+  padding: 5px 8px;
+  vertical-align: top;
+  position: relative;
+  min-width: 60px;
+  font-size: 14.5px;
+}
+.doc-prose th {
+  background: #f7f6f3;
+  font-weight: 600;
+  text-align: left;
+}
+.doc-prose th > p,
+.doc-prose td > p {
+  padding: 0;
+}
+.doc-prose .selectedCell::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(35, 131, 226, 0.12);
+  pointer-events: none;
+}
+.doc-prose .column-resize-handle {
+  display: none;
+}
+.doc-prose .doc-mention {
+  background: rgba(35, 131, 226, 0.1);
+  color: #1f6fc0;
+  border-radius: 4px;
+  padding: 0 3px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.doc-prose .doc-callout {
+  position: relative;
+  background: #f1f1ef;
+  border-radius: 6px;
+  padding: 14px 16px 14px 50px;
+  margin: 6px 0;
+}
+.doc-prose .doc-callout::before {
+  content: attr(data-emoji);
+  position: absolute;
+  left: 16px;
+  top: 14px;
+  font-size: 20px;
+  line-height: 1.3;
+}
+.doc-prose .doc-callout > p {
+  padding: 1px 0;
+}
+.doc-prose .is-empty::before,
+.doc-prose.is-editor-empty > p:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  color: #a5a29c;
+  pointer-events: none;
+}
+.doc-prose .doc-comment {
+  border-radius: 2px;
+  transition: background-color 0.15s;
+  background: rgba(255, 212, 0, 0.28);
+  cursor: pointer;
+}
+.doc-prose .ProseMirror-gapcursor:after {
+  border-top-color: #37352f;
+}
+
+/* 协同光标 */
+.collaboration-carets__caret {
+  border-left: 1px solid #0d0d0d;
+  border-right: 1px solid #0d0d0d;
+  margin-left: -1px;
+  margin-right: -1px;
+  pointer-events: none;
+  position: relative;
+  word-break: normal;
+}
+.collaboration-carets__label {
+  position: absolute;
+  top: -1.45em;
+  left: -1px;
+  font-size: 11.5px;
+  font-style: normal;
+  font-weight: 600;
+  line-height: normal;
+  padding: 1px 5px;
+  border-radius: 4px 4px 4px 0;
+  color: #fff;
+  white-space: nowrap;
+  user-select: none;
+}
+.collaboration-carets__selection {
+  border-radius: 1px;
+}
+
+.doc-title {
+  field-sizing: content;
+}
