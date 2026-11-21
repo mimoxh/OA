@@ -1,7 +1,8 @@
 import "server-only";
 import { unstable_rethrow } from "next/navigation";
-import { getCurrentUser, type CurrentUser } from "@/lib/auth/dal";
+import { getCurrentUser, isAppEnabled, type CurrentUser } from "@/lib/auth/dal";
 import { hasPermission, type Permission } from "@/lib/permissions";
+import { appName, moduleOfPermission } from "@/lib/apps";
 
 export type ActionResult<T = undefined> = { ok: true; data: T } | { ok: false; error: string };
 
@@ -18,6 +19,8 @@ export async function runAction<T>(
   try {
     const user = await getCurrentUser();
     if (!user) return { ok: false, error: "登录已过期，请重新登录" };
+    const app = permission ? moduleOfPermission(permission) : null;
+    if (app && !(await isAppEnabled(app))) return { ok: false, error: `「${appName(app)}」应用已停用` };
     if (permission && !hasPermission(user.permissions, permission)) {
       return { ok: false, error: "没有权限执行该操作" };
     }

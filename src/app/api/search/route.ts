@@ -1,7 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { getCurrentUser } from "@/lib/auth/dal";
+import { getCurrentUser, getEnabledApps } from "@/lib/auth/dal";
 import { db } from "@/lib/db";
 import { hasPermission } from "@/lib/permissions";
+import { moduleOfPermission } from "@/lib/apps";
 import type { SearchHit } from "@/components/shell/command-palette";
 
 const LIMIT = 6;
@@ -18,7 +19,11 @@ export async function GET(req: NextRequest) {
   if (!user) return NextResponse.json({ results: [] }, { status: 401 });
   const q = (req.nextUrl.searchParams.get("q") ?? "").trim().slice(0, 100);
   if (!q) return NextResponse.json({ results: [] });
-  const can = (p: Parameters<typeof hasPermission>[1]) => hasPermission(user.permissions, p);
+  const enabled = await getEnabledApps();
+  const can = (p: Parameters<typeof hasPermission>[1]) => {
+    const app = moduleOfPermission(p);
+    return hasPermission(user.permissions, p) && (!app || enabled.has(app));
+  };
   const tasks: Promise<SearchHit[]>[] = [];
 
   if (can("docs:view")) {

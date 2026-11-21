@@ -15,7 +15,7 @@ export function openCommandPalette() {
   window.dispatchEvent(new Event(OPEN_EVENT));
 }
 
-export function CommandPalette({ permissions }: { permissions: string[] }) {
+export function CommandPalette({ permissions, enabledApps }: { permissions: string[]; enabledApps: string[] }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
@@ -66,7 +66,7 @@ export function CommandPalette({ permissions }: { permissions: string[] }) {
     return acc;
   }, {});
 
-  const pages = NAV_MODULES.filter((m) => hasPermission(permissions, m.perm)).flatMap((m) =>
+  const pages = NAV_MODULES.filter((m) => enabledApps.includes(m.key) && hasPermission(permissions, m.perm)).flatMap((m) =>
     m.items
       .filter((i) => !i.perm || hasPermission(permissions, i.perm))
       .map((i) => ({ ...i, module: m.label, color: m.color, Icon: m.icon })),

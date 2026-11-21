@@ -4,7 +4,8 @@ import { zhCN } from "date-fns/locale";
 import { ArrowRight, BookOpen } from "lucide-react";
 import type { ReactNode } from "react";
 import { db } from "@/lib/db";
-import { can, requireUser } from "@/lib/auth/dal";
+import { can, getEnabledApps, requireUser } from "@/lib/auth/dal";
+import type { ModuleKey } from "@/lib/permissions";
 import { NAV_MODULES } from "@/lib/nav";
 import { TASK_PRIORITY } from "@/lib/labels";
 import { formatMoney, formatRelative } from "@/lib/format";
@@ -53,17 +54,18 @@ function SectionTitle({ children }: { children: ReactNode }) {
 
 export default async function HomePage() {
   const user = await requireUser();
+  const enabled = await getEnabledApps();
   const now = new Date();
   const g = greeting(now.getHours());
   const perm = {
-    docs: can(user, "docs:view"),
-    oa: can(user, "oa:view"),
-    crm: can(user, "crm:view"),
-    erp: can(user, "erp:view"),
-    finance: can(user, "finance:view"),
-    wms: can(user, "wms:view"),
-    tms: can(user, "tms:view"),
-    pms: can(user, "pms:view"),
+    docs: enabled.has("docs") && can(user, "docs:view"),
+    oa: enabled.has("oa") && can(user, "oa:view"),
+    crm: enabled.has("crm") && can(user, "crm:view"),
+    erp: enabled.has("erp") && can(user, "erp:view"),
+    finance: enabled.has("finance") && can(user, "finance:view"),
+    wms: enabled.has("wms") && can(user, "wms:view"),
+    tms: enabled.has("tms") && can(user, "tms:view"),
+    pms: enabled.has("pms") && can(user, "pms:view"),
   };
   const visibleSpace = { OR: [{ visibility: "PUBLIC" as const }, { members: { some: { userId: user.id } } }] };
   const none = <T,>(v: T) => Promise.resolve(v);
@@ -158,7 +160,7 @@ export default async function HomePage() {
     tms: { value: inTransit, hint: "运输中", href: "/tms/orders" },
     pms: { value: activeProjects, hint: "进行中的项目", href: "/pms" },
   };
-  const modules = NAV_MODULES.filter((m) => can(user, m.perm));
+  const modules = NAV_MODULES.filter((m) => enabled.has(m.key as ModuleKey) && can(user, m.perm));
   const todoTotal = approvalCount + taskCount;
   const today = startOfDay(now);
 

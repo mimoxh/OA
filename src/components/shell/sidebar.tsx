@@ -87,7 +87,7 @@ export function useUnreadCount() {
   return count;
 }
 
-export function Sidebar({ user, docsSlot }: { user: ShellUser; docsSlot: ReactNode }) {
+export function Sidebar({ user, docsSlot, enabledApps }: { user: ShellUser; docsSlot: ReactNode; enabledApps: string[] }) {
   const pathname = usePathname();
   const unread = useUnreadCount();
   const [collapsed, setCollapsed] = useState(false);
@@ -113,8 +113,9 @@ export function Sidebar({ user, docsSlot }: { user: ShellUser; docsSlot: ReactNo
     });
   };
 
-  const modules = NAV_MODULES.filter((m) => hasPermission(user.permissions, m.perm));
+  const modules = NAV_MODULES.filter((m) => enabledApps.includes(m.key) && hasPermission(user.permissions, m.perm));
   const isAdmin = hasPermission(user.permissions, "admin");
+  const docsEnabled = enabledApps.includes("docs") && hasPermission(user.permissions, "docs:view");
 
   if (collapsed) {
     return (
@@ -245,11 +246,11 @@ export function Sidebar({ user, docsSlot }: { user: ShellUser; docsSlot: ReactNo
           })}
         </div>
 
-        {hasPermission(user.permissions, "docs:view") && <div className="mt-4">{docsSlot}</div>}
+        {docsEnabled && <div className="mt-4">{docsSlot}</div>}
       </div>
 
       <div className="space-y-px border-t border-line px-2 py-2">
-        {hasPermission(user.permissions, "docs:view") && (
+        {docsEnabled && (
           <SidebarLink href="/docs/trash" icon={<Trash2 />} active={pathname === "/docs/trash"}>
             回收站
           </SidebarLink>

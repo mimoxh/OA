@@ -25,7 +25,17 @@ export type RoleDetail = {
   users: { id: string; name: string; avatarColor: string; title: string | null; active: boolean }[];
 };
 
-function PermissionMatrix({ value, onChange, disabled }: { value: string[]; onChange: (v: string[]) => void; disabled?: boolean }) {
+function PermissionMatrix({
+  value,
+  onChange,
+  disabled,
+  disabledApps,
+}: {
+  value: string[];
+  onChange: (v: string[]) => void;
+  disabled?: boolean;
+  disabledApps?: string[];
+}) {
   const isAdmin = value.includes("admin");
   const has = (p: string) => isAdmin || value.includes(p);
   const toggle = (module: string, kind: "view" | "edit", on: boolean) => {
@@ -80,7 +90,10 @@ function PermissionMatrix({ value, onChange, disabled }: { value: string[]; onCh
           {MODULES.map((m) => (
             <tr key={m.key} className="border-b border-line last:border-0">
               <td className="px-4 py-2">
-                <div className="font-medium text-ink">{m.name}</div>
+                <div className="flex items-center gap-1.5 font-medium text-ink">
+                  {m.name}
+                  {disabledApps?.includes(m.key) && <Badge>已停用</Badge>}
+                </div>
                 <div className="text-xs text-ink-3">{m.description}</div>
               </td>
               {(["view", "edit"] as const).map((k) => {
@@ -108,7 +121,7 @@ function PermissionMatrix({ value, onChange, disabled }: { value: string[]; onCh
   );
 }
 
-export function RoleEditor({ role }: { role: RoleDetail }) {
+export function RoleEditor({ role, disabledApps }: { role: RoleDetail; disabledApps?: string[] }) {
   const router = useRouter();
   const { run, pending } = useAction();
   const [name, setName] = useState(role.name);
@@ -163,7 +176,7 @@ export function RoleEditor({ role }: { role: RoleDetail }) {
         </Field>
       </div>
       <h3 className="mb-2 mt-6 text-[13px] font-semibold text-ink">权限</h3>
-      <PermissionMatrix value={perms} onChange={setPerms} disabled={locked} />
+      <PermissionMatrix value={perms} onChange={setPerms} disabled={locked} disabledApps={disabledApps} />
       {locked && <p className="mt-2 text-xs text-ink-3">系统管理员角色固定拥有全部权限。</p>}
       <h3 className="mb-2 mt-8 text-[13px] font-semibold text-ink">成员 {role.users.length}</h3>
       {role.users.length === 0 ? (

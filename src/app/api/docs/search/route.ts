@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { getCurrentUser } from "@/lib/auth/dal";
+import { getCurrentUser, isAppEnabled } from "@/lib/auth/dal";
 import { db } from "@/lib/db";
 import { visibleSpaceWhere } from "@/lib/docs/access";
 import { hasPermission } from "@/lib/permissions";
@@ -8,6 +8,7 @@ import { hasPermission } from "@/lib/permissions";
 export async function GET(req: NextRequest) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ results: [] }, { status: 401 });
+  if (!(await isAppEnabled("docs"))) return NextResponse.json({ results: [] }, { status: 403 });
   if (!hasPermission(user.permissions, "docs:view")) return NextResponse.json({ results: [] }, { status: 403 });
   const q = (req.nextUrl.searchParams.get("q") ?? "").trim().slice(0, 100);
   const rows = await db.document.findMany({

@@ -6,7 +6,9 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { runAction } from "@/lib/action";
 import { audit } from "@/lib/services/notify";
-import { ALL_PERMISSIONS, parsePermissions } from "@/lib/permissions";
+import { ALL_PERMISSIONS, MODULES, parsePermissions, type ModuleKey } from "@/lib/permissions";
+import { appDependents, appName, missingRequirements } from "@/lib/apps";
+import { getDisabledApps } from "@/lib/apps-store";
 import { parseInput } from "@/lib/oa/validate";
 
 const id = z.string().min(1);
@@ -268,5 +270,38 @@ export async function changePassword(input: { oldPassword: string; newPassword: 
     if (v.oldPassword === v.newPassword) throw new Error("新密码不能与当前密码相同");
     await db.user.update({ where: { id: user.id }, data: { passwordHash: await bcrypt.hash(v.newPassword, 10) } });
     await audit(db, { entityType: "user", entityId: user.id, action: "change_password", userId: user.id });
+  });
+}
+
+// ───────────── 应用开关 ─────────────
+
+const appKeySchema = z.custom<ModuleKey>((v) => typeof v === "string" && MODULES.some((m) => m.key === v), "应用不存在");
+
+export async function setAppEnabled(key: string, enabled: boolean) {
+  return runAction("admin", async (user) => {
+    const k = parseInput(appKeySchema, key);
+    const name = appName(k);
+    await db.$transaction(async (tx) => {
+      const disabled = await getDisabledApps(tx);
+      const enabledSet = new Set(MODULES.map((m) => m.key).filter((x) => !disabled.has(x)));
+      if (!enabled) {
+        const deps = appDependents(k, enabledSet);
+        if (deps.length) {
+          throw new Error(`无法停用「${name}」：${deps.map((d) => `「${appName(d)}」`).join("、")}依赖它，请先停用这些应用`);
+        }
+      } else {
+        const missing = missingRequirements(k, enabledSet);
+        if (missing.length) {
+          throw new Error(`无法启用「${name}」：它依赖${missing.map((d) => `「${appName(d)}」`).join("、")}，请先启用这些应用`);
+        }
+      }
+      await tx.appSetting.upsert({
+        where: { key: k },
+        create: { key: k, enabled, updatedById: user.id },
+        update: { enabled, updatedById: user.id },
+      });
+      await audit(tx, { entityType: "app", entityId: k, action: enabled ? "enable" : "disable", userId: user.id });
+    });
+    revalidatePath("/", "layout");
   });
 }
