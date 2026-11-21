@@ -465,7 +465,7 @@ export function DocView({ doc, ancestors, childPages, threads, members, me, canW
           )}
 
           <div className={cn("mx-auto w-full px-6 sm:px-10", fullWidth ? "max-w-[1400px] lg:px-16" : "max-w-[800px]")}>
-            <div className={cn("group/head", coverCss ? "-mt-10" : "pt-12")}>
+            <div className={cn("group/head relative z-10", coverCss ? "-mt-10" : "pt-12")}>
               <EmojiPicker onSelect={onPickIcon} onRemove={canWrite && icon ? onRemoveIcon : undefined}>
                 <button
                   type="button"
