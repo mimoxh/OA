@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { format } from "date-fns";
 import { zhCN } from "date-fns/locale";
-import { Check, Clock, MapPin, Trash2, UserRound, Users, X } from "lucide-react";
+import { Check, Clock, MapPin, Trash2, UserRound, Users, Video, X } from "lucide-react";
 import type { MemberOption } from "@/lib/oa/types";
 import { EVENT_STATUS, PALETTE } from "@/lib/oa/types";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,8 @@ import { useAction } from "@/components/ui/use-action";
 import { ColorPicker } from "@/components/oa/color-picker";
 import { MemberMultiSelect } from "@/components/oa/member-picker";
 import { BizGroupButton } from "@/components/im/biz-group-button";
+import { openBizGroup } from "@/app/(app)/messages/actions";
+import { startOrJoinConversationCall } from "@/components/call/store";
 import { cn } from "@/lib/utils";
 import { deleteEvent, respondEvent, saveEvent } from "./actions";
 
@@ -92,6 +94,29 @@ function AttendeeList({ attendees }: { attendees: CalEvent["attendees"] }) {
   );
 }
 
+function StartMeetingButton({ eventId, onClose }: { eventId: string; onClose: () => void }) {
+  const { run, pending } = useAction();
+  return (
+    <Button
+      size="sm"
+      variant="default"
+      loading={pending}
+      onClick={() =>
+        run(() => openBizGroup({ bizType: "event", bizId: eventId }), {
+          refresh: false,
+          onSuccess: (res) => {
+            onClose();
+            void startOrJoinConversationCall(res.conversationId, "video");
+          },
+        })
+      }
+    >
+      <Video className="size-3.5 text-brand" />
+      发起会议
+    </Button>
+  );
+}
+
 function EventDetail({ event, meId, onClose }: { event: CalEvent; meId: string; onClose: () => void }) {
   const { run, pending } = useAction();
   const mine = event.attendees.find((a) => a.userId === meId);
@@ -115,6 +140,7 @@ function EventDetail({ event, meId, onClose }: { event: CalEvent; meId: string; 
               existingConversationId={event.meetingGroupId}
               onAfterNavigate={onClose}
             />
+            <StartMeetingButton eventId={event.id} onClose={onClose} />
           </div>
           {mine ? (
             <>
@@ -258,6 +284,7 @@ function EditForm({
                 existingConversationId={event.meetingGroupId}
                 onAfterNavigate={onClose}
               />
+              <StartMeetingButton eventId={event.id} onClose={onClose} />
             </div>
           )}
           <Button onClick={onClose}>取消</Button>

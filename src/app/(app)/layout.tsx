@@ -2,6 +2,7 @@ import { requireUser } from "@/lib/auth/dal";
 import { AppRail } from "@/components/shell/app-rail";
 import { CommandPalette } from "@/components/shell/command-palette";
 import { RealtimeProvider } from "@/components/realtime/provider";
+import { CallOverlay } from "@/components/call/call-overlay";
 
 export default async function AppLayout({ children }: LayoutProps<"/">) {
   const user = await requireUser();
@@ -19,6 +20,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
         <AppRail user={shellUser} />
         <div className="min-w-0 flex-1">{children}</div>
         <CommandPalette permissions={user.permissions} />
+        <CallOverlay me={{ id: user.id, name: user.name, avatarColor: user.avatarColor }} />
       </div>
     </RealtimeProvider>
   );

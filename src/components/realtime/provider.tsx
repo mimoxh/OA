@@ -87,7 +87,7 @@ async function connect() {
     const isReconnect = everConnected || attempt > 0;
     attempt = 0;
     setStatus("open");
-    if (isReconnect) emit({ type: "reconnected" });
+    emit({ type: isReconnect ? "reconnected" : "connected" });
     everConnected = true;
     stopPing();
     pingTimer = setInterval(() => sendRealtime({ type: "ping" }), 25_000);
@@ -170,8 +170,9 @@ export function stopRealtime() {
 /** 全局实时连接（每标签页一条 WS）；挂载在 (app) 布局内，同时初始化 IM store */
 export function RealtimeProvider({ meId, children }: { meId: string; children: ReactNode }) {
   useEffect(() => {
-    // initIm 内部幂等
+    // initIm / initCallStore 内部幂等
     import("@/components/im/store").then((m) => m.initIm(meId));
+    import("@/components/call/store").then((m) => m.initCallStore(meId));
     import("@/lib/im/desktop-notify").then((m) => void m.registerServiceWorker());
     startRealtime(meId);
     return subscribeRealtime((event) => {

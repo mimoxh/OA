@@ -134,3 +134,52 @@ export type RefPreview = { type: RefType; id: string } & (
     }
   | { ok: false; reason: "forbidden" | "not_found" }
 );
+
+export type CallKind = "audio" | "video";
+export type CallStatus = "RINGING" | "ACTIVE" | "ENDED";
+export type RtcProviderKind = "webrtc" | "livekit";
+export const STALE_CALL_MS = 12 * 60 * 60 * 1000;
+
+export type CallDTO = {
+  id: string;
+  conversationId: string;
+  conversationType: ConversationDTO["type"];
+  conversationName: string;
+  initiator: UserLite;
+  kind: CallKind;
+  status: CallStatus;
+  provider: RtcProviderKind;
+  roomName: string;
+  startedAt: string;
+  endedAt: string | null;
+};
+
+export type CallPeerInfo = {
+  connectionId: string;
+  userId: string;
+  name: string;
+  avatarColor: string;
+  audio: boolean;
+  video: boolean;
+  screen: boolean;
+};
+
+export type IceServerConfig = {
+  urls: string | string[];
+  username?: string;
+  credential?: string;
+};
+
+export type RtcJoinConfig =
+  | {
+      provider: "webrtc";
+      roomName: string;
+      iceServers: IceServerConfig[];
+    }
+  | {
+      provider: "livekit";
+      roomName: string;
+      url: string;
+      token: string;
+      iceServers: IceServerConfig[];
+    };

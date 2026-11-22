@@ -3,7 +3,23 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowUpRight, BellOff, Check, DoorOpen, Ellipsis, Pencil, Pin, PinOff, Search, UserPlus, UserRound, Users, X } from "lucide-react";
+import {
+  ArrowUpRight,
+  BellOff,
+  Check,
+  DoorOpen,
+  Ellipsis,
+  Pencil,
+  Phone,
+  Pin,
+  PinOff,
+  Search,
+  UserPlus,
+  UserRound,
+  Users,
+  Video,
+  X,
+} from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Menu, MenuContent, MenuItem, MenuTrigger } from "@/components/ui/menu";
@@ -31,6 +47,12 @@ import {
   useOnline,
   type GroupMember,
 } from "./store";
+import {
+  setCallMinimized,
+  startOrJoinConversationCall,
+  useCallStore,
+  useConversationActiveCall,
+} from "@/components/call/store";
 import { ConvAvatar } from "./conversation-list";
 import { MessageList } from "./message-list";
 import { Composer } from "./composer";
@@ -82,6 +104,8 @@ export function ChatView({
 
   const conv = useConversation(convId) ?? initialConversation;
   const online = useOnline(conv.peerId);
+  const activeCallEntry = useConversationActiveCall(convId);
+  const { active: myActiveCall } = useCallStore();
   const [panel, setPanel] = useState<RightPanel>(() =>
     initialThreadRootId ? { kind: "thread", rootId: initialThreadRootId } : null,
   );
@@ -119,6 +143,8 @@ export function ChatView({
   const set = (patch: { pinned?: boolean; muted?: boolean }) =>
     run(() => updateConversationPrefs({ conversationId: convId, ...patch }), { refresh: false });
 
+  const inThisCall = myActiveCall?.call.conversationId === convId;
+
   return (
     <div className="flex h-screen">
       <div className="flex min-w-0 flex-1 flex-col">
@@ -144,6 +170,28 @@ export function ChatView({
               {conv.bizLabel}
               <ArrowUpRight className="size-3.5" />
             </Link>
+          )}
+          {conv.type !== "BOT" && (
+            <>
+              <button
+                type="button"
+                onClick={() => void startOrJoinConversationCall(convId, "audio")}
+                className="rounded-md p-2 text-ink-2 hover:bg-hover"
+                aria-label="语音通话"
+                title={conv.type === "GROUP" ? "发起语音会议" : "语音通话"}
+              >
+                <Phone className="size-4.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => void startOrJoinConversationCall(convId, "video")}
+                className="rounded-md p-2 text-ink-2 hover:bg-hover"
+                aria-label="视频通话"
+                title={conv.type === "GROUP" ? "发起视频会议" : "视频通话"}
+              >
+                <Video className="size-4.5" />
+              </button>
+            </>
           )}
           <button
             onClick={() => setPanel((p) => (p?.kind === "search" ? null : { kind: "search" }))}
@@ -179,6 +227,33 @@ export function ChatView({
             </MenuContent>
           </Menu>
         </div>
+
+        {/* 进行中的通话横幅 */}
+        {activeCallEntry && (
+          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-emerald-200 bg-emerald-50 px-4 py-2 text-xs text-emerald-900">
+            <div className="flex items-center gap-2">
+              <span className="size-2 animate-pulse rounded-full bg-emerald-500" />
+              <span className="font-medium">
+                {activeCallEntry.call.kind === "audio" ? "语音" : "视频"}
+                {conv.type === "GROUP" ? "会议" : "通话"}进行中
+              </span>
+              {activeCallEntry.peerCount != null && activeCallEntry.peerCount > 0 && (
+                <span className="text-emerald-700">· {activeCallEntry.peerCount} 人在房间</span>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() =>
+                inThisCall
+                  ? setCallMinimized(false)
+                  : void startOrJoinConversationCall(convId, activeCallEntry.call.kind)
+              }
+              className="rounded-md bg-emerald-600 px-3 py-1 text-xs font-medium text-white hover:bg-emerald-700"
+            >
+              {inThisCall ? "回到通话" : "点击加入"}
+            </button>
+          </div>
+        )}
 
         <MessageList
           conv={conv}

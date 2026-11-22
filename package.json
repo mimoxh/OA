@@ -15,6 +15,9 @@
     "db:seed": "tsx prisma/seed/index.ts",
     "db:seed:im": "tsx prisma/seed/im.ts",
     "db:reset": "prisma db push --force-reset && tsx prisma/seed/index.ts",
+    "desktop:dev": "pnpm --dir desktop dev",
+    "desktop:build": "pnpm --dir desktop build",
+    "desktop:check": "cargo check --manifest-path desktop/src-tauri/Cargo.toml",
     "postinstall": "prisma generate"
   },
   "dependencies": {

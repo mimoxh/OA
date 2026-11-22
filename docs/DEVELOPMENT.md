@@ -115,6 +115,13 @@ pnpm next dev --port 3103
   - PWA 与桌面通知：`src/app/manifest.ts` + `public/sw.js` + `public/icon.svg`，会话列表顶部可开关浏览器桌面通知（仅在页面切后台或非当前激活会话且未免打扰/被 @ 时触发）。
 - 附件与可插拔存储：`src/lib/storage/` 提供 `StorageDriver` 接口，默认 `LocalStorageDriver`（`data/uploads`），也支持免额外依赖的 AWS SigV4 `S3StorageDriver`。上传走 `POST /api/im/upload`（会话成员校验、大小限制、图片魔数校验并禁止 SVG 内联），下载/预览走 `GET /api/im/files/[id]`（成员权限校验 + `X-Content-Type-Options: nosniff`）。
 - 分享到会话：`GET /api/im/share-targets` 与 `ShareToChatButton` 支持将文档、审批、项目等直接分享到会话，消息内仅保存业务引用与用户附言，由 `RefPreviewCard` 按查看者权限动态解析，避免标题越权泄露。
+- P4 音视频通话与会议
+  - `CallSession` 保存语音/视频通话的 `RINGING`、`ACTIVE`、`ENDED` 状态。`call-service.ts` 处理状态流转、过期通话和开始/结束系统消息。
+  - 内置客户端使用 WebRTC Mesh 支持语音、视频、屏幕共享和旁听。通话可最小化后跨页继续，也可从日程详情发起。信令复用实时 WebSocket，配置 Redis 时跨实例共享参会人状态。
+  - `ICE_SERVERS` 配置 WebRTC 使用的 STUN/TURN。配置 LiveKit 后，扩展客户端可通过 `GET /api/im/calls/[id]/token?provider=livekit` 获取 SFU 令牌。
+- P4 桌面客户端
+  - `desktop/` 中的 Tauri v2 桌面壳支持系统托盘、单实例、原生通知和未读数同步。桌面命令限于已连接的工作空间。
+  - 根目录执行 `pnpm install` 后可运行 `pnpm desktop:dev`、`pnpm desktop:check` 和 `pnpm desktop:build`。前置依赖见 `desktop/README.md`。
 - `notify()` 除写 Notification 表外，还会派发 `notification.new` 并向对应机器人会话投递卡片；审批状态变化时 `approval.ts` 末尾调用 `refreshApprovalCards` 刷新所有相关卡片。
 - 补 IM 演示数据：`pnpm db:seed:im`（幂等）：无群聊时建群/单聊，并为还没有机器人会话的用户按历史通知回填卡片。
 
@@ -130,6 +137,8 @@ pnpm next dev --port 3103
 | `STORAGE_DRIVER` | `local` | 附件存储驱动：`local` 或 `s3` |
 | `STORAGE_LOCAL_DIR` | `./data/uploads` | 本地附件存储目录（`STORAGE_DRIVER=local`） |
 | `S3_BUCKET` / `S3_REGION` / `S3_ENDPOINT` / `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` / `S3_FORCE_PATH_STYLE` | 未设置 | S3 兼容对象存储配置（`STORAGE_DRIVER=s3`） |
+| `ICE_SERVERS` | Google 公共 STUN | 自定义 WebRTC STUN/TURN 列表（JSON 数组） |
+| `LIVEKIT_URL` / `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET` | 未设置 | 配置后可通过通话令牌接口显式申请 LiveKit SFU JWT |
 
 `docker-compose.yml` 提供可选的 `redis:7` 与 `postgres:16`（默认开发不需要启动）。
 
@@ -140,4 +149,4 @@ pnpm next dev --port 3103
 
 ### 事件类型（服务端 → 客户端）
 
-`message.new` / `message.updated` / `conversation.updated` / `conversation.removed` / `read` / `notification.new` / `typing` / `presence` / `presence.snapshot`，载荷定义见 `src/lib/im/types.ts`。
+`message.new` / `message.updated` / `conversation.updated` / `conversation.removed` / `read` / `notification.new` / `typing` / `presence` / `presence.snapshot` / `call.invite` / `call.updated` / `call.ended` / `call.peers` / `call.join-rejected` / `call.peer-joined` / `call.peer-left` / `call.peer-media` / `call.signal`。主要载荷定义见 `src/lib/im/types.ts`。

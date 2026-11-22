@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>协作平台 OA</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f7f7f5;
+        --card: #ffffff;
+        --ink: #37352f;
+        --ink-2: #6b6a65;
+        --line: #e9e9e7;
+        --brand: #2383e2;
+        --brand-hover: #1b6fc4;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      }
+      .card {
+        width: 400px;
+        max-width: calc(100vw - 32px);
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 28px;
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.06);
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 18px;
+      }
+      .logo {
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+        background: var(--brand);
+        color: #fff;
+        display: grid;
+        place-items: center;
+        font-weight: 700;
+        font-size: 16px;
+        letter-spacing: 0.5px;
+      }
+      h1 {
+        margin: 0;
+        font-size: 18px;
+      }
+      .sub {
+        margin: 2px 0 0;
+        font-size: 12px;
+        color: var(--ink-2);
+      }
+      label {
+        display: block;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--ink-2);
+        margin-bottom: 6px;
+      }
+      input {
+        width: 100%;
+        height: 38px;
+        padding: 0 12px;
+        border-radius: 8px;
+        border: 1px solid var(--line);
+        font-size: 13px;
+        color: var(--ink);
+        outline: none;
+      }
+      input:focus {
+        border-color: var(--brand);
+      }
+      .actions {
+        margin-top: 14px;
+        display: flex;
+        gap: 8px;
+      }
+      button {
+        flex: 1;
+        height: 38px;
+        border: 0;
+        border-radius: 8px;
+        background: var(--brand);
+        color: #fff;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      button:hover {
+        background: var(--brand-hover);
+      }
+      button:disabled {
+        opacity: 0.6;
+        cursor: wait;
+      }
+      .status {
+        margin-top: 12px;
+        font-size: 12px;
+        color: var(--ink-2);
+        min-height: 18px;
+      }
+      .error {
+        color: #d94848;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <div class="brand">
+        <div class="logo">OA</div>
+        <div>
+          <h1>协作平台 OA</h1>
+          <p class="sub">桌面客户端 · 连接到您的工作空间服务</p>
+        </div>
+      </div>
+      <form id="connect-form">
+        <label for="server-url">服务器地址</label>
+        <input id="server-url" type="url" required placeholder="http://localhost:3000" />
+        <div class="actions">
+          <button id="connect-btn" type="submit">连接并进入</button>
+        </div>
+        <div id="status" class="status"></div>
+      </form>
+    </main>
+    <script>
+      const STORAGE_KEY = "oa_desktop_server_url";
+      const input = document.getElementById("server-url");
+      const statusEl = document.getElementById("status");
+      const btn = document.getElementById("connect-btn");
+      const saved = localStorage.getItem(STORAGE_KEY) || "http://localhost:3000";
+      input.value = saved;
+
+      async function connect(rawUrl) {
+        const normalized = rawUrl.trim().replace(/\/+$/, "");
+        if (!/^https?:\/\//i.test(normalized)) {
+          statusEl.textContent = "请输入以 http:// 或 https:// 开头的有效地址";
+          statusEl.className = "status error";
+          return;
+        }
+        localStorage.setItem(STORAGE_KEY, normalized);
+        btn.disabled = true;
+        statusEl.textContent = "正在连接 " + normalized + " ...";
+        statusEl.className = "status";
+        try {
+          await window.__TAURI__.core.invoke("connect_server", { url: normalized });
+        } catch (err) {
+          btn.disabled = false;
+          statusEl.textContent = "无法连接服务器，请确认服务已启动";
+          statusEl.className = "status error";
+        }
+      }
+
+      document.getElementById("connect-form").addEventListener("submit", (e) => {
+        e.preventDefault();
+        connect(input.value);
+      });
+
+      if (localStorage.getItem(STORAGE_KEY)) {
+        statusEl.textContent = "正在自动连接上次保存的工作空间...";
+        setTimeout(() => {
+          if (!document.hidden && document.activeElement !== input) {
+            connect(input.value);
+          }
+        }, 600);
+      }
+    </script>
+  </body>
+</html>

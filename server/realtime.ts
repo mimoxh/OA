@@ -5,6 +5,7 @@ import type { Redis as RedisClient } from "ioredis";
 import { WebSocketServer, WebSocket } from "ws";
 import { db } from "@/lib/db";
 import { verifyScopedToken } from "@/lib/auth/token";
+import { STALE_CALL_MS, type CallPeerInfo } from "@/lib/im/types";
 
 const PORT = Number(process.env.REALTIME_PORT ?? 1235);
 const EVENTS_CHANNEL = "rt:events";
@@ -16,10 +17,16 @@ const PRESENCE_SYNC_MS = 20_000;
 const INSTANCE_ID = randomUUID();
 
 const onlineKey = (instanceId: string) => `rt:online:${instanceId}`;
+const callRoomKey = (callId: string) => `rt:call:${callId}:peers`;
+const CALL_PEER_TTL_SEC = 90;
 
-type Client = { ws: WebSocket; userId: string; alive: boolean };
+type Client = { id: string; ws: WebSocket; userId: string; alive: boolean; callId: string | null };
+type CallRoomEntry = { peer: CallPeerInfo; conversationId: string; client: Client };
+type LeasedCallPeer = { peer: CallPeerInfo; expiresAt: number };
+
 const socketsByUser = new Map<string, Set<Client>>();
 const allSockets = new Set<Client>();
+const callRooms = new Map<string, Map<string, CallRoomEntry>>();
 
 let redisPub: RedisClient | null = null;
 let redisSub: RedisClient | null = null;
@@ -34,9 +41,38 @@ function send(client: Client, event: object) {
 }
 
 function deliver(userIds: string[], event: object) {
-  for (const id of userIds) {
-    for (const client of socketsByUser.get(id) ?? []) send(client, event);
+  const callEvent = event as { type?: string; callId?: string; targetConnectionId?: string; peer?: CallPeerInfo };
+  if (callEvent.type === "call.ended" && callEvent.callId) {
+    const room = callRooms.get(callEvent.callId);
+    for (const entry of room?.values() ?? []) entry.client.callId = null;
+    callRooms.delete(callEvent.callId);
+    if (room && redisReady) void redisPub?.del(callRoomKey(callEvent.callId)).catch(() => {});
   }
+  for (const id of userIds) {
+    for (const client of socketsByUser.get(id) ?? []) {
+      if (callEvent.targetConnectionId && callEvent.targetConnectionId !== client.id) continue;
+      if (
+        callEvent.type === "call.peer-joined" && callEvent.callId && client.callId === callEvent.callId &&
+        callEvent.peer?.userId === client.userId && callEvent.peer.connectionId !== client.id
+      ) {
+        detachCallPeer(client, callEvent.callId);
+        send(client, { type: "call.join-rejected", callId: callEvent.callId });
+        continue;
+      }
+      send(client, event);
+    }
+  }
+}
+
+async function publishOrDeliver(userIds: string[], event: object) {
+  if (!userIds.length) return;
+  if (redisReady && redisPub) {
+    try {
+      await redisPub.publish(EVENTS_CHANNEL, JSON.stringify({ userIds, event }));
+      return;
+    } catch {}
+  }
+  deliver(userIds, event);
 }
 
 function broadcastAll(event: object) {
@@ -94,7 +130,7 @@ async function syncInstancePresence() {
   }
 }
 
-// ── 会话成员缓存（typing 校验 + 定向投递共用，60s） ──
+// ── 会话成员缓存（typing / call 信令校验 + 定向投递共用，60s） ──
 const memberCache = new Map<string, { userIds: string[]; expires: number }>();
 async function memberIds(conversationId: string): Promise<string[]> {
   const hit = memberCache.get(conversationId);
@@ -103,6 +139,191 @@ async function memberIds(conversationId: string): Promise<string[]> {
   const userIds = rows.map((r) => r.userId);
   memberCache.set(conversationId, { userIds, expires: Date.now() + 60_000 });
   return userIds;
+}
+
+const userLiteCache = new Map<string, { name: string; avatarColor: string; expires: number }>();
+async function getUserLite(userId: string): Promise<{ name: string; avatarColor: string }> {
+  const hit = userLiteCache.get(userId);
+  if (hit && hit.expires > Date.now()) return { name: hit.name, avatarColor: hit.avatarColor };
+  const u = await db.user.findUnique({ where: { id: userId }, select: { name: true, avatarColor: true } });
+  const val = { name: u?.name ?? "成员", avatarColor: u?.avatarColor ?? "#2383e2" };
+  userLiteCache.set(userId, { ...val, expires: Date.now() + 300_000 });
+  return val;
+}
+
+async function getCallPeers(callId: string): Promise<CallPeerInfo[]> {
+  if (redisReady && redisPub) {
+    try {
+      const now = Date.now();
+      const peers = await redisPub.hvals(callRoomKey(callId));
+      return peers.map((value) => JSON.parse(value) as LeasedCallPeer)
+        .filter((entry) => entry.expiresAt > now)
+        .map((entry) => entry.peer);
+    } catch {}
+  }
+  return [...(callRooms.get(callId)?.values() ?? [])].map((entry) => entry.peer);
+}
+
+// 每个用户在房间里只占一个位置。只有持有该位置的连接能续租、更新或离开。
+const updateCallPeerLease = `
+local value = redis.call('HGET', KEYS[1], ARGV[1])
+if not value or cjson.decode(value).peer.connectionId ~= ARGV[2] then return 0 end
+if ARGV[3] == '' then
+  redis.call('HDEL', KEYS[1], ARGV[1])
+else
+  redis.call('HSET', KEYS[1], ARGV[1], ARGV[3])
+  redis.call('EXPIRE', KEYS[1], ARGV[4])
+end
+return 1
+`;
+
+async function saveCallPeer(callId: string, peer: CallPeerInfo, joining = false): Promise<boolean> {
+  if (!redisReady || !redisPub) return true;
+  const key = callRoomKey(callId);
+  const value = JSON.stringify({ peer, expiresAt: Date.now() + CALL_PEER_TTL_SEC * 1000 });
+  if (joining) {
+    const result = await redisPub.multi().hset(key, peer.userId, value).expire(key, CALL_PEER_TTL_SEC).exec();
+    return result?.every(([error]) => !error) ?? false;
+  }
+  return await redisPub.eval(updateCallPeerLease, 1, key, peer.userId, peer.connectionId, value, CALL_PEER_TTL_SEC) === 1;
+}
+
+function detachCallPeer(client: Client, callId: string): CallRoomEntry | undefined {
+  if (client.callId !== callId) return;
+  client.callId = null;
+  const room = callRooms.get(callId);
+  const entry = room?.get(client.userId);
+  if (!room || entry?.client !== client) return;
+  room.delete(client.userId);
+  if (!room.size) callRooms.delete(callId);
+  return entry;
+}
+
+async function leaveCallRoom(client: Client, callId = client.callId) {
+  if (!callId) return;
+  const entry = detachCallPeer(client, callId);
+  if (!entry) return;
+  if (redisReady && redisPub) {
+    const removed = await redisPub.eval(
+      updateCallPeerLease, 1, callRoomKey(callId), client.userId, client.id, "", CALL_PEER_TTL_SEC,
+    );
+    if (removed !== 1) return;
+  }
+  const { conversationId } = entry;
+  const [peers, ids] = await Promise.all([getCallPeers(callId), memberIds(conversationId)]);
+  await publishOrDeliver(ids, {
+    type: "call.peer-left", callId, conversationId, userId: client.userId,
+    connectionId: client.id, peerCount: peers.length,
+  });
+}
+
+function sendCallPeers(client: Client, callId: string, conversationId: string, peers: CallPeerInfo[]) {
+  send(client, {
+    type: "call.peers", callId, conversationId, peerCount: peers.length,
+    peers: peers.filter((peer) => peer.userId !== client.userId),
+  });
+}
+
+async function handleCallMessage(client: Client, msg: Record<string, unknown>) {
+  if (typeof msg.callId !== "string") return;
+  const callId = msg.callId;
+  const userId = client.userId;
+  if (msg.type === "call.join") {
+    const call = await db.callSession.findFirst({
+      where: {
+        id: callId,
+        status: { in: ["RINGING", "ACTIVE"] },
+        startedAt: { gt: new Date(Date.now() - STALE_CALL_MS) },
+        conversation: { members: { some: { userId } } },
+      },
+      select: { conversationId: true },
+    });
+    if (client.ws.readyState !== WebSocket.OPEN) return;
+    if (!call || call.conversationId !== msg.conversationId) {
+      send(client, { type: "call.join-rejected", callId });
+      return;
+    }
+
+    const { conversationId } = call;
+    const [ids, lite] = await Promise.all([memberIds(conversationId), getUserLite(userId)]);
+    if (client.callId && client.callId !== callId) await leaveCallRoom(client);
+    if (client.ws.readyState !== WebSocket.OPEN) return;
+
+    const peer = {
+      connectionId: client.id,
+      userId,
+      ...lite,
+      audio: msg.audio === true,
+      video: msg.video === true,
+      screen: msg.screen === true,
+    };
+    if (!await saveCallPeer(callId, peer, true)) {
+      send(client, { type: "call.join-rejected", callId });
+      return;
+    }
+    let room = callRooms.get(callId);
+    if (!room) {
+      room = new Map();
+      callRooms.set(callId, room);
+    }
+    const previous = room.get(userId)?.client;
+    if (previous && previous !== client) {
+      previous.callId = null;
+      send(previous, { type: "call.join-rejected", callId });
+    }
+    room.set(userId, { peer, conversationId, client });
+    client.callId = callId;
+    const peers = await getCallPeers(callId);
+    if (!peers.some((entry) => entry.connectionId === client.id)) {
+      detachCallPeer(client, callId);
+      send(client, { type: "call.join-rejected", callId });
+      return;
+    }
+    sendCallPeers(client, callId, conversationId, peers);
+    await publishOrDeliver(ids, { type: "call.peer-joined", callId, conversationId, peer, peerCount: peers.length });
+    return;
+  }
+
+  if (msg.type === "call.leave") {
+    await leaveCallRoom(client, callId);
+    return;
+  }
+  const entry = callRooms.get(callId)?.get(userId);
+  if (client.callId !== callId || entry?.client !== client) return;
+  const { conversationId, peer } = entry;
+  if (msg.type === "call.media") {
+    for (const kind of ["audio", "video", "screen"] as const) {
+      if (typeof msg[kind] === "boolean") peer[kind] = msg[kind];
+    }
+    if (!await saveCallPeer(callId, peer)) return;
+    const peers = await getCallPeers(callId);
+    await publishOrDeliver(peers.filter((other) => other.userId !== userId).map((other) => other.userId), {
+      type: "call.peer-media", callId, conversationId, ...peer,
+    });
+    return;
+  }
+  if (msg.type !== "call.signal" || msg.conversationId !== conversationId || !msg.data) return;
+  const peers = await getCallPeers(callId);
+  if (!peers.some((other) => other.connectionId === client.id)) return;
+  const target = peers.find((other) => other.userId === msg.targetUserId && other.userId !== userId);
+  if (!target) return;
+  await publishOrDeliver([target.userId], {
+    type: "call.signal", conversationId, callId, peer, data: msg.data,
+    targetConnectionId: target.connectionId,
+  });
+}
+
+async function syncCallRooms() {
+  if (!redisReady) return;
+  for (const [callId, entries] of callRooms) {
+    await Promise.all([...entries.values()].map(({ peer }) => saveCallPeer(callId, peer)));
+    const peers = await getCallPeers(callId);
+    for (const entry of entries.values()) {
+      if (peers.some((peer) => peer.connectionId === entry.client.id)) {
+        sendCallPeers(entry.client, callId, entry.conversationId, peers);
+      }
+    }
+  }
 }
 
 // ── HTTP ──
@@ -130,6 +351,7 @@ const server = createServer(async (req, res) => {
       ok: true,
       users: socketsByUser.size,
       connections: allSockets.size,
+      callRooms: callRooms.size,
       redis: redisReady,
       instanceId: INSTANCE_ID,
     });
@@ -162,7 +384,7 @@ const server = createServer(async (req, res) => {
 });
 
 // ── WebSocket ──
-const wss = new WebSocketServer({ noServer: true });
+const wss = new WebSocketServer({ noServer: true, maxPayload: 128 * 1024 });
 
 server.on("upgrade", (req, socket, head) => {
   const url = new URL(req.url ?? "/", "http://localhost");
@@ -180,7 +402,8 @@ server.on("upgrade", (req, socket, head) => {
 });
 
 function onConnect(ws: WebSocket, userId: string) {
-  const client: Client = { ws, userId, alive: true };
+  const client: Client = { id: randomUUID(), ws, userId, alive: true, callId: null };
+  let callOperations = Promise.resolve();
   allSockets.add(client);
   let set = socketsByUser.get(userId);
   const isFirst = !set || set.size === 0;
@@ -218,33 +441,34 @@ function onConnect(ws: WebSocket, userId: string) {
   });
   ws.on("message", (data) => {
     client.alive = true;
-    let msg: { type?: string; conversationId?: string };
+    let msg: Record<string, unknown>;
     try {
-      msg = JSON.parse(String(data));
+      msg = JSON.parse(String(data)) as Record<string, unknown>;
     } catch {
       return;
     }
-    if (msg.type === "ping") return;
+    if (!msg || typeof msg !== "object" || msg.type === "ping") return;
     if (msg.type === "typing" && typeof msg.conversationId === "string") {
       const conversationId = msg.conversationId;
       void memberIds(conversationId)
-        .then(async (ids) => {
+        .then((ids) => {
           if (!ids.includes(userId)) return;
-          const targetIds = ids.filter((id) => id !== userId);
-          if (!targetIds.length) return;
-          const event = { type: "typing", conversationId, userId };
-          if (redisReady && redisPub) {
-            try {
-              await redisPub.publish(EVENTS_CHANNEL, JSON.stringify({ userIds: targetIds, event }));
-              return;
-            } catch {}
-          }
-          deliver(targetIds, event);
+          return publishOrDeliver(
+            ids.filter((id) => id !== userId),
+            { type: "typing", conversationId, userId },
+          );
         })
         .catch(() => {});
+      return;
+    }
+    if (typeof msg.type === "string" && msg.type.startsWith("call.")) {
+      callOperations = callOperations.then(() => handleCallMessage(client, msg)).catch(() => {
+        if (msg.type === "call.join") send(client, { type: "call.join-rejected", callId: msg.callId });
+      });
     }
   });
   ws.on("close", () => {
+    void callOperations.then(() => leaveCallRoom(client)).catch(() => {});
     allSockets.delete(client);
     const set = socketsByUser.get(userId);
     set?.delete(client);
@@ -282,6 +506,7 @@ const heartbeat = setInterval(() => {
     client.alive = false;
     client.ws.ping();
   }
+  void syncCallRooms().catch(() => {});
 }, 30_000);
 heartbeat.unref();
 
@@ -342,6 +567,7 @@ async function shutdown() {
   shuttingDown = true;
   clearInterval(heartbeat);
   if (presenceSyncTimer) clearInterval(presenceSyncTimer);
+  await Promise.allSettled([...allSockets].map((client) => leaveCallRoom(client)));
   if (redisReady && redisPub) {
     try {
       const localUsers = [...socketsByUser.keys()];

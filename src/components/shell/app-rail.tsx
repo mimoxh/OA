@@ -25,6 +25,7 @@ import { openCommandPalette } from "./command-palette";
 import { useUnreadCount } from "./use-unread";
 import { resetIm, useTotalUnread } from "@/components/im/store";
 import { stopRealtime } from "@/components/realtime/provider";
+import { setDesktopUnreadBadge } from "@/lib/desktop-bridge";
 
 export type ShellUser = {
   id: string;
@@ -91,10 +92,11 @@ export function AppRail({ user }: { user: ShellUser }) {
   const isAdmin = hasPermission(user.permissions, "admin");
   const settingsHref = isAdmin ? "/settings/members" : "/settings/profile";
 
-  // 未读消息数同步到标签页标题
+  // 未读消息数同步到标签页标题与桌面托盘
   useEffect(() => {
     const base = document.title.replace(/^\(\d+\+?\)\s*/, "");
     document.title = imUnread > 0 ? `(${imUnread > 99 ? "99+" : imUnread}) ${base}` : base;
+    setDesktopUnreadBadge(imUnread);
   }, [imUnread, pathname]);
 
   const inModule = NAV_MODULES.some((m) => pathname === m.href || pathname.startsWith(m.href + "/"));
@@ -145,6 +147,7 @@ export function AppRail({ user }: { user: ShellUser }) {
             <MenuItem
               icon={<LogOut />}
               onSelect={() => {
+                void import("@/components/call/store").then((m) => m.resetCallStore());
                 stopRealtime();
                 resetIm();
                 void logout();

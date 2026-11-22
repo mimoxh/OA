@@ -1,5 +1,7 @@
 "use client";
 
+import { isDesktopApp, showDesktopAppNotification } from "@/lib/desktop-bridge";
+
 const STORAGE_KEY = "oa_im_desktop_notify";
 let swRegistered = false;
 const listeners = new Set<() => void>();
@@ -16,11 +18,14 @@ export function subscribeDesktopNotify(listener: () => void) {
 export type NotifyPrefState = "unsupported" | "denied" | "off" | "on";
 
 export function isDesktopNotifySupported(): boolean {
-  return typeof window !== "undefined" && "Notification" in window;
+  return isDesktopApp() || (typeof window !== "undefined" && "Notification" in window);
 }
 
 export function getDesktopNotifyState(): NotifyPrefState {
   if (!isDesktopNotifySupported()) return "unsupported";
+  if (isDesktopApp()) {
+    return window.localStorage.getItem(STORAGE_KEY) === "off" ? "off" : "on";
+  }
   if (Notification.permission === "denied") return "denied";
   const pref = window.localStorage.getItem(STORAGE_KEY);
   if (Notification.permission === "granted" && pref !== "off") return "on";
@@ -34,6 +39,11 @@ export async function toggleDesktopNotify(): Promise<NotifyPrefState> {
     window.localStorage.setItem(STORAGE_KEY, "off");
     emitNotifyState();
     return "off";
+  }
+  if (isDesktopApp()) {
+    window.localStorage.setItem(STORAGE_KEY, "on");
+    emitNotifyState();
+    return "on";
   }
   if (Notification.permission === "denied") {
     emitNotifyState();
@@ -70,6 +80,10 @@ export async function registerServiceWorker() {
 
 export function showDesktopNotification(opts: { title: string; body: string; url: string; tag?: string }) {
   if (getDesktopNotifyState() !== "on") return;
+  if (isDesktopApp()) {
+    void showDesktopAppNotification(opts.title, opts.body);
+    return;
+  }
   try {
     const n = new Notification(opts.title, {
       body: opts.body.slice(0, 120),

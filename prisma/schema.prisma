@@ -97,6 +97,7 @@ model User {
   imMessages      Message[]           @relation("MessageSender")
   attachments     Attachment[]
   messageReactions MessageReaction[]
+  callSessions     CallSession[]
 }
 
 model Notification {
@@ -1102,6 +1103,7 @@ model Conversation {
   members       ConversationMember[]
   messages      Message[]
   attachments   Attachment[]
+  calls         CallSession[]
   createdAt     DateTime             @default(now())
 
   @@index([bizType, bizId])
@@ -1186,4 +1188,24 @@ model Attachment {
 
   @@index([conversationId])
   @@index([uploaderId])
+}
+
+model CallSession {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  initiatorId    String
+  initiator      User         @relation(fields: [initiatorId], references: [id])
+  // audio | video
+  kind           String       @default("video")
+  // RINGING | ACTIVE | ENDED
+  status         String       @default("ACTIVE")
+  // webrtc | livekit
+  provider       String       @default("webrtc")
+  roomName       String
+  startedAt      DateTime     @default(now())
+  endedAt        DateTime?
+
+  @@index([conversationId, status])
+  @@index([status])
 }
