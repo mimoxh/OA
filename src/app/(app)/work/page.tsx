@@ -4,9 +4,9 @@ import { zhCN } from "date-fns/locale";
 import { ArrowRight, BookOpen, FileText } from "lucide-react";
 import type { ReactNode } from "react";
 import { db } from "@/lib/db";
-import { can, requireUser } from "@/lib/auth/dal";
+import { can, getEnabledApps, requireUser } from "@/lib/auth/dal";
 import { NAV_MODULES } from "@/lib/nav";
-import { MODULES } from "@/lib/permissions";
+import { MODULES, type ModuleKey } from "@/lib/permissions";
 import { TASK_PRIORITY } from "@/lib/labels";
 import { formatMoney, formatRelative } from "@/lib/format";
 import { approvalTabWhere } from "@/lib/oa/server";
@@ -68,17 +68,18 @@ function AppTile({ href, color, icon, label, description }: { href: string; colo
 
 export default async function WorkPage() {
   const user = await requireUser();
+  const enabled = await getEnabledApps();
   const now = new Date();
   const g = greeting(now.getHours());
   const perm = {
-    docs: can(user, "docs:view"),
-    oa: can(user, "oa:view"),
-    crm: can(user, "crm:view"),
-    erp: can(user, "erp:view"),
-    finance: can(user, "finance:view"),
-    wms: can(user, "wms:view"),
-    tms: can(user, "tms:view"),
-    pms: can(user, "pms:view"),
+    docs: enabled.has("docs") && can(user, "docs:view"),
+    oa: enabled.has("oa") && can(user, "oa:view"),
+    crm: enabled.has("crm") && can(user, "crm:view"),
+    erp: enabled.has("erp") && can(user, "erp:view"),
+    finance: enabled.has("finance") && can(user, "finance:view"),
+    wms: enabled.has("wms") && can(user, "wms:view"),
+    tms: enabled.has("tms") && can(user, "tms:view"),
+    pms: enabled.has("pms") && can(user, "pms:view"),
   };
   const visibleSpace = { OR: [{ visibility: "PUBLIC" as const }, { members: { some: { userId: user.id } } }] };
   const none = <T,>(v: T) => Promise.resolve(v);
@@ -117,7 +118,7 @@ export default async function WorkPage() {
       : none([]),
     perm.docs
       ? db.document.findMany({
-          where: { deletedAt: null, isTemplate: false, space: visibleSpace },
+          where: { deletedAt: null, isTemplate: false, kind: { not: "row" }, space: visibleSpace },
           select: {
             id: true,
             title: true,
@@ -160,7 +161,7 @@ export default async function WorkPage() {
       : none(0),
     perm.tms ? db.transportOrder.count({ where: { status: "IN_TRANSIT" } }) : none(0),
     perm.pms ? db.project.count({ where: { status: "ACTIVE" } }) : none(0),
-    perm.docs ? db.document.count({ where: { deletedAt: null, isTemplate: false, space: visibleSpace } }) : none(0),
+    perm.docs ? db.document.count({ where: { deletedAt: null, isTemplate: false, kind: { not: "row" }, space: visibleSpace } }) : none(0),
   ]);
   const receivable = receivables.reduce((s, i) => s + i.amount - i.paidAmount, 0);
 
@@ -173,7 +174,7 @@ export default async function WorkPage() {
     tms: { value: inTransit, hint: "运输中", href: "/tms/orders" },
     pms: { value: activeProjects, hint: "进行中的项目", href: "/pms" },
   };
-  const modules = NAV_MODULES.filter((m) => can(user, m.perm));
+  const modules = NAV_MODULES.filter((m) => enabled.has(m.key as ModuleKey) && can(user, m.perm));
   const todoTotal = approvalCount + taskCount;
   const today = startOfDay(now);
 

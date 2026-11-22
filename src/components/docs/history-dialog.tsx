@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { History, Loader2, RotateCcw, Save } from "lucide-react";
 import { toast } from "sonner";
 import { Avatar } from "@/components/ui/avatar";
@@ -10,10 +10,13 @@ import { useAction } from "@/components/ui/use-action";
 import { formatDateTime, formatRelative } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { parseContent } from "@/lib/docs/content";
+import type { WhiteboardReference } from "@/lib/docs/whiteboard/content";
 import { getVersion, listVersions, restoreVersion } from "@/app/(app)/docs/actions";
 import { StaticDoc } from "./editor/static-doc";
 
 type VersionRow = { id: string; title: string; createdAt: string; author: { name: string; avatarColor: string } };
+type VersionPreview = { id: string; title: string; content: string; references?: WhiteboardReference[] };
+type PreviewOptions = { renderPreview?: (version: VersionPreview) => ReactNode; onRestored?: (title: string) => void };
 
 export function HistoryDialog({
   open,
@@ -21,16 +24,21 @@ export function HistoryDialog({
   docId,
   canRestore,
   onSaveCurrent,
+  renderPreview,
+  onRestored,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   docId: string;
   canRestore: boolean;
   onSaveCurrent?: () => Promise<boolean>;
-}) {
+} & PreviewOptions) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      {open && <HistoryBody docId={docId} canRestore={canRestore} onSaveCurrent={onSaveCurrent} onClose={() => onOpenChange(false)} />}
+      {open && <HistoryBody
+        docId={docId} canRestore={canRestore} onSaveCurrent={onSaveCurrent} onClose={() => onOpenChange(false)}
+        renderPreview={renderPreview} onRestored={onRestored}
+      />}
     </Dialog>
   );
 }
@@ -40,16 +48,18 @@ function HistoryBody({
   canRestore,
   onSaveCurrent,
   onClose,
+  renderPreview,
+  onRestored,
 }: {
   docId: string;
   canRestore: boolean;
   onSaveCurrent?: () => Promise<boolean>;
   onClose: () => void;
-}) {
+} & PreviewOptions) {
   const { run, pending } = useAction();
   const [rows, setRows] = useState<VersionRow[] | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
-  const [preview, setPreview] = useState<{ id: string; title: string; content: string } | null>(null);
+  const [preview, setPreview] = useState<VersionPreview | null>(null);
   const [saving, setSaving] = useState(false);
   const [reload, setReload] = useState(0);
 
@@ -125,7 +135,10 @@ function HistoryBody({
                 selected &&
                 run(() => restoreVersion(selected), {
                   success: "已恢复到所选版本",
-                  onSuccess: onClose,
+                  onSuccess: () => {
+                    if (current) onRestored?.(current.title);
+                    onClose();
+                  },
                 })
               }
             >
@@ -165,7 +178,7 @@ function HistoryBody({
           {current && preview && content ? (
             <>
               <h1 className="mb-4 text-[28px] font-bold text-ink">{preview.title || "无标题"}</h1>
-              <StaticDoc key={preview.id} content={content} />
+              {renderPreview ? renderPreview(preview) : <StaticDoc key={preview.id} content={content} />}
             </>
           ) : (
             <div className="py-10 text-center text-sm text-ink-3">{rows?.length ? "选择左侧版本进行预览" : "暂无可预览的内容"}</div>

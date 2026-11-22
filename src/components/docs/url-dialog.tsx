@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,7 @@ export function UrlDialog({
   description,
   placeholder,
   onSubmit,
+  extra,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -19,10 +20,13 @@ export function UrlDialog({
   description?: string;
   placeholder?: string;
   onSubmit: (url: string) => void;
+  extra?: ReactNode;
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      {open && <Body title={title} description={description} placeholder={placeholder} onSubmit={onSubmit} onCancel={() => onOpenChange(false)} />}
+      {open && (
+        <Body title={title} description={description} placeholder={placeholder} onSubmit={onSubmit} onCancel={() => onOpenChange(false)} extra={extra} />
+      )}
     </Dialog>
   );
 }
@@ -33,12 +37,14 @@ function Body({
   placeholder,
   onSubmit,
   onCancel,
+  extra,
 }: {
   title: string;
   description?: string;
   placeholder?: string;
   onSubmit: (url: string) => void;
   onCancel: () => void;
+  extra?: ReactNode;
 }) {
   const [v, setV] = useState("");
   const valid = /^https?:\/\/\S+$/.test(v.trim());
@@ -66,6 +72,7 @@ function Body({
         <Input autoFocus value={v} onChange={(e) => setV(e.target.value)} placeholder={placeholder ?? "https://"} />
         {v && !valid && <p className="mt-1 text-xs text-danger">请输入以 http:// 或 https:// 开头的链接</p>}
       </form>
+      {extra}
     </DialogContent>
   );
 }

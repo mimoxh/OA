@@ -18,7 +18,7 @@ import {
 import { Avatar } from "@/components/ui/avatar";
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuLabel, MenuTrigger } from "@/components/ui/menu";
 import { NAV_MODULES } from "@/lib/nav";
-import { hasPermission } from "@/lib/permissions";
+import { hasPermission, type Permission } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import { logout } from "@/app/login/actions";
 import { openCommandPalette } from "./command-palette";
@@ -85,11 +85,12 @@ function badgeNode(n: number) {
   ) : undefined;
 }
 
-export function AppRail({ user }: { user: ShellUser }) {
+export function AppRail({ user, enabledApps }: { user: ShellUser; enabledApps: string[] }) {
   const pathname = usePathname();
   const unread = useUnreadCount();
   const imUnread = useTotalUnread();
   const isAdmin = hasPermission(user.permissions, "admin");
+  const canUse = (app: string, p: Permission) => enabledApps.includes(app) && hasPermission(user.permissions, p);
   const settingsHref = isAdmin ? "/settings/members" : "/settings/profile";
 
   // 未读消息数同步到标签页标题与桌面托盘
@@ -112,8 +113,8 @@ export function AppRail({ user }: { user: ShellUser }) {
       active: pathname.startsWith("/inbox"),
       badge: badgeNode(unread),
     },
-    { label: "云文档", href: "/docs", icon: <FileText />, show: hasPermission(user.permissions, "docs:view"), active: pathname.startsWith("/docs") },
-    { label: "日历", href: "/oa/calendar", icon: <CalendarDays />, show: hasPermission(user.permissions, "oa:view"), active: pathname.startsWith("/oa/calendar") },
+    { label: "云文档", href: "/docs", icon: <FileText />, show: canUse("docs", "docs:view"), active: pathname.startsWith("/docs") },
+    { label: "日历", href: "/oa/calendar", icon: <CalendarDays />, show: canUse("oa", "oa:view"), active: pathname.startsWith("/oa/calendar") },
     { label: "工作台", href: "/work", icon: <LayoutGrid />, show: true, active: workActive },
     { label: "通讯录", href: "/contacts", icon: <BookUser />, show: true, active: pathname.startsWith("/contacts") },
   ];

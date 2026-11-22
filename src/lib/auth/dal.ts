@@ -3,7 +3,9 @@ import { cache } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
-import { hasPermission, parsePermissions, type Permission } from "@/lib/permissions";
+import { hasPermission, parsePermissions, type ModuleKey, type Permission } from "@/lib/permissions";
+import { moduleOfPermission } from "@/lib/apps";
+import { getEnabledAppKeys } from "@/lib/apps-store";
 import { SESSION_COOKIE, verifySessionToken } from "./token";
 
 export type CurrentUser = {
@@ -42,6 +44,13 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
   };
 });
 
+/** 当前启用的应用集合（同一请求内缓存） */
+export const getEnabledApps = cache(async (): Promise<Set<ModuleKey>> => getEnabledAppKeys());
+
+export async function isAppEnabled(key: ModuleKey): Promise<boolean> {
+  return (await getEnabledApps()).has(key);
+}
+
 /** 页面 / 布局中使用：未登录跳转登录页 */
 export async function requireUser(): Promise<CurrentUser> {
   const user = await getCurrentUser();
@@ -49,9 +58,11 @@ export async function requireUser(): Promise<CurrentUser> {
   return user;
 }
 
-/** 页面 / 布局中使用：无权限跳转到无权限页 */
+/** 页面 / 布局中使用：应用停用跳转提示页，无权限跳转到无权限页 */
 export async function requirePermission(p: Permission): Promise<CurrentUser> {
   const user = await requireUser();
+  const app = moduleOfPermission(p);
+  if (app && !(await isAppEnabled(app))) redirect(`/app-disabled?app=${app}`);
   if (!hasPermission(user.permissions, p)) redirect(`/forbidden?p=${encodeURIComponent(p)}`);
   return user;
 }

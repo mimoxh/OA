@@ -1,5 +1,6 @@
 "use server";
 
+import { unlink } from "node:fs/promises";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { runAction } from "@/lib/action";
@@ -7,10 +8,15 @@ import { db } from "@/lib/db";
 import type { CurrentUser } from "@/lib/auth/dal";
 import { notify } from "@/lib/services/notify";
 import { getDocAccess, getSpaceAccess, isDocsAdmin, spaceAccess } from "@/lib/docs/access";
+import { attachmentPath } from "@/lib/docs/attachments";
 import { broadcastToDoc, callCollab } from "@/lib/docs/collab-client";
 import { EMPTY_DOC, extractText, parseContent, type JSONNode } from "@/lib/docs/content";
+import { syncDocumentLinks } from "@/lib/docs/links";
+import { createDatabaseRecord } from "@/lib/docs/database/server";
 import { findTemplate } from "@/lib/docs/templates";
 import { collectDescendantIds, isDescendant } from "@/lib/docs/tree";
+import { EMPTY_WHITEBOARD, WHITEBOARD_ICON } from "@/lib/docs/whiteboard/content";
+import { getWhiteboardReferences, requireWhiteboardScene, writeWhiteboard } from "@/lib/docs/whiteboard/server";
 
 const NEW_DOC_CONTENT = JSON.stringify({ type: "doc", content: [{ type: "paragraph" }] });
 
@@ -46,11 +52,22 @@ async function requireSpaceManage(user: CurrentUser, spaceId: string) {
 
 async function nextSortOrder(spaceId: string, parentId: string | null) {
   const last = await db.document.findFirst({
-    where: { spaceId, parentId, deletedAt: null, isTemplate: false },
+    where: { spaceId, parentId, deletedAt: null, isTemplate: false, kind: { not: "row" } },
     orderBy: { sortOrder: "desc" },
     select: { sortOrder: true },
   });
   return (last?.sortOrder ?? -1) + 1;
+}
+
+async function requirePageContainer(spaceId: string, parentId: string | null) {
+  if (!parentId) return;
+  const parent = await db.document.findUnique({
+    where: { id: parentId },
+    select: { spaceId: true, deletedAt: true, kind: true },
+  });
+  if (!parent || parent.spaceId !== spaceId || parent.deletedAt) throw new Error("父页面不存在");
+  if (parent.kind === "database") throw new Error("请直接在多维表格中新建记录");
+  if (parent.kind === "whiteboard") throw new Error("白板下不能创建子页面");
 }
 
 // ───────────── 页面 ─────────────
@@ -58,6 +75,7 @@ async function nextSortOrder(spaceId: string, parentId: string | null) {
 const createSchema = z.object({
   spaceId: z.string().min(1),
   parentId: z.string().nullish(),
+  title: z.string().max(200).optional(),
   template: z.string().nullish(),
   templateDocId: z.string().nullish(),
 });
@@ -67,25 +85,24 @@ export async function createDocument(input: z.input<typeof createSchema>) {
     const v = createSchema.parse(input);
     await requireSpaceEdit(user, v.spaceId);
     const parentId = v.parentId ?? null;
-    if (parentId) {
-      const parent = await db.document.findUnique({ where: { id: parentId }, select: { spaceId: true, deletedAt: true } });
-      if (!parent || parent.spaceId !== v.spaceId || parent.deletedAt) throw new Error("父页面不存在");
-    }
-    let title = "";
+    await requirePageContainer(v.spaceId, parentId);
+    let title = v.title?.trim() ?? "";
     let icon: string | null = null;
     let content = NEW_DOC_CONTENT;
     if (v.template) {
       const t = findTemplate(v.template);
       if (!t) throw new Error("模板不存在");
-      title = t.title();
+      title = title || t.title();
       icon = t.icon;
       content = JSON.stringify(t.content());
     } else if (v.templateDocId) {
       const t = await requireDocRead(user, v.templateDocId);
-      title = t.doc.title;
+      if (t.doc.kind === "whiteboard") throw new Error("白板不能作为页面模板");
+      title = title || t.doc.title;
       icon = t.doc.icon;
       content = t.doc.content;
     }
+    const parsedContent = parseContent(content);
     const doc = await db.document.create({
       data: {
         spaceId: v.spaceId,
@@ -93,14 +110,57 @@ export async function createDocument(input: z.input<typeof createSchema>) {
         title,
         icon,
         content,
-        text: extractText(parseContent(content)),
+        text: extractText(parsedContent),
         sortOrder: await nextSortOrder(v.spaceId, parentId),
         createdById: user.id,
         updatedById: user.id,
       },
     });
+    await syncDocumentLinks(db, doc.id, parsedContent, { isTemplate: false });
     revalidateDocs();
-    return { id: doc.id };
+    return { id: doc.id, title: doc.title };
+  });
+}
+
+const createDatabaseSchema = z.object({
+  spaceId: z.string().min(1),
+  parentId: z.string().nullish(),
+  title: z.string().max(200).optional(),
+  icon: z.string().max(16).nullish(),
+});
+
+export async function createDatabase(input: z.input<typeof createDatabaseSchema>) {
+  return runAction("docs:edit", async (user) => {
+    const v = createDatabaseSchema.parse(input);
+    const created = await createDatabaseRecord(user, v);
+    revalidateDocs();
+    return created;
+  });
+}
+
+const createWhiteboardSchema = createSchema.pick({ spaceId: true, parentId: true, title: true });
+
+export async function createWhiteboard(input: z.input<typeof createWhiteboardSchema>) {
+  return runAction("docs:edit", async (user) => {
+    const { spaceId, parentId = null, title } = createWhiteboardSchema.parse(input);
+    await requireSpaceEdit(user, spaceId);
+    await requirePageContainer(spaceId, parentId);
+    const created = await db.document.create({
+      data: {
+        kind: "whiteboard",
+        spaceId,
+        parentId,
+        title: title?.trim() || "未命名白板",
+        icon: WHITEBOARD_ICON,
+        content: EMPTY_WHITEBOARD,
+        sortOrder: await nextSortOrder(spaceId, parentId),
+        createdById: user.id,
+        updatedById: user.id,
+      },
+      select: { id: true, title: true },
+    });
+    revalidateDocs();
+    return created;
   });
 }
 
@@ -117,14 +177,14 @@ const updateSchema = z.object({
 export async function updateDocument(input: z.input<typeof updateSchema>) {
   return runAction("docs:edit", async (user) => {
     const v = updateSchema.parse(input);
-    await requireDocWrite(user, v.id);
+    const { doc } = await requireDocWrite(user, v.id);
     const data: { title?: string; icon?: string | null; cover?: string | null; fullWidth?: boolean } = {};
     if (v.title !== undefined) data.title = v.title.trim();
     if (v.icon !== undefined) data.icon = v.icon || null;
     if (v.cover !== undefined) data.cover = v.cover || null;
     if (v.fullWidth !== undefined) data.fullWidth = v.fullWidth;
     await db.document.update({ where: { id: v.id }, data: { ...data, updatedById: user.id } });
-    if (!v.silent) await broadcastToDoc(user.id, v.id, { type: "meta", ...data });
+    if (!v.silent && doc.kind !== "whiteboard") await broadcastToDoc(user.id, v.id, { type: "meta", ...data });
     revalidateDocs();
     return null;
   });
@@ -152,14 +212,19 @@ export async function moveDocument(input: z.input<typeof moveSchema>) {
   return runAction("docs:edit", async (user) => {
     const v = moveSchema.parse(input);
     const { doc } = await requireDocWrite(user, v.id);
+    if (doc.kind === "row") throw new Error("多维表格的记录行不支持在目录树中移动");
     let spaceId = v.spaceId;
     let parentId: string | null = null;
-    let target: { id: string; parentId: string | null; spaceId: string } | null = null;
+    let target: { id: string; parentId: string | null; spaceId: string; kind: string } | null = null;
     if (v.position !== "end") {
       if (!v.targetId) throw new Error("缺少目标页面");
       if (v.targetId === v.id) return null;
-      target = await db.document.findUnique({ where: { id: v.targetId }, select: { id: true, parentId: true, spaceId: true } });
+      target = await db.document.findUnique({ where: { id: v.targetId }, select: { id: true, parentId: true, spaceId: true, kind: true } });
       if (!target) throw new Error("目标页面不存在");
+      if (v.position === "inside" && target.kind === "database") {
+        throw new Error("不能将页面移入多维表格中");
+      }
+      if (v.position === "inside" && target.kind === "whiteboard") throw new Error("不能将页面移入白板");
       spaceId = target.spaceId;
       parentId = v.position === "inside" ? target.id : target.parentId;
     }
@@ -167,7 +232,7 @@ export async function moveDocument(input: z.input<typeof moveSchema>) {
     if (spaceId !== doc.spaceId) await requireSpaceEdit(user, spaceId);
 
     const siblings = await db.document.findMany({
-      where: { spaceId, parentId, deletedAt: null, isTemplate: false, id: { not: v.id } },
+      where: { spaceId, parentId, deletedAt: null, isTemplate: false, kind: { not: "row" }, id: { not: v.id } },
       orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
       select: { id: true },
     });
@@ -185,6 +250,7 @@ export async function moveDocument(input: z.input<typeof moveSchema>) {
       if (spaceId !== doc.spaceId) {
         const desc = await collectDescendantIds(tx, v.id);
         if (desc.length) await tx.document.updateMany({ where: { id: { in: desc } }, data: { spaceId } });
+        await tx.documentAttachment.updateMany({ where: { documentId: { in: [v.id, ...desc] } }, data: { spaceId } });
       }
     });
     revalidateDocs();
@@ -216,8 +282,12 @@ export async function restoreDocument(id: string) {
       : [];
     let parentId = doc.parentId;
     if (parentId) {
-      const parent = await db.document.findUnique({ where: { id: parentId }, select: { deletedAt: true } });
-      if (!parent || parent.deletedAt) parentId = null;
+      const parent = await db.document.findUnique({ where: { id: parentId }, select: { deletedAt: true, kind: true } });
+      if (doc.kind === "row") {
+        if (!parent || parent.deletedAt) throw new Error("所属多维表格仍在回收站中，请先恢复多维表格");
+      } else if (!parent || parent.deletedAt) {
+        parentId = null;
+      }
     }
     await db.$transaction(async (tx) => {
       await tx.document.update({
@@ -270,6 +340,7 @@ export async function emptyTrash() {
 export async function duplicateDocument(id: string) {
   return runAction("docs:edit", async (user) => {
     const { doc } = await requireDocRead(user, id);
+    if (doc.kind !== "page") throw new Error("多维表格和记录行请使用表格内复制功能");
     await requireSpaceEdit(user, doc.spaceId);
     const copy = await db.$transaction(async (tx) => {
       const siblings = await tx.document.findMany({
@@ -277,7 +348,7 @@ export async function duplicateDocument(id: string) {
         select: { id: true, sortOrder: true },
       });
       for (const s of siblings) await tx.document.update({ where: { id: s.id }, data: { sortOrder: s.sortOrder + 1 } });
-      return tx.document.create({
+      const created = await tx.document.create({
         data: {
           spaceId: doc.spaceId,
           parentId: doc.parentId,
@@ -292,6 +363,8 @@ export async function duplicateDocument(id: string) {
           updatedById: user.id,
         },
       });
+      await syncDocumentLinks(tx, created.id, parseContent(doc.content), { isTemplate: false });
+      return created;
     });
     revalidateDocs();
     return { id: copy.id };
@@ -301,6 +374,7 @@ export async function duplicateDocument(id: string) {
 export async function saveAsTemplate(id: string) {
   return runAction("docs:edit", async (user) => {
     const { doc } = await requireDocRead(user, id);
+    if (doc.kind === "whiteboard") throw new Error("白板不能作为页面模板");
     await requireSpaceEdit(user, doc.spaceId);
     await db.document.create({
       data: {
@@ -375,7 +449,10 @@ export async function updateSpace(input: z.input<typeof spaceSchema> & { id: str
 export async function deleteSpace(id: string) {
   return runAction("docs:edit", async (user) => {
     await requireSpaceManage(user, id);
-    const docs = await db.document.findMany({ where: { spaceId: id }, select: { id: true } });
+    const [docs, atts] = await Promise.all([
+      db.document.findMany({ where: { spaceId: id }, select: { id: true } }),
+      db.documentAttachment.findMany({ where: { spaceId: id }, select: { id: true } }),
+    ]);
     await db.$transaction(async (tx) => {
       if (docs.length) {
         const ids = docs.map((d) => d.id);
@@ -384,6 +461,7 @@ export async function deleteSpace(id: string) {
       }
       await tx.space.delete({ where: { id } });
     });
+    await Promise.all(atts.map((a) => unlink(attachmentPath(a.id)).catch(() => {})));
     revalidateDocs();
     return null;
   });
@@ -562,21 +640,34 @@ export async function getVersion(id: string) {
   return runAction("docs:view", async (user) => {
     const v = await db.documentVersion.findUnique({ where: { id } });
     if (!v) throw new Error("版本不存在");
-    await requireDocRead(user, v.documentId);
+    const { doc } = await requireDocRead(user, v.documentId);
+    if (doc.kind === "whiteboard") {
+      const scene = requireWhiteboardScene(v.content);
+      const references = await getWhiteboardReferences(user, scene.elements);
+      return { id: v.id, title: v.title, content: v.content, references };
+    }
     return { id: v.id, title: v.title, content: v.content };
   });
 }
 
 const saveVersionSchema = z.object({
   documentId: z.string().min(1),
-  title: z.string().max(200),
-  content: z.string().max(5_000_000),
+  title: z.string().max(200).optional(),
+  content: z.string().max(5_000_000).optional(),
 });
 
 export async function saveVersion(input: z.input<typeof saveVersionSchema>) {
   return runAction("docs:edit", async (user) => {
     const v = saveVersionSchema.parse(input);
-    await requireDocWrite(user, v.documentId);
+    const { doc } = await requireDocWrite(user, v.documentId);
+    if (doc.kind === "whiteboard") {
+      requireWhiteboardScene(doc.content);
+      await db.documentVersion.create({
+        data: { documentId: doc.id, title: doc.title, content: doc.content, createdById: user.id },
+      });
+      return null;
+    }
+    if (v.title === undefined || v.content === undefined) throw new Error("缺少文档内容");
     const json: JSONNode = parseContent(v.content);
     if (json === EMPTY_DOC && v.content !== JSON.stringify(EMPTY_DOC)) throw new Error("文档内容无效");
     await db.documentVersion.create({
@@ -588,10 +679,16 @@ export async function saveVersion(input: z.input<typeof saveVersionSchema>) {
 
 export async function restoreVersion(versionId: string) {
   return runAction("docs:edit", async (user) => {
-    const v = await db.documentVersion.findUnique({ where: { id: versionId }, select: { documentId: true } });
+    const v = await db.documentVersion.findUnique({ where: { id: versionId } });
     if (!v) throw new Error("版本不存在");
-    await requireDocWrite(user, v.documentId);
-    await callCollab("/restore", user.id, { documentId: v.documentId, versionId });
+    const { doc } = await requireDocWrite(user, v.documentId);
+    if (doc.kind === "whiteboard") {
+      const current = requireWhiteboardScene(doc.content);
+      const previous = requireWhiteboardScene(v.content);
+      await writeWhiteboard(user, doc, current.revision, previous.elements, v.title);
+    } else {
+      await callCollab("/restore", user.id, { documentId: v.documentId, versionId });
+    }
     revalidateDocs();
     return null;
   });

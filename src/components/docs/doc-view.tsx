@@ -11,6 +11,7 @@ import {
   Copy,
   FileDown,
   FilePlus2,
+  GitFork,
   History,
   Image as ImageIcon,
   Link2,
@@ -26,7 +27,7 @@ import {
   WifiOff,
 } from "lucide-react";
 import { Avatar, AvatarStack } from "@/components/ui/avatar";
-import { IconButton } from "@/components/ui/button";
+import { Button, IconButton } from "@/components/ui/button";
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger, Popover, PopoverContent, PopoverTrigger } from "@/components/ui/menu";
 import { TopBar } from "@/components/ui/page";
 import { useAction } from "@/components/ui/use-action";
@@ -34,8 +35,10 @@ import { formatRelative } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { COVERS, coverStyle } from "@/lib/docs/constants";
 import { isEmptyDoc, parseContent } from "@/lib/docs/content";
+import type { BacklinkItem } from "@/lib/docs/links";
 import { BUILTIN_TEMPLATES } from "@/lib/docs/templates";
 import {
+  createDatabase,
   duplicateDocument,
   notifyDocMention,
   saveAsTemplate,
@@ -46,20 +49,26 @@ import {
   createDocument,
 } from "@/app/(app)/docs/actions";
 import { emitDocMeta } from "./events";
+import { BacklinksPanel } from "./backlinks-panel";
 import { EmojiPicker } from "./emoji-picker";
+import { GraphDialog } from "./graph/graph-dialog";
 import { HistoryDialog } from "./history-dialog";
 import { PagePickerDialog } from "./page-picker";
 import { UrlDialog } from "./url-dialog";
 import { CommentsPanel, type PendingSelection } from "./comments-panel";
 import { CollabEditor, type EditorCallbacks } from "./editor/collab-editor";
+import { DatabaseLinkPickerDialog } from "./editor/database-view-node";
+import { uploadFilesIntoEditor } from "./editor/upload";
 import { StaticDoc } from "./editor/static-doc";
 import { useCollab } from "./editor/use-collab";
+import { RowPropertiesBar, type RowPropertiesContext } from "./database/row-properties-bar";
 import type { CommentThread, Member } from "./types";
 import { ShareToChatButton } from "@/components/im/share-to-chat";
 
 export type DocViewProps = {
   doc: {
     id: string;
+    kind?: string;
     title: string;
     icon: string | null;
     cover: string | null;
@@ -73,8 +82,11 @@ export type DocViewProps = {
     updatedAt: string;
     updatedBy: { name: string; avatarColor: string } | null;
   };
+  rowProperties?: RowPropertiesContext | null;
   ancestors: { id: string; title: string; icon: string | null }[];
   childPages: { id: string; title: string; icon: string | null }[];
+  backlinks: BacklinkItem[];
+  backlinksTruncated: boolean;
   threads: CommentThread[];
   members: Member[];
   me: { id: string; name: string; color: string };
@@ -112,7 +124,21 @@ function CoverPicker({ onPick, onRemove }: { onPick: (key: string) => void; onRe
   );
 }
 
-export function DocView({ doc, ancestors, childPages, threads, members, me, canWrite, canAdmin, favorite: favorite0, focusComment }: DocViewProps) {
+export function DocView({
+  doc,
+  rowProperties,
+  ancestors,
+  childPages,
+  backlinks,
+  backlinksTruncated,
+  threads,
+  members,
+  me,
+  canWrite,
+  canAdmin,
+  favorite: favorite0,
+  focusComment,
+}: DocViewProps) {
   const router = useRouter();
   const { run, pending } = useAction();
   const [title, setTitle] = useState(doc.title);
@@ -124,11 +150,17 @@ export function DocView({ doc, ancestors, childPages, threads, members, me, canW
   const [focusThread, setFocusThread] = useState<string | null>(focusComment ?? null);
   const [pendingSel, setPendingSel] = useState<PendingSelection | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [graphOpen, setGraphOpen] = useState(false);
   const [pagePickerOpen, setPagePickerOpen] = useState(false);
+  const [dbPickerOpen, setDbPickerOpen] = useState(false);
+  const [whiteboardPickerOpen, setWhiteboardPickerOpen] = useState(false);
   const [imageDialogOpen, setImageDialogOpen] = useState(false);
   const [editor, setEditor] = useState<Editor | null>(null);
   const [hasContent, setHasContent] = useState(() => !isEmptyDoc(parseContent(doc.content)));
   const pendingRange = useRef<Range | null>(null);
+  const editorRef = useRef<Editor | null>(null);
+  const attachFileRef = useRef<HTMLInputElement | null>(null);
+  const imageFileRef = useRef<HTMLInputElement | null>(null);
   const titleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingTitle = useRef<string | null>(null);
 
@@ -262,18 +294,82 @@ export function DocView({ doc, ancestors, childPages, threads, members, me, canW
         pendingRange.current = range;
         setPagePickerOpen(true);
       },
+      onCreateDatabase: (range) => {
+        if (!canWrite) return;
+        const pos = range.from;
+        void createDatabase({
+          spaceId: doc.spaceId,
+          parentId: doc.kind === "row" ? null : doc.id,
+        }).then((res) => {
+          if (!res.ok) {
+            toast.error(res.error);
+            return;
+          }
+          const ed = editorRef.current;
+          if (ed) {
+            ed.chain()
+              .focus()
+              .insertContentAt(Math.min(pos, ed.state.doc.content.size), {
+                type: "databaseView",
+                attrs: { databaseId: res.data.id, viewId: res.data.defaultViewId },
+              })
+              .run();
+          }
+          toast.success("已新建并嵌入多维表格");
+          router.refresh();
+        });
+      },
+      onLinkDatabase: (range) => {
+        pendingRange.current = range;
+        setDbPickerOpen(true);
+      },
+      onEmbedWhiteboard: (range) => {
+        pendingRange.current = range;
+        setWhiteboardPickerOpen(true);
+      },
       onImage: (range) => {
         pendingRange.current = range;
         setImageDialogOpen(true);
       },
+      onFile: (range) => {
+        pendingRange.current = range;
+        attachFileRef.current?.click();
+      },
+      onFiles: (files, pos) => {
+        if (!canWrite) return;
+        void uploadFilesIntoEditor(editorRef.current, files, doc.id, pos);
+      },
       onMention: (userId) => {
         void run(() => notifyDocMention({ documentId: doc.id, userIds: [userId] }), { refresh: false });
       },
+      onQuickCreatePage: async (pageTitle) => {
+        const res = await createDocument({ spaceId: doc.spaceId, title: pageTitle });
+        if (!res.ok) {
+          toast.error(res.error);
+          return null;
+        }
+        toast.success(`已新建页面「${res.data.title || pageTitle}」`);
+        router.refresh();
+        return { id: res.data.id, title: res.data.title || pageTitle };
+      },
     }),
-    [doc.id, run],
+    [doc.id, doc.kind, doc.spaceId, canWrite, run, router],
   );
 
-  const onEditorReady = useCallback((e: Editor | null) => setEditor(e), []);
+  const onEditorReady = useCallback((e: Editor | null) => {
+    editorRef.current = e;
+    setEditor(e);
+  }, []);
+
+  const uploadPickedFiles = (input: HTMLInputElement | null) => {
+    const files = [...(input?.files ?? [])];
+    if (input) input.value = "";
+    setImageDialogOpen(false);
+    if (!files.length || !canWrite) return;
+    const pos = pendingRange.current?.from ?? null;
+    pendingRange.current = null;
+    void uploadFilesIntoEditor(editorRef.current, files, doc.id, pos);
+  };
 
   const insertAt = (content: Record<string, unknown>) => {
     if (!editor) return;
@@ -395,6 +491,9 @@ export function DocView({ doc, ancestors, childPages, threads, members, me, canW
                 {openCount > 0 && <span className="absolute -right-1.5 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-accent px-0.5 text-[9px] font-semibold text-white">{openCount}</span>}
               </span>
             </IconButton>
+            <IconButton title="关系图" onClick={() => setGraphOpen(true)}>
+              <GitFork className="size-4" />
+            </IconButton>
             <IconButton title="历史版本" onClick={() => setHistoryOpen(true)}>
               <History className="size-4" />
             </IconButton>
@@ -413,6 +512,11 @@ export function DocView({ doc, ancestors, childPages, threads, members, me, canW
                 <MenuItem icon={<FileDown />} onSelect={() => window.open(`/api/docs/${doc.id}/export`, "_blank")}>
                   导出 Markdown
                 </MenuItem>
+                {doc.kind !== "row" && (
+                  <MenuItem icon={<FileDown />} onSelect={() => window.open(`/api/docs/${doc.id}/export?subtree=1`, "_blank")}>
+                    导出（含子页面）
+                  </MenuItem>
+                )}
                 {canWrite && (
                   <MenuItem
                     icon={<Save />}
@@ -425,21 +529,30 @@ export function DocView({ doc, ancestors, childPages, threads, members, me, canW
                 )}
                 {canWrite && (
                   <>
-                    <MenuSeparator />
-                    <MenuItem
-                      icon={<Copy />}
-                      onSelect={() => void run(() => duplicateDocument(doc.id), { success: "已创建副本", onSuccess: (r) => router.push(`/docs/${r.id}`) })}
-                    >
-                      创建副本
-                    </MenuItem>
-                    <MenuItem icon={<FilePlus2 />} onSelect={() => void run(() => saveAsTemplate(doc.id), { success: "已保存为模板" })}>
-                      保存为模板
-                    </MenuItem>
+                    {doc.kind !== "row" && (
+                      <>
+                        <MenuSeparator />
+                        <MenuItem
+                          icon={<Copy />}
+                          onSelect={() => void run(() => duplicateDocument(doc.id), { success: "已创建副本", onSuccess: (r) => router.push(`/docs/${r.id}`) })}
+                        >
+                          创建副本
+                        </MenuItem>
+                        <MenuItem icon={<FilePlus2 />} onSelect={() => void run(() => saveAsTemplate(doc.id), { success: "已保存为模板" })}>
+                          保存为模板
+                        </MenuItem>
+                      </>
+                    )}
                     <MenuSeparator />
                     <MenuItem
                       icon={<Trash2 />}
                       danger
-                      onSelect={() => void run(() => trashDocument(doc.id), { success: "已移到回收站", onSuccess: () => router.push("/docs") })}
+                      onSelect={() =>
+                        void run(() => trashDocument(doc.id), {
+                          success: "已移到回收站",
+                          onSuccess: () => router.push(doc.kind === "row" && doc.parentId ? `/docs/${doc.parentId}` : "/docs"),
+                        })
+                      }
                     >
                       移到回收站
                     </MenuItem>
@@ -473,7 +586,7 @@ export function DocView({ doc, ancestors, childPages, threads, members, me, canW
           )}
 
           <div className={cn("mx-auto w-full px-6 sm:px-10", fullWidth ? "max-w-[1400px] lg:px-16" : "max-w-[800px]")}>
-            <div className={cn("group/head", coverCss ? "-mt-10" : "pt-12")}>
+            <div className={cn("group/head relative z-10", coverCss ? "-mt-10" : "pt-12")}>
               <EmojiPicker onSelect={onPickIcon} onRemove={canWrite && icon ? onRemoveIcon : undefined}>
                 <button
                   type="button"
@@ -537,9 +650,12 @@ export function DocView({ doc, ancestors, childPages, threads, members, me, canW
               {!canWrite && <span className="rounded bg-hover px-1.5 py-0.5 text-[11px]">只读</span>}
             </div>
 
+            {rowProperties && <RowPropertiesBar initial={rowProperties} />}
+
             <div className="mt-4">
               {showEditor ? (
                 <CollabEditor
+                  docId={doc.id}
                   provider={session.provider}
                   ydoc={session.ydoc}
                   user={session.user}
@@ -570,7 +686,7 @@ export function DocView({ doc, ancestors, childPages, threads, members, me, canW
               )}
             </div>
 
-            {canWrite && editor && !hasContent && (
+            {canWrite && editor && !hasContent && doc.kind !== "row" && (
               <div className="mt-6">
                 <div className="mb-2 text-[13px] font-medium text-ink-3">从模板开始</div>
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -592,7 +708,7 @@ export function DocView({ doc, ancestors, childPages, threads, members, me, canW
               </div>
             )}
 
-            {(childPages.length > 0 || canWrite) && (
+            {doc.kind !== "row" && (childPages.length > 0 || canWrite) && (
               <div className="mt-10">
                 <div className="mb-1 text-[13px] font-semibold text-ink-3">子页面</div>
                 <div className="divide-y divide-line rounded-lg border border-line">
@@ -620,6 +736,13 @@ export function DocView({ doc, ancestors, childPages, threads, members, me, canW
                 </div>
               </div>
             )}
+
+            <BacklinksPanel
+              docId={doc.id}
+              initialLinks={backlinks}
+              initialTruncated={backlinksTruncated}
+              onOpenGraph={() => setGraphOpen(true)}
+            />
           </div>
         </div>
 
@@ -641,6 +764,7 @@ export function DocView({ doc, ancestors, childPages, threads, members, me, canW
       </div>
 
       <HistoryDialog open={historyOpen} onOpenChange={setHistoryOpen} docId={doc.id} canRestore={canWrite} onSaveCurrent={saveCurrentVersion} />
+      <GraphDialog open={graphOpen} onOpenChange={setGraphOpen} docId={doc.id} docTitle={title} spaceId={doc.spaceId} />
       <PagePickerDialog
         open={pagePickerOpen}
         onOpenChange={setPagePickerOpen}
@@ -650,17 +774,41 @@ export function DocView({ doc, ancestors, childPages, threads, members, me, canW
           insertAt({ type: "text", text: hit.title, marks: [{ type: "link", attrs: { href: `/docs/${hit.id}` } }] });
         }}
       />
+      <DatabaseLinkPickerDialog
+        open={dbPickerOpen}
+        onOpenChange={setDbPickerOpen}
+        onSelect={(databaseId, viewId) => {
+          setDbPickerOpen(false);
+          insertAt({ type: "databaseView", attrs: { databaseId, viewId } });
+        }}
+      />
+      <PagePickerDialog
+        open={whiteboardPickerOpen}
+        onOpenChange={setWhiteboardPickerOpen}
+        kind="whiteboard"
+        onPick={(board) => {
+          setWhiteboardPickerOpen(false);
+          insertAt({ type: "whiteboardView", attrs: { boardId: board.id } });
+        }}
+      />
       <UrlDialog
         open={imageDialogOpen}
         onOpenChange={setImageDialogOpen}
         title="插入图片"
-        description="粘贴图片链接（http:// 或 https://）"
+        description="粘贴图片链接（http:// 或 https://），或上传本地图片"
         placeholder="https://example.com/image.png"
         onSubmit={(url) => {
           setImageDialogOpen(false);
           insertAt({ type: "image", attrs: { src: url } });
         }}
+        extra={
+          <Button className="mb-2 w-full" onClick={() => imageFileRef.current?.click()}>
+            上传图片
+          </Button>
+        }
       />
+      <input ref={attachFileRef} type="file" multiple hidden onChange={() => uploadPickedFiles(attachFileRef.current)} />
+      <input ref={imageFileRef} type="file" accept="image/*" hidden onChange={() => uploadPickedFiles(imageFileRef.current)} />
     </div>
   );
 }

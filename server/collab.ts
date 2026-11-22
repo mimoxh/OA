@@ -11,6 +11,7 @@ import { verifyScopedToken } from "@/lib/auth/token";
 import { getDocAccess, loadDocUser } from "@/lib/docs/access";
 import { COLLAB_FIELD, createSchemaExtensions } from "@/lib/docs/schema";
 import { extractText, parseContent } from "@/lib/docs/content";
+import { syncDocumentLinks } from "@/lib/docs/links";
 
 const PORT = Number(process.env.COLLAB_PORT ?? 1234);
 /** 编辑过程中距上一个历史版本超过该时长时自动生成新版本 */
@@ -29,9 +30,9 @@ function log(...args: unknown[]) {
 async function persist(document: Y.Doc, documentId: string, userId?: string) {
   const existing = await db.document.findUnique({
     where: { id: documentId },
-    select: { content: true, title: true, createdById: true, updatedAt: true },
+    select: { content: true, title: true, createdById: true, updatedAt: true, isTemplate: true, kind: true },
   });
-  if (!existing) return;
+  if (!existing || existing.kind === "whiteboard") return;
   const json = TiptapTransformer.fromYdoc(document, COLLAB_FIELD);
   const content = JSON.stringify(json);
   const state = Buffer.from(Y.encodeStateAsUpdate(document));
@@ -43,6 +44,7 @@ async function persist(document: Y.Doc, documentId: string, userId?: string) {
     where: { id: documentId },
     data: { ydoc: state, content, text: extractText(json), ...(userId ? { updatedById: userId } : {}) },
   });
+  await syncDocumentLinks(db, documentId, json, { isTemplate: existing.isTemplate });
   const last = await db.documentVersion.findFirst({
     where: { documentId },
     orderBy: { createdAt: "desc" },
@@ -97,6 +99,7 @@ class HttpError extends Error {
 async function restoreVersion(instance: Hocuspocus, body: Record<string, unknown>) {
   const { user, doc, canWrite } = await authorize(body.token, body.documentId);
   if (!canWrite) throw new HttpError(403, "没有编辑权限");
+  if (doc.kind === "whiteboard") throw new HttpError(400, "请通过白板历史版本恢复");
   const version = await db.documentVersion.findUnique({ where: { id: String(body.versionId ?? "") } });
   if (!version || version.documentId !== doc.id) throw new HttpError(404, "版本不存在");
 
@@ -165,6 +168,7 @@ const redisExt = process.env.REDIS_URL ? createRedisExtension(process.env.REDIS_
 const server = new Server<Context>({
   name: "oa-docs",
   port: PORT,
+  ...(process.env.COLLAB_HOST ? { address: process.env.COLLAB_HOST } : {}),
   quiet: true,
   debounce: 1500,
   maxDebounce: 8000,
@@ -181,13 +185,15 @@ const server = new Server<Context>({
     if (!user) throw new Error("用户不存在或已停用");
     const res = await getDocAccess(user, documentName);
     if (!res || !res.canRead) throw new Error("没有权限访问该文档");
+    if (res.doc.kind === "whiteboard") throw new Error("白板使用独立的编辑接口");
     if (!res.canWrite) connectionConfig.readOnly = true;
     return { userId: user.id, name: user.name } satisfies Context;
   },
 
   async onLoadDocument({ documentName }) {
-    const doc = await db.document.findUnique({ where: { id: documentName }, select: { ydoc: true, content: true } });
+    const doc = await db.document.findUnique({ where: { id: documentName }, select: { ydoc: true, content: true, kind: true } });
     if (!doc) throw new Error("文档不存在");
+    if (doc.kind === "whiteboard") throw new Error("白板使用独立的编辑接口");
     if (doc.ydoc && doc.ydoc.length > 0) return new Uint8Array(doc.ydoc);
     const json = parseContent(doc.content);
     if (!json.content?.length) return;

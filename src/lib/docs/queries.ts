@@ -3,7 +3,14 @@ import { db } from "@/lib/db";
 import { hasPermission, parsePermissions } from "@/lib/permissions";
 import { spaceAccess, visibleSpaceWhere, type DocUser, type SpaceLike } from "./access";
 
-export type TreeDoc = { id: string; title: string; icon: string | null; parentId: string | null; spaceId: string };
+export type TreeDoc = {
+  id: string;
+  title: string;
+  icon: string | null;
+  parentId: string | null;
+  spaceId: string;
+  kind: string;
+};
 export type NavSpace = {
   id: string;
   name: string;
@@ -23,12 +30,12 @@ export async function getDocsNav(user: DocUser) {
   const spaceIds = spaces.map((s) => s.id);
   const [docs, favorites] = await Promise.all([
     db.document.findMany({
-      where: { spaceId: { in: spaceIds }, deletedAt: null, isTemplate: false },
-      select: { id: true, title: true, icon: true, parentId: true, spaceId: true },
+      where: { spaceId: { in: spaceIds }, deletedAt: null, isTemplate: false, kind: { not: "row" } },
+      select: { id: true, title: true, icon: true, parentId: true, spaceId: true, kind: true },
       orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
     }),
     db.documentFavorite.findMany({
-      where: { userId: user.id, document: { deletedAt: null, isTemplate: false, spaceId: { in: spaceIds } } },
+      where: { userId: user.id, document: { deletedAt: null, isTemplate: false, kind: { not: "row" }, spaceId: { in: spaceIds } } },
       select: { documentId: true },
       orderBy: { createdAt: "asc" },
     }),

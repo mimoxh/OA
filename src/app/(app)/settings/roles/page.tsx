@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { Lock } from "lucide-react";
 import { db } from "@/lib/db";
-import { requirePermission } from "@/lib/auth/dal";
-import { parsePermissions, PERMISSION_LABELS } from "@/lib/permissions";
+import { getEnabledApps, requirePermission } from "@/lib/auth/dal";
+import { MODULES, parsePermissions, PERMISSION_LABELS } from "@/lib/permissions";
 import { Card, Page, PageHeader, TopBar } from "@/components/ui/page";
 import { NewRoleButton, RoleEditor } from "@/components/settings/role-editor";
 import { cn } from "@/lib/utils";
@@ -19,6 +19,8 @@ function summary(perms: string[]) {
 export default async function RolesPage({ searchParams }: PageProps<"/settings/roles">) {
   await requirePermission("admin");
   const sp = await searchParams;
+  const enabled = await getEnabledApps();
+  const disabledApps = MODULES.filter((m) => !enabled.has(m.key)).map((m) => m.key);
   const roles = await db.role.findMany({
     orderBy: { createdAt: "asc" },
     include: {
@@ -60,6 +62,7 @@ export default async function RolesPage({ searchParams }: PageProps<"/settings/r
           {selected && (
             <RoleEditor
               key={selected.id + selected.permissions + selected.name}
+              disabledApps={disabledApps}
               role={{
                 id: selected.id,
                 key: selected.key,

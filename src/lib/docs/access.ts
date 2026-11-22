@@ -1,6 +1,7 @@
 import type { Prisma } from "@/generated/prisma/client";
 import { db, type DbClient } from "@/lib/db";
 import { hasPermission, parsePermissions } from "@/lib/permissions";
+import { getDisabledApps } from "@/lib/apps-store";
 
 /** 文档权限判断所需的最小用户信息（Next 页面与协同服务共用，因此不依赖 next/*） */
 export type DocUser = { id: string; permissions: string[] };
@@ -43,6 +44,7 @@ export async function loadDocUser(userId: string, client: DbClient = db) {
 }
 
 export async function getDocAccess(user: DocUser, documentId: string, client: DbClient = db) {
+  if ((await getDisabledApps(client)).has("docs")) return null;
   const doc = await client.document.findUnique({
     where: { id: documentId },
     include: { space: { include: { members: { select: { userId: true, role: true } } } } },

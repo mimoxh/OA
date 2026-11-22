@@ -1,12 +1,12 @@
 import Link from "next/link";
-import { Lock, Star } from "lucide-react";
+import { GitFork, Lock, Star } from "lucide-react";
 import { db } from "@/lib/db";
 import { can, requirePermission } from "@/lib/auth/dal";
 import { EmptyState, Page, PageHeader, Section, TopBar } from "@/components/ui/page";
 import { formatRelative } from "@/lib/format";
 import { spaceAccess, visibleSpaceWhere } from "@/lib/docs/access";
 import { DocCard } from "@/components/docs/doc-card";
-import { NewPageButton, NewSpaceButton } from "@/components/docs/buttons";
+import { NewDatabaseButton, NewPageButton, NewSpaceButton } from "@/components/docs/buttons";
 import { SpaceHome } from "./space-home";
 
 const cardSelect = {
@@ -32,7 +32,7 @@ export default async function DocsHomePage({ searchParams }: PageProps<"/docs">)
     include: { members: { select: { userId: true, role: true } } },
   });
   const spaceIds = spaces.map((s) => s.id);
-  const live = { deletedAt: null, isTemplate: false, spaceId: { in: spaceIds } };
+  const live = { deletedAt: null, isTemplate: false, kind: { not: "row" }, spaceId: { in: spaceIds } };
   const [recent, favorites, counts] = await Promise.all([
     db.document.findMany({ where: live, orderBy: { updatedAt: "desc" }, take: 9, select: cardSelect }),
     db.documentFavorite.findMany({
@@ -51,7 +51,15 @@ export default async function DocsHomePage({ searchParams }: PageProps<"/docs">)
         crumbs={[{ label: "文档" }]}
         actions={
           <>
+            <Link
+              href="/docs/graph"
+              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-line bg-white px-2.5 text-[13px] font-medium text-ink-2 transition-colors hover:bg-hover hover:text-ink"
+            >
+              <GitFork className="size-3.5" />
+              关系图
+            </Link>
             {can(user, "docs:edit") && <NewSpaceButton />}
+            {editableSpace && <NewDatabaseButton spaceId={editableSpace.id} />}
             {editableSpace && <NewPageButton spaceId={editableSpace.id} />}
           </>
         }

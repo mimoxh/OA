@@ -6,6 +6,10 @@ const nextConfig: NextConfig = {
   // dev 下允许通过 127.0.0.1 访问（预览代理 / e2e 多会话）
   allowedDevOrigins: ["127.0.0.1"],
   serverExternalPackages: ["better-sqlite3"],
+  // proxy 会缓冲请求体（默认 10MB）；附件上传与导入需要更大的上限
+  experimental: {
+    proxyClientMaxBodySize: "60mb",
+  },
   turbopack: {
     rules: {
       "*.css": {

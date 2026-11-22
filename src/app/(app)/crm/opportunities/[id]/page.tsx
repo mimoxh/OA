@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { MessageSquarePlus } from "lucide-react";
 import { db } from "@/lib/db";
-import { can, requireUser } from "@/lib/auth/dal";
+import { can, isAppEnabled, requireUser } from "@/lib/auth/dal";
 import { TopBar, Page, PageHeader, Section } from "@/components/ui/page";
 import { Table, TBody, TD, TEmpty, TH, THead, TR } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -28,7 +28,7 @@ const ACTION_LABEL: Record<string, string> = {
 export default async function OpportunityDetailPage({ params }: PageProps<"/crm/opportunities/[id]">) {
   const user = await requireUser();
   const canEdit = can(user, "crm:edit");
-  const canConvert = can(user, "erp:edit");
+  const canConvert = can(user, "erp:edit") && (await isAppEnabled("erp"));
   const { id } = await params;
   const opp = await db.opportunity.findUnique({
     where: { id },
