@@ -18,6 +18,7 @@ import {
   List,
   ListOrdered,
   Minus,
+  Paperclip,
   Quote,
   Table2,
   Type,
@@ -96,7 +97,11 @@ export type SlashItem = {
   run: (editor: Editor, range: Range) => void;
 };
 
-export function buildSlashItems(cb: { onImage: (range: Range) => void; onLinkPage: (range: Range) => void }): SlashItem[] {
+export function buildSlashItems(cb: {
+  onImage: (range: Range) => void;
+  onFile: (range: Range) => void;
+  onLinkPage: (range: Range) => void;
+}): SlashItem[] {
   const c = (editor: Editor, range: Range) => editor.chain().focus().deleteRange(range);
   return [
     { key: "text", group: "基础块", title: "文本", description: "普通段落文字", icon: Type, keywords: ["text", "paragraph", "wenben", "wb", "duanluo"], run: (e, r) => c(e, r).setParagraph().run() },
@@ -121,6 +126,18 @@ export function buildSlashItems(cb: { onImage: (range: Range) => void; onLinkPag
       run: (e, r) => {
         c(e, r).run();
         cb.onImage(r);
+      },
+    },
+    {
+      key: "file",
+      group: "插入",
+      title: "文件",
+      description: "上传并插入附件",
+      icon: Paperclip,
+      keywords: ["file", "attachment", "fujian", "wenjian", "fj", "fujia"],
+      run: (e, r) => {
+        c(e, r).run();
+        cb.onFile(r);
       },
     },
     {

@@ -13,12 +13,15 @@ import type * as Y from "yjs";
 import { COLLAB_FIELD, createSchemaExtensions } from "@/lib/docs/schema";
 import { SlashCommand, buildSlashItems, mentionSuggestion, type MentionItem } from "./suggestion";
 import { BubbleToolbar, TableToolbar } from "./toolbars";
+import { FileAttachmentView } from "./file-attachment";
 
 export type EditorCallbacks = {
   onCommentClick: (id: string) => void;
   onAddComment: (sel: { from: number; to: number; quote: string }) => void;
   onLinkPage: (range: Range) => void;
   onImage: (range: Range) => void;
+  onFile: (range: Range) => void;
+  onFiles: (files: File[], pos: number | null) => void;
   onMention: (userId: string) => void;
 };
 
@@ -29,6 +32,11 @@ export function useLinkClick() {
     const a = (event.target as HTMLElement).closest("a[href]");
     if (!a) return false;
     const href = a.getAttribute("href") ?? "";
+    if (href.startsWith("/api/")) {
+      event.preventDefault();
+      window.open(href, "_blank", "noopener,noreferrer");
+      return true;
+    }
     if (href.startsWith("/")) {
       event.preventDefault();
       if (event.ctrlKey || event.metaKey) window.open(href, "_blank");
@@ -77,14 +85,19 @@ export function CollabEditor({
       extensions: [
         ...createSchemaExtensions({
           mention: { suggestion: mentionSuggestion(() => members, (id) => callbacks.onMention(id)) },
-        }),
+        }).map((e) => (e.name === "fileAttachment" ? FileAttachmentView : e)),
         Placeholder.configure({
           placeholder: ({ node }) => (node.type.name === "heading" ? `标题 ${node.attrs.level}` : "输入 / 唤出命令，@ 提及成员"),
         }),
         Collaboration.configure({ document: ydoc, field: COLLAB_FIELD }),
         CollaborationCaret.configure({ provider, user: { id: user.id, name: user.name, color: user.color } }),
         SlashCommand.configure({
-          items: () => buildSlashItems({ onImage: (r) => callbacks.onImage(r), onLinkPage: (r) => callbacks.onLinkPage(r) }),
+          items: () =>
+            buildSlashItems({
+              onImage: (r) => callbacks.onImage(r),
+              onFile: (r) => callbacks.onFile(r),
+              onLinkPage: (r) => callbacks.onLinkPage(r),
+            }),
         }),
       ],
       editorProps: {
@@ -93,6 +106,21 @@ export function CollabEditor({
           const c = (event.target as HTMLElement).closest("[data-comment-id]");
           if (c) cb.current.onCommentClick(c.getAttribute("data-comment-id")!);
           return linkRef.current(event, view.editable);
+        },
+        handlePaste: (view, event) => {
+          const files = [...(event.clipboardData?.files ?? [])];
+          if (!files.length || !view.editable) return false;
+          event.preventDefault();
+          cb.current.onFiles(files, null);
+          return true;
+        },
+        handleDrop: (view, event) => {
+          const files = [...(event.dataTransfer?.files ?? [])];
+          if (!files.length || !view.editable) return false;
+          event.preventDefault();
+          const pos = view.posAtCoords({ left: event.clientX, top: event.clientY })?.pos ?? null;
+          cb.current.onFiles(files, pos);
+          return true;
         },
       },
     },

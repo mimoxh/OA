@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Settings2, Trash2, UserPlus, X } from "lucide-react";
+import { FileDown, Settings2, Trash2, UserPlus, X } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { Button, IconButton } from "@/components/ui/button";
 import { ConfirmButton } from "@/components/ui/common";
@@ -38,6 +38,15 @@ export function SpaceActions({ space, pageCount }: { space: SpaceFormValue & { i
       </ConfirmButton>
       <SpaceFormDialog open={open} onOpenChange={setOpen} space={space} />
     </>
+  );
+}
+
+export function SpaceExportButton({ spaceId }: { spaceId: string }) {
+  return (
+    <Button variant="ghost" onClick={() => window.open(`/api/docs/spaces/${spaceId}/export`, "_blank")}>
+      <FileDown className="size-3.5" />
+      导出空间
+    </Button>
   );
 }
 

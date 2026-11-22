@@ -65,6 +65,49 @@ export const CommentMark = Mark.create({
   },
 });
 
+/** 附件块：attrs 保存附件 id 与展示信息，文件本体在 storage/attachments/<id> */
+export const FileAttachment = Node.create({
+  name: "fileAttachment",
+  group: "block",
+  atom: true,
+  draggable: true,
+  addAttributes() {
+    return {
+      id: {
+        default: null,
+        parseHTML: (el: HTMLElement) => el.getAttribute("data-id"),
+        renderHTML: (attrs: Record<string, unknown>) => ({ "data-id": attrs.id }),
+      },
+      fileName: {
+        default: "",
+        parseHTML: (el: HTMLElement) => el.getAttribute("data-file-name") ?? "",
+        renderHTML: (attrs: Record<string, unknown>) => ({ "data-file-name": attrs.fileName }),
+      },
+      mediaType: {
+        default: "",
+        parseHTML: (el: HTMLElement) => el.getAttribute("data-media-type") ?? "",
+        renderHTML: (attrs: Record<string, unknown>) => ({ "data-media-type": attrs.mediaType }),
+      },
+      size: {
+        default: 0,
+        parseHTML: (el: HTMLElement) => Number(el.getAttribute("data-size") ?? 0),
+        renderHTML: (attrs: Record<string, unknown>) => ({ "data-size": attrs.size }),
+      },
+    };
+  },
+  parseHTML() {
+    return [{ tag: 'div[data-type="file-attachment"]' }];
+  },
+  renderHTML({ node, HTMLAttributes }) {
+    const a = node.attrs;
+    return [
+      "div",
+      mergeAttributes({ "data-type": "file-attachment", class: "doc-attachment" }, HTMLAttributes),
+      ["a", { href: `/api/docs/attachments/${a.id}?download=1` }, a.fileName || "附件"],
+    ];
+  },
+});
+
 /**
  * 文档编辑器的 schema 扩展列表。协同服务端（TiptapTransformer）与浏览器端共用，
  * 两端 schema 必须一致，否则 Yjs 内容无法互相转换。
@@ -87,6 +130,7 @@ export function createSchemaExtensions(opts: { mention?: { suggestion?: unknown 
     }),
     Callout,
     CommentMark,
+    FileAttachment,
   ];
 }
 

@@ -247,6 +247,30 @@
   color: #a5a29c;
   pointer-events: none;
 }
+.doc-prose .doc-attachment {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #e9e9e7;
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin: 6px 0;
+}
+.doc-prose .doc-attachment .doc-attachment-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 6px;
+  background: #f7f6f3;
+  color: #787774;
+  flex-shrink: 0;
+}
+.doc-prose .doc-attachment.ProseMirror-selectednode,
+.doc-prose .ProseMirror-selectednode.doc-attachment {
+  outline: 3px solid rgba(35, 131, 226, 0.45);
+}
 .doc-prose .doc-comment {
   border-radius: 2px;
   transition: background-color 0.15s;

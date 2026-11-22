@@ -4,6 +4,10 @@ const nextConfig: NextConfig = {
   // 允许在同一目录并行运行多个 dev 实例（每个实例使用不同 distDir）
   distDir: process.env.NEXT_DIST_DIR || ".next",
   serverExternalPackages: ["better-sqlite3"],
+  // proxy 会缓冲请求体（默认 10MB）；附件上传与导入需要更大的上限
+  experimental: {
+    proxyClientMaxBodySize: "60mb",
+  },
   turbopack: {
     rules: {
       "*.css": {

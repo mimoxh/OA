@@ -62,6 +62,7 @@ model User {
   docsUpdated     Document[]         @relation("DocUpdater")
   docFavorites    DocumentFavorite[]
   docVersions     DocumentVersion[]
+  attachments     Attachment[]          @relation("AttachmentCreator")
 
   approvalsApplied  ApprovalInstance[] @relation("Applicant")
   approvalTasks     ApprovalTask[]
@@ -176,6 +177,7 @@ model Space {
   createdBy   User            @relation(fields: [createdById], references: [id])
   members     SpaceMember[]
   documents   Document[]
+  attachments Attachment[]
   createdAt   DateTime        @default(now())
 }
 
@@ -218,8 +220,9 @@ model Document {
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 
-  favorites DocumentFavorite[]
-  versions  DocumentVersion[]
+  favorites   DocumentFavorite[]
+  versions    DocumentVersion[]
+  attachments Attachment[]
 
   @@index([spaceId, parentId])
 }
@@ -244,6 +247,25 @@ model DocumentVersion {
   createdById String
   createdBy   User     @relation(fields: [createdById], references: [id])
   createdAt   DateTime @default(now())
+}
+
+// 文档附件：文件存磁盘（storage/attachments/<id>），user 文件名仅入库
+model Attachment {
+  id          String    @id
+  spaceId     String
+  space       Space     @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  documentId  String?
+  document    Document? @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  fileName    String
+  mediaType   String
+  size        Int
+  sha256      String
+  createdById String
+  createdBy   User      @relation("AttachmentCreator", fields: [createdById], references: [id])
+  createdAt   DateTime  @default(now())
+
+  @@index([spaceId])
+  @@index([documentId])
 }
 
 // ───────────────────────────── OA ─────────────────────────────

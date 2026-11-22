@@ -28,6 +28,7 @@ const BLOCKS = new Set([
   "tableRow",
   "callout",
   "horizontalRule",
+  "fileAttachment",
 ]);
 
 /** 提取纯文本（用于全文搜索、摘要） */
@@ -36,6 +37,7 @@ export function extractText(doc: JSONNode): string {
   const walk = (n: JSONNode) => {
     if (n.type === "text" && n.text) out.push(n.text);
     else if (n.type === "mention") out.push(`@${String(n.attrs?.label ?? n.attrs?.id ?? "")}`);
+    else if (n.type === "fileAttachment") out.push(`📎 ${String(n.attrs?.fileName ?? "附件")}`);
     else if (n.type === "hardBreak") out.push("\n");
     n.content?.forEach(walk);
     if (n.type === "tableCell" || n.type === "tableHeader") out.push(" ");
@@ -66,83 +68,6 @@ export function collectCommentIds(doc: JSONNode): string[] {
   };
   walk(doc);
   return [...ids];
-}
-
-function inlineMd(nodes: JSONNode[] | undefined): string {
-  if (!nodes) return "";
-  return nodes
-    .map((n) => {
-      if (n.type === "hardBreak") return "  \n";
-      if (n.type === "mention") return `@${String(n.attrs?.label ?? n.attrs?.id ?? "")}`;
-      if (n.type === "image") return `![${String(n.attrs?.alt ?? "")}](${String(n.attrs?.src ?? "")})`;
-      let t = n.text ?? "";
-      const marks = n.marks ?? [];
-      const has = (m: string) => marks.some((x) => x.type === m);
-      if (has("code")) return "`" + t + "`";
-      if (has("bold")) t = `**${t}**`;
-      if (has("italic")) t = `*${t}*`;
-      if (has("strike")) t = `~~${t}~~`;
-      if (has("highlight")) t = `==${t}==`;
-      if (has("underline")) t = `<u>${t}</u>`;
-      const link = marks.find((m) => m.type === "link");
-      if (link) t = `[${t}](${String(link.attrs?.href ?? "")})`;
-      return t;
-    })
-    .join("");
-}
-
-function blockMd(n: JSONNode, indent = ""): string {
-  switch (n.type) {
-    case "paragraph":
-      return indent + inlineMd(n.content);
-    case "heading":
-      return "#".repeat(Number(n.attrs?.level ?? 1)) + " " + inlineMd(n.content);
-    case "blockquote":
-      return (n.content ?? []).map((c) => blockMd(c)).join("\n\n").split("\n").map((l) => "> " + l).join("\n");
-    case "callout":
-      return (
-        `> ${String(n.attrs?.emoji ?? "💡")} ` +
-        (n.content ?? []).map((c) => blockMd(c)).join("\n\n").split("\n").join("\n> ")
-      );
-    case "codeBlock":
-      return "```" + String(n.attrs?.language ?? "") + "\n" + (n.content ?? []).map((c) => c.text ?? "").join("") + "\n```";
-    case "horizontalRule":
-      return "---";
-    case "image":
-      return `![${String(n.attrs?.alt ?? "")}](${String(n.attrs?.src ?? "")})`;
-    case "bulletList":
-    case "orderedList":
-    case "taskList":
-      return (n.content ?? [])
-        .map((item, i) => {
-          const marker =
-            n.type === "orderedList" ? `${Number(n.attrs?.start ?? 1) + i}. ` : n.type === "taskList" ? `- [${item.attrs?.checked ? "x" : " "}] ` : "- ";
-          const [first, ...rest] = item.content ?? [];
-          const head = indent + marker + (first ? blockMd(first).trimStart() : "");
-          const tail = rest.map((c) => blockMd(c, indent + "  ")).filter(Boolean);
-          return [head, ...tail].join("\n");
-        })
-        .join("\n");
-    case "table": {
-      const rows = (n.content ?? []).map((row) =>
-        (row.content ?? []).map((cell) =>
-          (cell.content ?? []).map((p) => inlineMd(p.content)).join(" ").replace(/\|/g, "\\|"),
-        ),
-      );
-      if (!rows.length) return "";
-      const cols = Math.max(...rows.map((r) => r.length));
-      const line = (r: string[]) => "| " + Array.from({ length: cols }, (_, i) => r[i] ?? "").join(" | ") + " |";
-      return [line(rows[0]), "| " + Array.from({ length: cols }, () => "---").join(" | ") + " |", ...rows.slice(1).map(line)].join("\n");
-    }
-    default:
-      return (n.content ?? []).map((c) => blockMd(c, indent)).join("\n\n");
-  }
-}
-
-/** Tiptap JSON → Markdown */
-export function toMarkdown(doc: JSONNode, title?: string): string {
-  const body = (doc.content ?? []).map((n) => blockMd(n)).join("\n\n");
-  return (title ? `# ${title}\n\n` : "") + body + "\n";
 }
 
 // ── JSON 构造工具（模板与种子数据共用） ──

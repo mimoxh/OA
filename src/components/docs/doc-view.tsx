@@ -26,7 +26,7 @@ import {
   WifiOff,
 } from "lucide-react";
 import { Avatar, AvatarStack } from "@/components/ui/avatar";
-import { IconButton } from "@/components/ui/button";
+import { Button, IconButton } from "@/components/ui/button";
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger, Popover, PopoverContent, PopoverTrigger } from "@/components/ui/menu";
 import { TopBar } from "@/components/ui/page";
 import { useAction } from "@/components/ui/use-action";
@@ -52,6 +52,7 @@ import { PagePickerDialog } from "./page-picker";
 import { UrlDialog } from "./url-dialog";
 import { CommentsPanel, type PendingSelection } from "./comments-panel";
 import { CollabEditor, type EditorCallbacks } from "./editor/collab-editor";
+import { uploadFilesIntoEditor } from "./editor/upload";
 import { StaticDoc } from "./editor/static-doc";
 import { useCollab } from "./editor/use-collab";
 import type { CommentThread, Member } from "./types";
@@ -128,6 +129,9 @@ export function DocView({ doc, ancestors, childPages, threads, members, me, canW
   const [editor, setEditor] = useState<Editor | null>(null);
   const [hasContent, setHasContent] = useState(() => !isEmptyDoc(parseContent(doc.content)));
   const pendingRange = useRef<Range | null>(null);
+  const editorRef = useRef<Editor | null>(null);
+  const attachFileRef = useRef<HTMLInputElement | null>(null);
+  const imageFileRef = useRef<HTMLInputElement | null>(null);
   const titleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingTitle = useRef<string | null>(null);
 
@@ -265,14 +269,35 @@ export function DocView({ doc, ancestors, childPages, threads, members, me, canW
         pendingRange.current = range;
         setImageDialogOpen(true);
       },
+      onFile: (range) => {
+        pendingRange.current = range;
+        attachFileRef.current?.click();
+      },
+      onFiles: (files, pos) => {
+        if (!canWrite) return;
+        void uploadFilesIntoEditor(editorRef.current, files, doc.id, pos);
+      },
       onMention: (userId) => {
         void run(() => notifyDocMention({ documentId: doc.id, userIds: [userId] }), { refresh: false });
       },
     }),
-    [doc.id, run],
+    [doc.id, canWrite, run],
   );
 
-  const onEditorReady = useCallback((e: Editor | null) => setEditor(e), []);
+  const onEditorReady = useCallback((e: Editor | null) => {
+    editorRef.current = e;
+    setEditor(e);
+  }, []);
+
+  const uploadPickedFiles = (input: HTMLInputElement | null) => {
+    const files = [...(input?.files ?? [])];
+    if (input) input.value = "";
+    setImageDialogOpen(false);
+    if (!files.length || !canWrite) return;
+    const pos = pendingRange.current?.from ?? null;
+    pendingRange.current = null;
+    void uploadFilesIntoEditor(editorRef.current, files, doc.id, pos);
+  };
 
   const insertAt = (content: Record<string, unknown>) => {
     if (!editor) return;
@@ -404,6 +429,9 @@ export function DocView({ doc, ancestors, childPages, threads, members, me, canW
                 )}
                 <MenuItem icon={<FileDown />} onSelect={() => window.open(`/api/docs/${doc.id}/export`, "_blank")}>
                   导出 Markdown
+                </MenuItem>
+                <MenuItem icon={<FileDown />} onSelect={() => window.open(`/api/docs/${doc.id}/export?subtree=1`, "_blank")}>
+                  导出（含子页面）
                 </MenuItem>
                 {canWrite && (
                   <MenuItem
@@ -646,13 +674,20 @@ export function DocView({ doc, ancestors, childPages, threads, members, me, canW
         open={imageDialogOpen}
         onOpenChange={setImageDialogOpen}
         title="插入图片"
-        description="粘贴图片链接（http:// 或 https://）"
+        description="粘贴图片链接（http:// 或 https://），或上传本地图片"
         placeholder="https://example.com/image.png"
         onSubmit={(url) => {
           setImageDialogOpen(false);
           insertAt({ type: "image", attrs: { src: url } });
         }}
+        extra={
+          <Button className="mb-2 w-full" onClick={() => imageFileRef.current?.click()}>
+            上传图片
+          </Button>
+        }
       />
+      <input ref={attachFileRef} type="file" multiple hidden onChange={() => uploadPickedFiles(attachFileRef.current)} />
+      <input ref={imageFileRef} type="file" accept="image/*" hidden onChange={() => uploadPickedFiles(imageFileRef.current)} />
     </div>
   );
 }

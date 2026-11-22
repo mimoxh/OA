@@ -10,7 +10,7 @@ import { formatDateTime, formatRelative } from "@/lib/format";
 import { getSpaceAccess, isDocsAdmin } from "@/lib/docs/access";
 import { getAllActiveUsers } from "@/lib/docs/queries";
 import { NewPageButton } from "@/components/docs/buttons";
-import { SpaceActions, SpaceMembers, TemplateGallery } from "@/components/docs/space-manage";
+import { SpaceActions, SpaceExportButton, SpaceMembers, TemplateGallery } from "@/components/docs/space-manage";
 
 export async function SpaceHome({ user, spaceId }: { user: CurrentUser; spaceId: string }) {
   const r = await getSpaceAccess(user, spaceId);
@@ -67,6 +67,7 @@ export async function SpaceHome({ user, spaceId }: { user: CurrentUser; spaceId:
         crumbs={[{ label: "文档", href: "/docs" }, { label: `${space.icon} ${space.name}` }]}
         actions={
           <>
+            <SpaceExportButton spaceId={space.id} />
             {access.canManage && (
               <SpaceActions
                 space={{ id: space.id, name: space.name, icon: space.icon, description: space.description, visibility: space.visibility }}

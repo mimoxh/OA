@@ -1,5 +1,6 @@
 "use server";
 
+import { unlink } from "node:fs/promises";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { runAction } from "@/lib/action";
@@ -7,6 +8,7 @@ import { db } from "@/lib/db";
 import type { CurrentUser } from "@/lib/auth/dal";
 import { notify } from "@/lib/services/notify";
 import { getDocAccess, getSpaceAccess, isDocsAdmin, spaceAccess } from "@/lib/docs/access";
+import { attachmentPath } from "@/lib/docs/attachments";
 import { broadcastToDoc, callCollab } from "@/lib/docs/collab-client";
 import { EMPTY_DOC, extractText, parseContent, type JSONNode } from "@/lib/docs/content";
 import { findTemplate } from "@/lib/docs/templates";
@@ -185,6 +187,7 @@ export async function moveDocument(input: z.input<typeof moveSchema>) {
       if (spaceId !== doc.spaceId) {
         const desc = await collectDescendantIds(tx, v.id);
         if (desc.length) await tx.document.updateMany({ where: { id: { in: desc } }, data: { spaceId } });
+        await tx.attachment.updateMany({ where: { documentId: { in: [v.id, ...desc] } }, data: { spaceId } });
       }
     });
     revalidateDocs();
@@ -375,7 +378,10 @@ export async function updateSpace(input: z.input<typeof spaceSchema> & { id: str
 export async function deleteSpace(id: string) {
   return runAction("docs:edit", async (user) => {
     await requireSpaceManage(user, id);
-    const docs = await db.document.findMany({ where: { spaceId: id }, select: { id: true } });
+    const [docs, atts] = await Promise.all([
+      db.document.findMany({ where: { spaceId: id }, select: { id: true } }),
+      db.attachment.findMany({ where: { spaceId: id }, select: { id: true } }),
+    ]);
     await db.$transaction(async (tx) => {
       if (docs.length) {
         const ids = docs.map((d) => d.id);
@@ -384,6 +390,7 @@ export async function deleteSpace(id: string) {
       }
       await tx.space.delete({ where: { id } });
     });
+    await Promise.all(atts.map((a) => unlink(attachmentPath(a.id)).catch(() => {})));
     revalidateDocs();
     return null;
   });

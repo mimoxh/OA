@@ -14,6 +14,7 @@
   - SQLite 的 `contains` 默认对 ASCII 大小写不敏感，不支持 `mode: "insensitive"`。
 - Tailwind CSS v4，设计令牌在 `src/app/globals.css`（`text-ink`、`text-ink-2`、`text-ink-3`、`border-line`、`bg-hover`、`bg-sidebar`、`bg-accent`、`bg-tag-*` 等）。
 - Tiptap 3 + Yjs + Hocuspocus（实时协同），radix-ui，cmdk，sonner，recharts，lucide-react，date-fns。
+- 文档附件存储在 `ATTACHMENT_DIR`（默认 `storage/attachments`，相对路径基于项目根目录），文件名以附件 id 命名、不入库；上限 10MB。
 
 ## 目录
 

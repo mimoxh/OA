@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
-import { ChevronRight, Copy, FilePlus2, Link2, Lock, MoreHorizontal, Pencil, Plus, Settings2, Star, StarOff, Trash2 } from "lucide-react";
+import { ChevronRight, Copy, FilePlus2, FileUp, Link2, Lock, MoreHorizontal, Pencil, Plus, Settings2, Star, StarOff, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from "@/components/ui/menu";
 import { useAction } from "@/components/ui/use-action";
@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import type { NavSpace, TreeDoc } from "@/lib/docs/queries";
 import { createDocument, duplicateDocument, moveDocument, toggleFavorite, trashDocument, updateDocument } from "@/app/(app)/docs/actions";
 import { SpaceFormDialog } from "./space-dialog";
+import { ImportDialog } from "./import-dialog";
 import { DOC_META_EVENT, type DocMetaDetail } from "./events";
 
 const EXPANDED_KEY = "docs:tree:expanded";
@@ -36,6 +37,7 @@ export function DocsTree({
   const [dragId, setDragId] = useState<string | null>(null);
   const [drop, setDrop] = useState<{ id: string; pos: DropPos | "end" } | null>(null);
   const [spaceDialog, setSpaceDialog] = useState(false);
+  const [importTarget, setImportTarget] = useState<{ spaceId: string; parentId: string | null } | null>(null);
 
   useEffect(() => {
     try {
@@ -207,6 +209,7 @@ export function DocsTree({
                     },
                   })
                 }
+                onImport={() => setImportTarget({ spaceId: d.spaceId, parentId: d.id })}
               />
               {canEdit && (
                 <button
@@ -312,6 +315,16 @@ export function DocsTree({
                   {s.canEdit && (
                     <button
                       type="button"
+                      title="导入 Markdown…"
+                      onClick={() => setImportTarget({ spaceId: s.id, parentId: null })}
+                      className="flex size-5 items-center justify-center rounded text-ink-3 hover:bg-active hover:text-ink"
+                    >
+                      <FileUp className="size-3.5" />
+                    </button>
+                  )}
+                  {s.canEdit && (
+                    <button
+                      type="button"
                       title="在此空间新建页面"
                       onClick={() => newPage(s.id)}
                       className="flex size-5 items-center justify-center rounded text-ink-3 hover:bg-active hover:text-ink"
@@ -345,6 +358,9 @@ export function DocsTree({
         {spaces.length === 0 && <div className="px-2 py-1 text-xs text-ink-3">暂无可访问的空间</div>}
       </Section>
       <SpaceFormDialog open={spaceDialog} onOpenChange={setSpaceDialog} />
+      {importTarget && (
+        <ImportDialog spaceId={importTarget.spaceId} parentId={importTarget.parentId} open onOpenChange={(v) => !v && setImportTarget(null)} />
+      )}
     </div>
   );
 }
@@ -418,6 +434,7 @@ function RowMenu({
   onFavorite,
   onDuplicate,
   onTrash,
+  onImport,
 }: {
   doc: TreeDoc;
   canEdit: boolean;
@@ -426,6 +443,7 @@ function RowMenu({
   onFavorite: () => void;
   onDuplicate: () => void;
   onTrash: () => void;
+  onImport: () => void;
 }) {
   return (
     <Menu>
@@ -457,6 +475,11 @@ function RowMenu({
         {canEdit && (
           <MenuItem icon={<Copy />} onSelect={onDuplicate}>
             创建副本
+          </MenuItem>
+        )}
+        {canEdit && (
+          <MenuItem icon={<FileUp />} onSelect={onImport}>
+            导入到此页面下
           </MenuItem>
         )}
         {canEdit && (
