@@ -17,7 +17,7 @@ export async function GET(_req: NextRequest, ctx: RouteContext<"/api/docs/spaces
 
   const pages = await db.document.findMany({
     where: { spaceId: id, deletedAt: null, isTemplate: false },
-    select: { id: true, parentId: true, title: true, icon: true, content: true, sortOrder: true, createdAt: true },
+    select: { id: true, parentId: true, title: true, icon: true, content: true, kind: true, sortOrder: true, createdAt: true },
     orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
   });
 

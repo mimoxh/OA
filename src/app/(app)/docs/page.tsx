@@ -6,7 +6,7 @@ import { EmptyState, Page, PageHeader, Section, TopBar } from "@/components/ui/p
 import { formatRelative } from "@/lib/format";
 import { spaceAccess, visibleSpaceWhere } from "@/lib/docs/access";
 import { DocCard } from "@/components/docs/doc-card";
-import { NewPageButton, NewSpaceButton } from "@/components/docs/buttons";
+import { NewDatabaseButton, NewPageButton, NewSpaceButton } from "@/components/docs/buttons";
 import { SpaceHome } from "./space-home";
 
 const cardSelect = {
@@ -32,7 +32,7 @@ export default async function DocsHomePage({ searchParams }: PageProps<"/docs">)
     include: { members: { select: { userId: true, role: true } } },
   });
   const spaceIds = spaces.map((s) => s.id);
-  const live = { deletedAt: null, isTemplate: false, spaceId: { in: spaceIds } };
+  const live = { deletedAt: null, isTemplate: false, kind: { not: "row" }, spaceId: { in: spaceIds } };
   const [recent, favorites, counts] = await Promise.all([
     db.document.findMany({ where: live, orderBy: { updatedAt: "desc" }, take: 9, select: cardSelect }),
     db.documentFavorite.findMany({
@@ -59,6 +59,7 @@ export default async function DocsHomePage({ searchParams }: PageProps<"/docs">)
               关系图
             </Link>
             {can(user, "docs:edit") && <NewSpaceButton />}
+            {editableSpace && <NewDatabaseButton spaceId={editableSpace.id} />}
             {editableSpace && <NewPageButton spaceId={editableSpace.id} />}
           </>
         }

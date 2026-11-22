@@ -15,6 +15,7 @@ export default async function TrashPage() {
     orderBy: { deletedAt: "desc" },
     select: {
       id: true,
+      kind: true,
       title: true,
       icon: true,
       parentId: true,
@@ -44,7 +45,7 @@ export default async function TrashPage() {
     <>
       <TopBar crumbs={[{ label: "文档", href: "/docs" }, { label: "回收站" }]} actions={anyEditable ? <EmptyTrashButton count={rows.length} /> : undefined} />
       <Page>
-        <PageHeader icon="🗑️" title="回收站" description="删除的页面会保留在这里，可以随时恢复；删除父页面时，子页面会一起移入回收站" />
+        <PageHeader icon="🗑️" title="回收站" description="删除的页面会保留在这里，可以随时恢复；删除父页面或多维表格时，子页面与记录会一起移入回收站" />
         {roots.length === 0 ? (
           <EmptyState icon={<Trash2 />} title="回收站是空的" description="移到回收站的页面会显示在这里" />
         ) : (
@@ -54,17 +55,25 @@ export default async function TrashPage() {
               const n = childCount.get(r.id) ?? 0;
               return (
                 <div key={r.id} className="flex items-center gap-3 border-b border-line px-4 py-2.5 last:border-b-0 hover:bg-hover/40">
-                  <span className="text-lg leading-none">{r.icon || "📄"}</span>
+                  <span className="text-lg leading-none">{r.icon || (r.kind === "database" ? "🗃️" : "📄")}</span>
                   <div className="min-w-0 flex-1">
-                    <Link href={`/docs/${r.id}`} className="block truncate text-sm font-medium text-ink hover:underline">
-                      {r.title || "无标题"}
-                    </Link>
+                    <div className="flex items-center gap-1.5">
+                      <Link href={`/docs/${r.id}`} className="truncate text-sm font-medium text-ink hover:underline">
+                        {r.title || "无标题"}
+                      </Link>
+                      {r.kind === "database" && (
+                        <span className="shrink-0 rounded bg-hover px-1.5 py-0.5 text-[10px] font-medium text-ink-3">多维表格</span>
+                      )}
+                      {r.kind === "row" && (
+                        <span className="shrink-0 rounded bg-hover px-1.5 py-0.5 text-[10px] font-medium text-ink-3">表格记录</span>
+                      )}
+                    </div>
                     <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-ink-3">
                       <span>
                         {r.space.icon} {r.space.name}
                       </span>
                       {r.parent && <span>· 原位置：{r.parent.title || "无标题"}</span>}
-                      {n > 0 && <span>· 含 {n} 个子页面</span>}
+                      {n > 0 && <span>· 含 {n} {r.kind === "database" ? "条记录" : "个子页面"}</span>}
                       {r.updatedBy && (
                         <span className="flex items-center gap-1">
                           · 最后编辑 <Avatar name={r.updatedBy.name} color={r.updatedBy.avatarColor} size={14} /> {r.updatedBy.name}

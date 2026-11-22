@@ -5,10 +5,15 @@ import { getDocAccess } from "@/lib/docs/access";
 import { parseContent } from "@/lib/docs/content";
 import { docToMarkdown } from "@/lib/docs/markdown";
 import { buildDocsZip, collectAttachmentIds, safeFileName, ZipExportError, zipFileName, type ZipPage } from "@/lib/docs/export-zip";
+import { parseWhiteboard } from "@/lib/docs/whiteboard/content";
+
+import { getDatabasePayload } from "@/lib/docs/database/server";
+import { serializeDatabaseCsv } from "@/lib/docs/database/csv";
+import { activeProperties, cellText } from "@/lib/docs/database/engine";
 
 const err = (error: string, status: number) => NextResponse.json({ error }, { status });
 
-/** 下载文档 Markdown：无附件时为 .md，含附件或 ?subtree=1 时为 ZIP */
+/** 下载文档 Markdown：无附件时为 .md，含附件或 ?subtree=1 时为 ZIP；多维表格支持 ?format=csv 或默认 Markdown 表 */
 export async function GET(req: NextRequest, ctx: RouteContext<"/api/docs/[id]/export">) {
   const { id } = await ctx.params;
   const user = await getCurrentUser();
@@ -16,9 +21,50 @@ export async function GET(req: NextRequest, ctx: RouteContext<"/api/docs/[id]/ex
   const res = await getDocAccess(user, id);
   if (!res || !res.canRead) return err("没有权限访问该文档", 403);
 
+  const title = res.doc.title || "无标题";
+
+  if (res.doc.kind === "whiteboard") {
+    const scene = parseWhiteboard(res.doc.content);
+    if (!scene) return err("白板内容无法读取", 422);
+    return NextResponse.json(scene, {
+      headers: {
+        "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(safeFileName(title))}.whiteboard.json`,
+        "Cache-Control": "no-store",
+      },
+    });
+  }
+
+  if (res.doc.kind === "database") {
+    const payload = await getDatabasePayload(user, id, { includeRows: true });
+    const format = req.nextUrl.searchParams.get("format");
+    if (format === "csv") {
+      const csv = serializeDatabaseCsv(payload.properties, payload.rows, payload.members);
+      return new NextResponse(csv, {
+        headers: {
+          "Content-Type": "text/csv; charset=utf-8",
+          "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(safeFileName(title))}.csv`,
+          "Cache-Control": "no-store",
+        },
+      });
+    }
+    const cols = activeProperties(payload.properties);
+    const membersById = new Map(payload.members.map((m) => [m.id, m]));
+    const esc = (s: string) => s.replace(/\|/g, "\\|").replace(/\r?\n/g, " ");
+    const header = `| ${cols.map((c) => esc(c.name)).join(" | ")} |`;
+    const sep = `| ${cols.map(() => "---").join(" | ")} |`;
+    const bodyLines = payload.rows.map((row) => `| ${cols.map((c) => esc(cellText(row, c, membersById))).join(" | ")} |`);
+    const md = `---\ntitle: ${JSON.stringify(title)}\n---\n\n${header}\n${sep}\n${bodyLines.join("\n")}\n`;
+    return new NextResponse(md, {
+      headers: {
+        "Content-Type": "text/markdown; charset=utf-8",
+        "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(safeFileName(title))}.md`,
+        "Cache-Control": "no-store",
+      },
+    });
+  }
+
   const subtree = req.nextUrl.searchParams.get("subtree") === "1";
   const json = parseContent(res.doc.content);
-  const title = res.doc.title || "无标题";
 
   try {
     if (!subtree && collectAttachmentIds(json).size === 0) {
@@ -37,7 +83,7 @@ export async function GET(req: NextRequest, ctx: RouteContext<"/api/docs/[id]/ex
     if (subtree) {
       const descendants = await db.document.findMany({
         where: { spaceId: res.doc.spaceId, deletedAt: null, isTemplate: false },
-        select: { id: true, parentId: true, title: true, icon: true, content: true, sortOrder: true, createdAt: true },
+        select: { id: true, parentId: true, title: true, icon: true, content: true, kind: true, sortOrder: true, createdAt: true },
       });
       const byParent = new Map<string | null, typeof descendants>();
       for (const d of descendants) {

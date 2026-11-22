@@ -3,13 +3,13 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
-import { ChevronRight, Copy, FilePlus2, FileUp, GitFork, Link2, Lock, MoreHorizontal, Pencil, Plus, Settings2, Star, StarOff, Trash2 } from "lucide-react";
+import { ChevronRight, Copy, FilePlus2, FileUp, GitFork, Link2, Lock, MoreHorizontal, Palette, Pencil, Plus, Settings2, Star, StarOff, Table2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from "@/components/ui/menu";
 import { useAction } from "@/components/ui/use-action";
 import { cn } from "@/lib/utils";
 import type { NavSpace, TreeDoc } from "@/lib/docs/queries";
-import { createDocument, duplicateDocument, moveDocument, toggleFavorite, trashDocument, updateDocument } from "@/app/(app)/docs/actions";
+import { createDatabase, createDocument, createWhiteboard, duplicateDocument, moveDocument, toggleFavorite, trashDocument, updateDocument } from "@/app/(app)/docs/actions";
 import { SpaceFormDialog } from "./space-dialog";
 import { ImportDialog } from "./import-dialog";
 import { DOC_META_EVENT, type DocMetaDetail } from "./events";
@@ -98,7 +98,8 @@ export function DocsTree({
   };
 
   const titleOf = (d: TreeDoc) => (meta[d.id]?.title ?? d.title) || "无标题";
-  const iconOf = (d: TreeDoc) => (meta[d.id] && "icon" in meta[d.id] ? meta[d.id].icon : d.icon) || "📄";
+  const iconOf = (d: TreeDoc) =>
+    (meta[d.id] && "icon" in meta[d.id] ? meta[d.id].icon : d.icon) || (d.kind === "database" ? "🗃️" : "📄");
 
   const newPage = (spaceId: string, parentId?: string) =>
     run(() => createDocument({ spaceId, parentId }), {
@@ -108,13 +109,38 @@ export function DocsTree({
       },
     });
 
+  const newDatabase = (spaceId: string, parentId?: string) =>
+    run(() => createDatabase({ spaceId, parentId }), {
+      onSuccess: (d) => {
+        if (parentId) setOpen(parentId, true);
+        router.push(`/docs/${d.id}`);
+      },
+    });
+
+  const newWhiteboard = (spaceId: string, parentId?: string) =>
+    run(() => createWhiteboard({ spaceId, parentId }), {
+      onSuccess: (board) => {
+        if (parentId) setOpen(parentId, true);
+        router.push(`/docs/${board.id}`);
+      },
+    });
+
   const onRowDragOver = (e: DragEvent<HTMLDivElement>, d: TreeDoc) => {
     if (!dragId || dragId === d.id || isAncestorOf(dragId, d.id) || !spaceById.get(d.spaceId)?.canEdit) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
     const r = e.currentTarget.getBoundingClientRect();
     const y = e.clientY - r.top;
-    const pos: DropPos = y < r.height * 0.28 ? "before" : y > r.height * 0.72 ? "after" : "inside";
+    const pos: DropPos =
+      d.kind === "database" || d.kind === "whiteboard"
+        ? y < r.height * 0.5
+          ? "before"
+          : "after"
+        : y < r.height * 0.28
+          ? "before"
+          : y > r.height * 0.72
+            ? "after"
+            : "inside";
     if (drop?.id !== d.id || drop.pos !== pos) setDrop({ id: d.id, pos });
   };
 
@@ -138,8 +164,9 @@ export function DocsTree({
 
   const renderDoc = (d: TreeDoc, depth: number, prefix: string, dnd: boolean): ReactNode => {
     const key = prefix + d.id;
-    const kids = childrenMap.get(d.id) ?? [];
-    const open = isOpen(key, !prefix && currentAncestors.has(d.id));
+    const isLeaf = d.kind === "database" || d.kind === "whiteboard";
+    const kids = isLeaf ? [] : (childrenMap.get(d.id) ?? []);
+    const open = !isLeaf && isOpen(key, !prefix && currentAncestors.has(d.id));
     const active = currentId === d.id;
     const space = spaceById.get(d.spaceId);
     const canEdit = !!space?.canEdit;
@@ -168,14 +195,20 @@ export function DocsTree({
         >
           {dropHere === "before" && <span className="pointer-events-none absolute inset-x-1 -top-px h-0.5 rounded bg-accent" />}
           {dropHere === "after" && <span className="pointer-events-none absolute inset-x-1 -bottom-px h-0.5 rounded bg-accent" />}
-          <button
-            type="button"
-            onClick={() => setOpen(key, !open)}
-            className="flex size-5 shrink-0 items-center justify-center rounded text-ink-3 hover:bg-active hover:text-ink"
-            aria-label={open ? "收起" : "展开"}
-          >
-            <ChevronRight className={cn("size-3.5 transition-transform", open && "rotate-90")} />
-          </button>
+          {isLeaf ? (
+            <span className="flex size-5 shrink-0 items-center justify-center text-ink-3">
+              {d.kind === "whiteboard" ? <Palette className="size-3" /> : <Table2 className="size-3" />}
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setOpen(key, !open)}
+              className="flex size-5 shrink-0 items-center justify-center rounded text-ink-3 hover:bg-active hover:text-ink"
+              aria-label={open ? "收起" : "展开"}
+            >
+              <ChevronRight className={cn("size-3.5 transition-transform", open && "rotate-90")} />
+            </button>
+          )}
           {renaming === d.id ? (
             <RenameInput
               initial={titleOf(d) === "无标题" ? "" : titleOf(d)}
@@ -210,8 +243,10 @@ export function DocsTree({
                   })
                 }
                 onImport={() => setImportTarget({ spaceId: d.spaceId, parentId: d.id })}
+                onNewDatabase={() => newDatabase(d.spaceId, d.id)}
+                onNewWhiteboard={() => newWhiteboard(d.spaceId, d.id)}
               />
-              {canEdit && (
+              {canEdit && !isLeaf && (
                 <button
                   type="button"
                   title="新建子页面"
@@ -337,6 +372,26 @@ export function DocsTree({
                   {s.canEdit && (
                     <button
                       type="button"
+                      title="在此空间新建多维表格"
+                      onClick={() => newDatabase(s.id)}
+                      className="flex size-5 items-center justify-center rounded text-ink-3 hover:bg-active hover:text-ink"
+                    >
+                      <Table2 className="size-3.5" />
+                    </button>
+                  )}
+                  {s.canEdit && (
+                    <button
+                      type="button"
+                      title="在此空间新建白板"
+                      onClick={() => newWhiteboard(s.id)}
+                      className="flex size-5 items-center justify-center rounded text-ink-3 hover:bg-active hover:text-ink"
+                    >
+                      <Palette className="size-3.5" />
+                    </button>
+                  )}
+                  {s.canEdit && (
+                    <button
+                      type="button"
                       title="在此空间新建页面"
                       onClick={() => newPage(s.id)}
                       className="flex size-5 items-center justify-center rounded text-ink-3 hover:bg-active hover:text-ink"
@@ -447,6 +502,8 @@ function RowMenu({
   onDuplicate,
   onTrash,
   onImport,
+  onNewDatabase,
+  onNewWhiteboard,
 }: {
   doc: TreeDoc;
   canEdit: boolean;
@@ -456,7 +513,10 @@ function RowMenu({
   onDuplicate: () => void;
   onTrash: () => void;
   onImport: () => void;
+  onNewDatabase: () => void;
+  onNewWhiteboard: () => void;
 }) {
+  const canCreateUnder = canEdit && doc.kind === "page";
   return (
     <Menu>
       <MenuTrigger asChild>
@@ -484,12 +544,22 @@ function RowMenu({
         >
           复制链接
         </MenuItem>
-        {canEdit && (
+        {canCreateUnder && (
+          <MenuItem icon={<Table2 />} onSelect={onNewDatabase}>
+            新建子多维表格
+          </MenuItem>
+        )}
+        {canCreateUnder && (
+          <MenuItem icon={<Palette />} onSelect={onNewWhiteboard}>
+            新建子白板
+          </MenuItem>
+        )}
+        {canCreateUnder && (
           <MenuItem icon={<Copy />} onSelect={onDuplicate}>
             创建副本
           </MenuItem>
         )}
-        {canEdit && (
+        {canCreateUnder && (
           <MenuItem icon={<FileUp />} onSelect={onImport}>
             导入到此页面下
           </MenuItem>

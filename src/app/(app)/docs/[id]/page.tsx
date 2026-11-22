@@ -2,9 +2,12 @@ import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/auth/dal";
 import { getDocAccess, isDocsAdmin } from "@/lib/docs/access";
+import { getDatabasePayload, getRowDatabaseContext } from "@/lib/docs/database/server";
 import { queryBacklinks } from "@/lib/docs/links";
 import { getAncestors, getMentionableUsers } from "@/lib/docs/queries";
 import { DocView } from "@/components/docs/doc-view";
+import { DatabasePageView } from "@/components/docs/database/database-page-view";
+import { WhiteboardPageView } from "@/components/docs/whiteboard/whiteboard-page-view";
 import type { CommentThread } from "@/components/docs/types";
 
 export default async function DocPage({ params, searchParams }: PageProps<"/docs/[id]">) {
@@ -16,10 +19,44 @@ export default async function DocPage({ params, searchParams }: PageProps<"/docs
   if (!r || !r.access.canView || r.doc.deletedAt) notFound();
   const { doc, access } = r;
 
-  const [ancestors, children, comments, favorite, members, updatedBy, backlinksData] = await Promise.all([
+  if (doc.kind === "whiteboard") {
+    const [ancestors, favorite, backlinks] = await Promise.all([
+      getAncestors(doc.parentId),
+      db.documentFavorite.findUnique({ where: { userId_documentId: { userId: user.id, documentId: id } } }),
+      queryBacklinks(user, id),
+    ]);
+    return <WhiteboardPageView
+      key={id}
+      board={{ id, title: doc.title, icon: doc.icon, spaceId: doc.spaceId, spaceName: doc.space.name, spaceIcon: doc.space.icon }}
+      ancestors={ancestors}
+      backlinks={backlinks}
+      favorite={!!favorite}
+      canWrite={r.canWrite}
+    />;
+  }
+
+  if (doc.kind === "database") {
+    const [payload, ancestors, favorite, backlinksData] = await Promise.all([
+      getDatabasePayload(user, id),
+      getAncestors(doc.parentId),
+      db.documentFavorite.findUnique({ where: { userId_documentId: { userId: user.id, documentId: id } } }),
+      queryBacklinks(user, id),
+    ]);
+    return (
+      <DatabasePageView
+        initialData={payload}
+        ancestors={ancestors}
+        favorite={!!favorite}
+        backlinks={backlinksData.links}
+        backlinksTruncated={backlinksData.truncated}
+      />
+    );
+  }
+
+  const [ancestors, children, comments, favorite, members, updatedBy, backlinksData, rowProperties] = await Promise.all([
     getAncestors(doc.parentId),
     db.document.findMany({
-      where: { parentId: id, deletedAt: null, isTemplate: false },
+      where: { parentId: id, deletedAt: null, isTemplate: false, kind: { not: "row" } },
       orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
       select: { id: true, title: true, icon: true },
     }),
@@ -32,6 +69,7 @@ export default async function DocPage({ params, searchParams }: PageProps<"/docs
     getMentionableUsers(doc.space),
     doc.updatedById ? db.user.findUnique({ where: { id: doc.updatedById }, select: { name: true, avatarColor: true } }) : Promise.resolve(null),
     queryBacklinks(user, id),
+    doc.kind === "row" && doc.parentId ? getRowDatabaseContext(user, id, doc.parentId) : Promise.resolve(null),
   ]);
 
   const threads: CommentThread[] = comments
@@ -52,6 +90,7 @@ export default async function DocPage({ params, searchParams }: PageProps<"/docs
     <DocView
       doc={{
         id: doc.id,
+        kind: doc.kind,
         title: doc.title,
         icon: doc.icon,
         cover: doc.cover,
@@ -64,6 +103,7 @@ export default async function DocPage({ params, searchParams }: PageProps<"/docs
         updatedAt: doc.updatedAt.toISOString(),
         updatedBy,
       }}
+      rowProperties={rowProperties}
       ancestors={ancestors}
       childPages={children}
       backlinks={backlinksData.links}

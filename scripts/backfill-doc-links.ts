@@ -2,6 +2,7 @@ import "dotenv/config";
 import { db } from "@/lib/db";
 import { parseContent } from "@/lib/docs/content";
 import { syncDocumentLinks } from "@/lib/docs/links";
+import { parseWhiteboard, whiteboardLinkContent } from "@/lib/docs/whiteboard/content";
 
 /**
  * 幂等回填脚本：扫描所有非模板文档正文中的 /docs/<id> 链接并同步到 DocumentLink。
@@ -9,14 +10,16 @@ import { syncDocumentLinks } from "@/lib/docs/links";
  */
 async function main() {
   const docs = await db.document.findMany({
-    select: { id: true, content: true, isTemplate: true },
+    select: { id: true, content: true, isTemplate: true, kind: true },
     orderBy: { createdAt: "asc" },
   });
 
   let processed = 0;
   let totalLinks = 0;
   for (const d of docs) {
-    const count = await syncDocumentLinks(db, d.id, parseContent(d.content), { isTemplate: d.isTemplate });
+    const board = d.kind === "whiteboard" ? parseWhiteboard(d.content) : null;
+    const content = board ? whiteboardLinkContent(board.elements) : parseContent(d.content);
+    const count = await syncDocumentLinks(db, d.id, content, { isTemplate: d.isTemplate });
     processed += 1;
     totalLinks += count;
   }

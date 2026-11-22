@@ -248,8 +248,9 @@ export async function POST(req: NextRequest) {
   const access = await getSpaceAccess(user, spaceId);
   if (!access || !access.access.canEdit) return err("没有权限导入到该空间", 403);
   if (parentId) {
-    const parent = await db.document.findUnique({ where: { id: parentId }, select: { spaceId: true, deletedAt: true } });
+    const parent = await db.document.findUnique({ where: { id: parentId }, select: { spaceId: true, deletedAt: true, kind: true } });
     if (!parent || parent.spaceId !== spaceId || parent.deletedAt) return err("父页面不存在", 400);
+    if (parent.kind === "whiteboard") return err("白板下不能导入子页面", 400);
   }
 
   // ── 解包 ──

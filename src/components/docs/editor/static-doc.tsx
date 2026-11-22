@@ -6,6 +6,8 @@ import { EditorContent, useEditor, type JSONContent } from "@tiptap/react";
 import { createSchemaExtensions } from "@/lib/docs/schema";
 import { useLinkClick } from "./collab-editor";
 import { FileAttachmentView } from "./file-attachment";
+import { DatabaseViewExtension } from "./database-view-node";
+import { WhiteboardViewExtension } from "./whiteboard-view-node";
 
 /** 只读渲染 Tiptap JSON（离线预览、历史版本预览） */
 export function StaticDoc({ content, onCommentClick }: { content: JSONContent; onCommentClick?: (id: string) => void }) {
@@ -18,7 +20,15 @@ export function StaticDoc({ content, onCommentClick }: { content: JSONContent; o
     {
       immediatelyRender: false,
       editable: false,
-      extensions: createSchemaExtensions().map((e) => (e.name === "fileAttachment" ? FileAttachmentView : e)),
+      extensions: createSchemaExtensions().map((e) =>
+        e.name === "fileAttachment"
+          ? FileAttachmentView
+          : e.name === "databaseView"
+            ? DatabaseViewExtension
+            : e.name === "whiteboardView"
+              ? WhiteboardViewExtension
+              : e,
+      ),
       content,
       editorProps: {
         attributes: { class: "doc-prose" },

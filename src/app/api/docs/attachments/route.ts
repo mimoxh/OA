@@ -9,7 +9,10 @@ function isSameOrigin(req: NextRequest) {
   const origin = req.headers.get("origin");
   if (!origin) return false;
   try {
-    return new URL(origin).origin === req.nextUrl.origin;
+    const source = new URL(origin);
+    if (source.origin === req.nextUrl.origin) return true;
+    // Next.js 开发服务器可能把回环地址规范化为 localhost。
+    return source.protocol === req.nextUrl.protocol && source.host === req.headers.get("host")?.toLowerCase();
   } catch {
     return false;
   }

@@ -176,6 +176,11 @@ export function extractDocLinks(doc: JSONNode): ExtractedDocLink[] {
   };
 
   const walk = (node: JSONNode) => {
+    if (node.type === "whiteboardView" && typeof node.attrs?.boardId === "string") {
+      const targetDocId = parseDocLinkId(`/docs/${node.attrs.boardId}`);
+      if (targetDocId) out.push({ targetDocId, occurrence: out.length, snippet: "文档内嵌白板" });
+      return;
+    }
     if (node.type && INLINE_CONTAINERS.has(node.type)) {
       scanInlineContainer(node);
       return;

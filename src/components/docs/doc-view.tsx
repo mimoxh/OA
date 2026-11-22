@@ -38,6 +38,7 @@ import { isEmptyDoc, parseContent } from "@/lib/docs/content";
 import type { BacklinkItem } from "@/lib/docs/links";
 import { BUILTIN_TEMPLATES } from "@/lib/docs/templates";
 import {
+  createDatabase,
   duplicateDocument,
   notifyDocMention,
   saveAsTemplate,
@@ -56,14 +57,17 @@ import { PagePickerDialog } from "./page-picker";
 import { UrlDialog } from "./url-dialog";
 import { CommentsPanel, type PendingSelection } from "./comments-panel";
 import { CollabEditor, type EditorCallbacks } from "./editor/collab-editor";
+import { DatabaseLinkPickerDialog } from "./editor/database-view-node";
 import { uploadFilesIntoEditor } from "./editor/upload";
 import { StaticDoc } from "./editor/static-doc";
 import { useCollab } from "./editor/use-collab";
+import { RowPropertiesBar, type RowPropertiesContext } from "./database/row-properties-bar";
 import type { CommentThread, Member } from "./types";
 
 export type DocViewProps = {
   doc: {
     id: string;
+    kind?: string;
     title: string;
     icon: string | null;
     cover: string | null;
@@ -77,6 +81,7 @@ export type DocViewProps = {
     updatedAt: string;
     updatedBy: { name: string; avatarColor: string } | null;
   };
+  rowProperties?: RowPropertiesContext | null;
   ancestors: { id: string; title: string; icon: string | null }[];
   childPages: { id: string; title: string; icon: string | null }[];
   backlinks: BacklinkItem[];
@@ -120,6 +125,7 @@ function CoverPicker({ onPick, onRemove }: { onPick: (key: string) => void; onRe
 
 export function DocView({
   doc,
+  rowProperties,
   ancestors,
   childPages,
   backlinks,
@@ -145,6 +151,8 @@ export function DocView({
   const [historyOpen, setHistoryOpen] = useState(false);
   const [graphOpen, setGraphOpen] = useState(false);
   const [pagePickerOpen, setPagePickerOpen] = useState(false);
+  const [dbPickerOpen, setDbPickerOpen] = useState(false);
+  const [whiteboardPickerOpen, setWhiteboardPickerOpen] = useState(false);
   const [imageDialogOpen, setImageDialogOpen] = useState(false);
   const [editor, setEditor] = useState<Editor | null>(null);
   const [hasContent, setHasContent] = useState(() => !isEmptyDoc(parseContent(doc.content)));
@@ -285,6 +293,39 @@ export function DocView({
         pendingRange.current = range;
         setPagePickerOpen(true);
       },
+      onCreateDatabase: (range) => {
+        if (!canWrite) return;
+        const pos = range.from;
+        void createDatabase({
+          spaceId: doc.spaceId,
+          parentId: doc.kind === "row" ? null : doc.id,
+        }).then((res) => {
+          if (!res.ok) {
+            toast.error(res.error);
+            return;
+          }
+          const ed = editorRef.current;
+          if (ed) {
+            ed.chain()
+              .focus()
+              .insertContentAt(Math.min(pos, ed.state.doc.content.size), {
+                type: "databaseView",
+                attrs: { databaseId: res.data.id, viewId: res.data.defaultViewId },
+              })
+              .run();
+          }
+          toast.success("已新建并嵌入多维表格");
+          router.refresh();
+        });
+      },
+      onLinkDatabase: (range) => {
+        pendingRange.current = range;
+        setDbPickerOpen(true);
+      },
+      onEmbedWhiteboard: (range) => {
+        pendingRange.current = range;
+        setWhiteboardPickerOpen(true);
+      },
       onImage: (range) => {
         pendingRange.current = range;
         setImageDialogOpen(true);
@@ -311,7 +352,7 @@ export function DocView({
         return { id: res.data.id, title: res.data.title || pageTitle };
       },
     }),
-    [doc.id, doc.spaceId, canWrite, run, router],
+    [doc.id, doc.kind, doc.spaceId, canWrite, run, router],
   );
 
   const onEditorReady = useCallback((e: Editor | null) => {
@@ -463,9 +504,11 @@ export function DocView({
                 <MenuItem icon={<FileDown />} onSelect={() => window.open(`/api/docs/${doc.id}/export`, "_blank")}>
                   导出 Markdown
                 </MenuItem>
-                <MenuItem icon={<FileDown />} onSelect={() => window.open(`/api/docs/${doc.id}/export?subtree=1`, "_blank")}>
-                  导出（含子页面）
-                </MenuItem>
+                {doc.kind !== "row" && (
+                  <MenuItem icon={<FileDown />} onSelect={() => window.open(`/api/docs/${doc.id}/export?subtree=1`, "_blank")}>
+                    导出（含子页面）
+                  </MenuItem>
+                )}
                 {canWrite && (
                   <MenuItem
                     icon={<Save />}
@@ -478,21 +521,30 @@ export function DocView({
                 )}
                 {canWrite && (
                   <>
-                    <MenuSeparator />
-                    <MenuItem
-                      icon={<Copy />}
-                      onSelect={() => void run(() => duplicateDocument(doc.id), { success: "已创建副本", onSuccess: (r) => router.push(`/docs/${r.id}`) })}
-                    >
-                      创建副本
-                    </MenuItem>
-                    <MenuItem icon={<FilePlus2 />} onSelect={() => void run(() => saveAsTemplate(doc.id), { success: "已保存为模板" })}>
-                      保存为模板
-                    </MenuItem>
+                    {doc.kind !== "row" && (
+                      <>
+                        <MenuSeparator />
+                        <MenuItem
+                          icon={<Copy />}
+                          onSelect={() => void run(() => duplicateDocument(doc.id), { success: "已创建副本", onSuccess: (r) => router.push(`/docs/${r.id}`) })}
+                        >
+                          创建副本
+                        </MenuItem>
+                        <MenuItem icon={<FilePlus2 />} onSelect={() => void run(() => saveAsTemplate(doc.id), { success: "已保存为模板" })}>
+                          保存为模板
+                        </MenuItem>
+                      </>
+                    )}
                     <MenuSeparator />
                     <MenuItem
                       icon={<Trash2 />}
                       danger
-                      onSelect={() => void run(() => trashDocument(doc.id), { success: "已移到回收站", onSuccess: () => router.push("/docs") })}
+                      onSelect={() =>
+                        void run(() => trashDocument(doc.id), {
+                          success: "已移到回收站",
+                          onSuccess: () => router.push(doc.kind === "row" && doc.parentId ? `/docs/${doc.parentId}` : "/docs"),
+                        })
+                      }
                     >
                       移到回收站
                     </MenuItem>
@@ -590,6 +642,8 @@ export function DocView({
               {!canWrite && <span className="rounded bg-hover px-1.5 py-0.5 text-[11px]">只读</span>}
             </div>
 
+            {rowProperties && <RowPropertiesBar initial={rowProperties} />}
+
             <div className="mt-4">
               {showEditor ? (
                 <CollabEditor
@@ -624,7 +678,7 @@ export function DocView({
               )}
             </div>
 
-            {canWrite && editor && !hasContent && (
+            {canWrite && editor && !hasContent && doc.kind !== "row" && (
               <div className="mt-6">
                 <div className="mb-2 text-[13px] font-medium text-ink-3">从模板开始</div>
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -646,7 +700,7 @@ export function DocView({
               </div>
             )}
 
-            {(childPages.length > 0 || canWrite) && (
+            {doc.kind !== "row" && (childPages.length > 0 || canWrite) && (
               <div className="mt-10">
                 <div className="mb-1 text-[13px] font-semibold text-ink-3">子页面</div>
                 <div className="divide-y divide-line rounded-lg border border-line">
@@ -710,6 +764,23 @@ export function DocView({
         onPick={(hit) => {
           setPagePickerOpen(false);
           insertAt({ type: "text", text: hit.title, marks: [{ type: "link", attrs: { href: `/docs/${hit.id}` } }] });
+        }}
+      />
+      <DatabaseLinkPickerDialog
+        open={dbPickerOpen}
+        onOpenChange={setDbPickerOpen}
+        onSelect={(databaseId, viewId) => {
+          setDbPickerOpen(false);
+          insertAt({ type: "databaseView", attrs: { databaseId, viewId } });
+        }}
+      />
+      <PagePickerDialog
+        open={whiteboardPickerOpen}
+        onOpenChange={setWhiteboardPickerOpen}
+        kind="whiteboard"
+        onPick={(board) => {
+          setWhiteboardPickerOpen(false);
+          insertAt({ type: "whiteboardView", attrs: { boardId: board.id } });
         }}
       />
       <UrlDialog

@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { attachmentPath, parseAttachmentUrl } from "./attachments";
 import { parseContent, type JSONNode } from "./content";
 import { docToMarkdown } from "./markdown";
+import { parseWhiteboard, whiteboardAttachmentIds, whiteboardLinkContent, whiteboardText } from "./whiteboard/content";
 
 export class ZipExportError extends Error {
   constructor(
@@ -48,7 +49,7 @@ export function zipFileName(name: string): string {
   return encodeURIComponent(safeFileName(name)) + ".zip";
 }
 
-export type ZipPage = { id: string; title: string; icon: string | null; parentId: string | null; content: string };
+export type ZipPage = { id: string; title: string; icon: string | null; parentId: string | null; content: string; kind?: string };
 
 /** 收集文档 JSON 中引用的附件 id（fileAttachment 节点 + 内部图片地址） */
 export function collectAttachmentIds(json: JSONNode, into = new Set<string>()): Set<string> {
@@ -110,7 +111,24 @@ export async function buildDocsZip(spaceId: string, pages: ZipPage[], rootIds: s
   // 收集全部引用附件并读盘（仅允许当前空间内的附件，防止跨空间越权读取）
   const refIds = new Set<string>();
   const parsed = new Map<string, JSONNode>();
+  const whiteboardPaths = new Map<string, string>();
   for (const p of ordered) {
+    if (p.kind === "whiteboard") {
+      const scene = parseWhiteboard(p.content);
+      if (!scene) throw new ZipExportError("白板内容无法读取", 422);
+      whiteboardPaths.set(p.id, `whiteboards/${p.id}.whiteboard.json`);
+      for (const id of whiteboardAttachmentIds(scene.elements)) refIds.add(id);
+      const text = whiteboardText(scene.elements);
+      const links = whiteboardLinkContent(scene.elements);
+      parsed.set(p.id, {
+        type: "doc",
+        content: [
+          ...text.split("\n").filter(Boolean).map((line) => ({ type: "paragraph", content: [{ type: "text", text: line }] })),
+          ...(links.content ?? []),
+        ],
+      });
+      continue;
+    }
     const json = parseContent(p.content);
     parsed.set(p.id, json);
     collectAttachmentIds(json, refIds);
@@ -139,7 +157,13 @@ export async function buildDocsZip(spaceId: string, pages: ZipPage[], rootIds: s
     format: EXPORT_FORMAT,
     exportedAt: new Date().toISOString(),
     pages: ordered.map((p) => ({ path: mdPath.get(p.id)!, parentPath: parentMdPath.get(p.id) ?? null, title: p.title, icon: p.icon })),
-    attachments: [...attEntries.values()].map((a) => ({ path: a.path, fileName: a.fileName, mediaType: a.mediaType })),
+    attachments: [
+      ...[...attEntries.values()].map((a) => ({ path: a.path, fileName: a.fileName, mediaType: a.mediaType })),
+      ...ordered.flatMap((p) => {
+        const path = whiteboardPaths.get(p.id);
+        return path ? [{ path, fileName: `${safeFileName(p.title)}.whiteboard.json`, mediaType: "application/json" }] : [];
+      }),
+    ],
   };
 
   for (const p of ordered) {
@@ -156,7 +180,12 @@ export async function buildDocsZip(spaceId: string, pages: ZipPage[], rootIds: s
         return target ? rel(file, target) : null;
       },
     });
-    const mdBytes = enc.encode(md);
+    const whiteboardPath = whiteboardPaths.get(p.id);
+    if (whiteboardPath) {
+      files[whiteboardPath] = enc.encode(p.content);
+      total += files[whiteboardPath].byteLength;
+    }
+    const mdBytes = enc.encode(whiteboardPath ? `${md}\n[白板源数据](${rel(file, whiteboardPath)})\n` : md);
     total += mdBytes.byteLength;
     if (total > ZIP_MAX_BYTES) throw new ZipExportError("导出内容超过 200MB 限制", 413);
     files[file] = mdBytes;

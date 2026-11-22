@@ -1,8 +1,9 @@
 import { flattenExtensions, getSchema, type AnyExtension, type MarkdownLexerConfiguration, type MarkdownToken } from "@tiptap/core";
 import { Node as PMNode } from "@tiptap/pm/model";
 import { MarkdownManager } from "@tiptap/markdown";
-import { Callout, createSchemaExtensions, FileAttachment } from "./schema";
+import { Callout, createSchemaExtensions, DatabaseViewNode, FileAttachment, WhiteboardViewNode } from "./schema";
 import type { JSONNode } from "./content";
+import { isWhiteboardDocumentId } from "./whiteboard/content";
 
 /** 提示块 emoji ↔ GitHub alert 类型 */
 const EMOJI_TO_TYPE: Record<string, string> = { "💡": "TIP", "ℹ️": "NOTE", "⚠️": "WARNING", "❗": "IMPORTANT", "⛔": "CAUTION", "🚫": "CAUTION" };
@@ -13,6 +14,8 @@ const EMOJI_START = /^(?:\p{Extended_Pictographic}|\p{Emoji_Presentation})(?:\uF
 
 const ATTACHMENT_URL_RE = /^\/api\/docs\/attachments\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(\?download=1)?$/i;
 const DOC_URL_RE = /^\/docs\/([\w-]+)$/;
+const DATABASE_VIEW_URL_RE = /^\/docs\/([\w-]+)#database-view(?:=([\w-]+))?$/;
+const WHITEBOARD_VIEW_URL_RE = /^\/docs\/([\w-]{1,128})#whiteboard-view$/;
 
 const escapeLinkLabel = (s: string) => s.replace(/([\\[\]])/g, "\\$1");
 
@@ -48,6 +51,21 @@ function markdownExtensions(resolveAttachment?: ExportResolvers["resolveAttachme
       return `[${name}](${target})`;
     },
   });
+  const databaseViewMd = DatabaseViewNode.extend({
+    renderMarkdown(node) {
+      const a = node.attrs ?? {};
+      const dbId = String(a.databaseId ?? "");
+      const viewId = typeof a.viewId === "string" && a.viewId ? a.viewId : null;
+      if (!dbId) return "";
+      return `[多维表格视图](/docs/${dbId}#database-view${viewId ? `=${viewId}` : ""})`;
+    },
+  });
+  const whiteboardViewMd = WhiteboardViewNode.extend({
+    renderMarkdown(node) {
+      const id = node.attrs?.boardId;
+      return isWhiteboardDocumentId(id) ? `[白板](/docs/${id}#whiteboard-view)` : "";
+    },
+  });
   // flatten 后才能拿到 StarterKit 内部的 heading/underline 等扩展副本；
   // kit 容器自身必须剔除（manager 会再 flatten 一次，listItem/taskItem 的子 keymap 同理）
   return flattenExtensions(createSchemaExtensions())
@@ -55,6 +73,8 @@ function markdownExtensions(resolveAttachment?: ExportResolvers["resolveAttachme
     .map((e) => {
       if (e.name === "callout") return calloutMd;
       if (e.name === "fileAttachment") return attachmentMd;
+      if (e.name === "databaseView") return databaseViewMd;
+      if (e.name === "whiteboardView") return whiteboardViewMd;
       if (e.name === "mention")
         return e.extend({
           renderMarkdown: (node) => `@${String(node.attrs?.label ?? node.attrs?.id ?? "")}`,
@@ -502,6 +522,22 @@ export function finalizeImportedDoc(input: JSONNode, resolvers: ImportResolvers,
         content[0].marks[0].type === "link"
       ) {
         const href = String(content[0].marks[0].attrs?.href ?? "");
+        const whiteboard = WHITEBOARD_VIEW_URL_RE.exec(href);
+        if (whiteboard && resolvers.checkDocLink?.(whiteboard[1])) {
+          return [{ type: "whiteboardView", attrs: { boardId: whiteboard[1] } }];
+        }
+        const dbMatch = DATABASE_VIEW_URL_RE.exec(href);
+        if (dbMatch) {
+          return [
+            {
+              type: "databaseView",
+              attrs: {
+                databaseId: dbMatch[1],
+                viewId: dbMatch[2] ?? null,
+              },
+            },
+          ];
+        }
         const r = classifyHref(href, resolvers);
         if (r.kind === "attachment") {
           return [

@@ -60,9 +60,10 @@ model User {
   spaceMembers    SpaceMember[]
   docsCreated     Document[]         @relation("DocCreator")
   docsUpdated     Document[]         @relation("DocUpdater")
-  docFavorites    DocumentFavorite[]
-  docVersions     DocumentVersion[]
-  attachments     Attachment[]          @relation("AttachmentCreator")
+  docFavorites           DocumentFavorite[]
+  docVersions            DocumentVersion[]
+  attachments            Attachment[]            @relation("AttachmentCreator")
+  databaseSchemaVersions DatabaseSchemaVersion[]
 
   approvalsApplied  ApprovalInstance[] @relation("Applicant")
   approvalTasks     ApprovalTask[]
@@ -200,13 +201,17 @@ model Document {
   parentId    String?
   parent      Document?  @relation("DocTree", fields: [parentId], references: [id])
   children    Document[] @relation("DocTree")
+  // page | database | row | whiteboard
+  kind        String     @default("page")
   title       String     @default("")
   icon        String?
   cover       String?
-  // Tiptap JSON（字符串）
+  // Tiptap JSON 或白板画布 JSON（字符串）
   content     String     @default("{\"type\":\"doc\",\"content\":[]}")
   // 纯文本，用于搜索
   text        String     @default("")
+  // 行属性 JSON（kind = row 时使用）
+  properties  String     @default("{}")
   // Yjs 文档二进制状态（实时协同持久化）
   ydoc        Bytes?
   sortOrder   Int        @default(0)
@@ -220,13 +225,65 @@ model Document {
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 
-  favorites   DocumentFavorite[]
-  versions    DocumentVersion[]
-  attachments Attachment[]
-  linksOut    DocumentLink[]     @relation("DocLinksOut")
-  linksIn     DocumentLink[]     @relation("DocLinksIn")
+  favorites              DocumentFavorite[]
+  versions               DocumentVersion[]
+  attachments            Attachment[]
+  linksOut               DocumentLink[]          @relation("DocLinksOut")
+  linksIn                DocumentLink[]          @relation("DocLinksIn")
+  databaseSchema         DatabaseSchema?
+  databaseSchemaVersions DatabaseSchemaVersion[]
+  rowLinksOut            DatabaseRowLink[]       @relation("RowLinksOut")
+  rowLinksIn             DatabaseRowLink[]       @relation("RowLinksIn")
 
   @@index([spaceId, parentId])
+  @@index([spaceId, kind])
+  @@index([parentId, kind])
+}
+
+model DatabaseSchema {
+  documentId String   @id
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  // PropertyDefinition[] JSON
+  properties String
+  // DatabaseView[] JSON
+  views      String
+  revision   Int      @default(1)
+  updatedAt  DateTime @updatedAt
+}
+
+model DatabaseSchemaVersion {
+  id             String   @id @default(cuid())
+  databaseId     String
+  database       Document @relation(fields: [databaseId], references: [id], onDelete: Cascade)
+  revision       Int
+  properties     String
+  views          String
+  // create | update | relation | restore
+  kind           String   @default("update")
+  sourceRevision Int?
+  actorId        String?
+  actor          User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  createdAt      DateTime @default(now())
+
+  @@unique([databaseId, revision])
+  @@index([databaseId, revision])
+}
+
+model DatabaseRowLink {
+  id               String   @id @default(cuid())
+  sourceDatabaseId String
+  propertyId       String
+  sourceRowId      String
+  sourceRow        Document @relation("RowLinksOut", fields: [sourceRowId], references: [id], onDelete: Cascade)
+  targetDatabaseId String
+  targetRowId      String
+  targetRow        Document @relation("RowLinksIn", fields: [targetRowId], references: [id], onDelete: Cascade)
+  sortOrder        Int      @default(0)
+  createdAt        DateTime @default(now())
+
+  @@unique([propertyId, sourceRowId, targetRowId])
+  @@index([sourceDatabaseId, propertyId, sourceRowId])
+  @@index([targetDatabaseId, targetRowId])
 }
 
 model DocumentFavorite {

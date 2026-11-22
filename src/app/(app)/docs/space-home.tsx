@@ -9,7 +9,7 @@ import { Card, EmptyState, Page, PageHeader, Section, TopBar } from "@/component
 import { formatDateTime, formatRelative } from "@/lib/format";
 import { getSpaceAccess, isDocsAdmin } from "@/lib/docs/access";
 import { getAllActiveUsers } from "@/lib/docs/queries";
-import { NewPageButton } from "@/components/docs/buttons";
+import { NewDatabaseButton, NewPageButton, NewWhiteboardButton } from "@/components/docs/buttons";
 import { SpaceActions, SpaceExportButton, SpaceMembers, TemplateGallery } from "@/components/docs/space-manage";
 
 export async function SpaceHome({ user, spaceId }: { user: CurrentUser; spaceId: string }) {
@@ -19,12 +19,13 @@ export async function SpaceHome({ user, spaceId }: { user: CurrentUser; spaceId:
 
   const [docs, members, templates, users] = await Promise.all([
     db.document.findMany({
-      where: { spaceId, deletedAt: null, isTemplate: false },
+      where: { spaceId, deletedAt: null, isTemplate: false, kind: { not: "row" } },
       orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
       select: {
         id: true,
         title: true,
         icon: true,
+        kind: true,
         parentId: true,
         updatedAt: true,
         updatedBy: { select: { name: true, avatarColor: true } },
@@ -81,6 +82,8 @@ export async function SpaceHome({ user, spaceId }: { user: CurrentUser; spaceId:
                 pageCount={docs.length}
               />
             )}
+            {access.canEdit && <NewDatabaseButton spaceId={space.id} />}
+            {access.canEdit && <NewWhiteboardButton spaceId={space.id} />}
             {access.canEdit && <NewPageButton spaceId={space.id} />}
           </>
         }
@@ -127,8 +130,10 @@ export async function SpaceHome({ user, spaceId }: { user: CurrentUser; spaceId:
                       className="flex h-10 items-center gap-2 border-b border-line px-3 last:border-b-0 hover:bg-hover/60"
                     >
                       <span style={{ width: depth * 20 }} className="shrink-0" />
-                      <span className="text-base leading-none">{d.icon || "📄"}</span>
+                      <span className="text-base leading-none">{d.icon || (d.kind === "database" ? "🗃️" : "📄")}</span>
                       <span className="min-w-0 flex-1 truncate text-sm text-ink">{d.title || "无标题"}</span>
+                      {d.kind === "database" && <Badge color="blue">多维表格</Badge>}
+                      {d.kind === "whiteboard" && <Badge color="blue">白板</Badge>}
                       {d.updatedBy && (
                         <span className="hidden shrink-0 items-center gap-1 text-xs text-ink-3 sm:flex">
                           <Avatar name={d.updatedBy.name} color={d.updatedBy.avatarColor} size={16} />

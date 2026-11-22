@@ -9,15 +9,18 @@ import {
   AtSign,
   CheckSquare,
   Code2,
+  Database,
   FileText,
   Heading1,
   Heading2,
   Heading3,
   ImageIcon,
   Lightbulb,
+  Link2,
   List,
   ListOrdered,
   Minus,
+  Palette,
   Paperclip,
   Quote,
   Table2,
@@ -101,6 +104,9 @@ export function buildSlashItems(cb: {
   onImage: (range: Range) => void;
   onFile: (range: Range) => void;
   onLinkPage: (range: Range) => void;
+  onCreateDatabase?: (range: Range) => void;
+  onLinkDatabase?: (range: Range) => void;
+  onEmbedWhiteboard?: (range: Range) => void;
 }): SlashItem[] {
   const c = (editor: Editor, range: Range) => editor.chain().focus().deleteRange(range);
   return [
@@ -116,6 +122,50 @@ export function buildSlashItems(cb: {
     { key: "code", group: "基础块", title: "代码块", description: "插入一段代码", icon: Code2, keywords: ["code", "codeblock", "daima", "dm"], run: (e, r) => c(e, r).toggleCodeBlock().run() },
     { key: "hr", group: "基础块", title: "分割线", description: "视觉上分隔内容", icon: Minus, keywords: ["divider", "hr", "line", "fenge", "fgx"], run: (e, r) => c(e, r).setHorizontalRule().run() },
     { key: "table", group: "插入", title: "表格", description: "插入 3×3 表格", icon: Table2, keywords: ["table", "biaoge", "bg"], run: (e, r) => c(e, r).insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run() },
+    ...(cb.onCreateDatabase
+      ? [
+          {
+            key: "database",
+            group: "插入",
+            title: "多维表格",
+            description: "新建多维表格并嵌入当前页面",
+            icon: Database,
+            keywords: ["database", "db", "duowei", "duoweibiaoge", "dwbg", "board", "kanban"],
+            run: (e: Editor, r: Range) => {
+              c(e, r).run();
+              cb.onCreateDatabase?.(r);
+            },
+          },
+        ]
+      : []),
+    ...(cb.onLinkDatabase
+      ? [
+          {
+            key: "link-database",
+            group: "插入",
+            title: "关联表格",
+            description: "嵌入已有的多维表格视图",
+            icon: Link2,
+            keywords: ["linked", "linkdb", "guanlian", "guanlianbiaoge", "glbg", "database"],
+            run: (e: Editor, r: Range) => {
+              c(e, r).run();
+              cb.onLinkDatabase?.(r);
+            },
+          },
+        ]
+      : []),
+    ...(cb.onEmbedWhiteboard ? [{
+      key: "whiteboard",
+      group: "插入",
+      title: "嵌入白板",
+      description: "在文档内显示并使用已有白板",
+      icon: Palette,
+      keywords: ["whiteboard", "canvas", "baiban"],
+      run: (e: Editor, r: Range) => {
+        c(e, r).run();
+        cb.onEmbedWhiteboard?.(r);
+      },
+    }] : []),
     {
       key: "image",
       group: "插入",

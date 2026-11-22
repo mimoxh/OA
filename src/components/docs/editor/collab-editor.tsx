@@ -15,11 +15,16 @@ import { SlashCommand, buildSlashItems, mentionSuggestion, type MentionItem } fr
 import { WikiLinkSuggestion } from "./wikilink-suggestion";
 import { BubbleToolbar, TableToolbar } from "./toolbars";
 import { FileAttachmentView } from "./file-attachment";
+import { DatabaseViewExtension } from "./database-view-node";
+import { WhiteboardViewExtension } from "./whiteboard-view-node";
 
 export type EditorCallbacks = {
   onCommentClick: (id: string) => void;
   onAddComment: (sel: { from: number; to: number; quote: string }) => void;
   onLinkPage: (range: Range) => void;
+  onCreateDatabase: (range: Range) => void;
+  onLinkDatabase: (range: Range) => void;
+  onEmbedWhiteboard: (range: Range) => void;
   onImage: (range: Range) => void;
   onFile: (range: Range) => void;
   onFiles: (files: File[], pos: number | null) => void;
@@ -88,7 +93,15 @@ export function CollabEditor({
       extensions: [
         ...createSchemaExtensions({
           mention: { suggestion: mentionSuggestion(() => members, (id) => callbacks.onMention(id)) },
-        }).map((e) => (e.name === "fileAttachment" ? FileAttachmentView : e)),
+        }).map((e) =>
+          e.name === "fileAttachment"
+            ? FileAttachmentView
+            : e.name === "databaseView"
+              ? DatabaseViewExtension
+              : e.name === "whiteboardView"
+                ? WhiteboardViewExtension
+                : e,
+        ),
         Placeholder.configure({
           placeholder: ({ node }) => (node.type.name === "heading" ? `标题 ${node.attrs.level}` : "输入 / 唤出命令，[[ 链接页面，@ 提及成员"),
         }),
@@ -100,6 +113,9 @@ export function CollabEditor({
               onImage: (r) => callbacks.onImage(r),
               onFile: (r) => callbacks.onFile(r),
               onLinkPage: (r) => callbacks.onLinkPage(r),
+              onCreateDatabase: (r) => callbacks.onCreateDatabase(r),
+              onLinkDatabase: (r) => callbacks.onLinkDatabase(r),
+              onEmbedWhiteboard: (r) => callbacks.onEmbedWhiteboard(r),
             }),
         }),
         WikiLinkSuggestion.configure({

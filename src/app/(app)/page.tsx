@@ -104,7 +104,7 @@ export default async function HomePage() {
       : none([]),
     perm.docs
       ? db.document.findMany({
-          where: { deletedAt: null, isTemplate: false, space: visibleSpace },
+          where: { deletedAt: null, isTemplate: false, kind: { not: "row" }, space: visibleSpace },
           select: {
             id: true,
             title: true,
@@ -147,7 +147,7 @@ export default async function HomePage() {
       : none(0),
     perm.tms ? db.transportOrder.count({ where: { status: "IN_TRANSIT" } }) : none(0),
     perm.pms ? db.project.count({ where: { status: "ACTIVE" } }) : none(0),
-    perm.docs ? db.document.count({ where: { deletedAt: null, isTemplate: false, space: visibleSpace } }) : none(0),
+    perm.docs ? db.document.count({ where: { deletedAt: null, isTemplate: false, kind: { not: "row" }, space: visibleSpace } }) : none(0),
   ]);
   const receivable = receivables.reduce((s, i) => s + i.amount - i.paidAmount, 0);
 
