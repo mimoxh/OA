@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { hasPermission, parsePermissions, type ModuleKey, type Permission } from "@/lib/permissions";
 import { moduleOfPermission } from "@/lib/apps";
 import { getEnabledAppKeys } from "@/lib/apps-store";
+import { parseRailPins } from "@/lib/nav";
 import { SESSION_COOKIE, verifySessionToken } from "./token";
 
 export type CurrentUser = {
@@ -19,6 +20,7 @@ export type CurrentUser = {
   departmentId: string | null;
   departmentName: string | null;
   permissions: string[];
+  railPins: string[];
 };
 
 export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
@@ -41,6 +43,7 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
     departmentId: user.departmentId,
     departmentName: user.department?.name ?? null,
     permissions: parsePermissions(user.role.permissions),
+    railPins: parseRailPins(user.railPins),
   };
 });
 
