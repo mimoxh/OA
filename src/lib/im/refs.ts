@@ -192,6 +192,34 @@ async function resolveOne(user: UserLike, ref: { type: RefType; id: string }, cl
           status: statusOf(TRANSPORT_STATUS, t.status),
         };
       }
+      case "event": {
+        if (!perm("oa:view")) return forbidden(ref.type, ref.id);
+        const ev = await client.calendarEvent.findUnique({
+          where: { id: ref.id },
+          include: {
+            organizer: { select: { name: true } },
+            attendees: { select: { userId: true } },
+          },
+        });
+        if (!ev) return notFound(ref.type, ref.id);
+        const canSee =
+          ev.organizerId === user.id ||
+          ev.attendees.some((a) => a.userId === user.id) ||
+          perm("admin");
+        if (!canSee) return forbidden(ref.type, ref.id);
+        const pad = (n: number) => String(n).padStart(2, "0");
+        const dateStr = `${ev.startAt.getFullYear()}-${pad(ev.startAt.getMonth() + 1)}-${pad(ev.startAt.getDate())}`;
+        return {
+          type: ref.type,
+          id: ref.id,
+          ok: true,
+          title: ev.title,
+          subtitle: ev.location ?? `组织者：${ev.organizer.name}`,
+          icon: "📅",
+          href: `/oa/calendar?date=${dateStr}&event=${ev.id}`,
+          status: { label: "日程", color: "blue" },
+        };
+      }
       default:
         return notFound(ref.type, ref.id);
     }

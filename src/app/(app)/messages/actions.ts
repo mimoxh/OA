@@ -16,10 +16,13 @@ import {
   removeGroupMember,
   renameGroup,
   requireMember,
+  sendAttachmentMessage,
   sendTextMessage,
   setConversationPrefs,
+  shareRefMessage,
   transferGroupOwner,
 } from "@/lib/im/service";
+import { getOrCreateBizGroup } from "@/lib/im/biz";
 import { listMessages } from "@/lib/im/queries";
 
 const id = z.string().min(1);
@@ -179,5 +182,78 @@ export async function cardAction(input: z.input<typeof cardActionSchema>) {
     revalidatePath("/oa/approvals");
     if (instance.bizType === "purchase_order" && instance.bizId) revalidatePath(`/erp/purchase/${instance.bizId}`);
     return { status: instance.status };
+  });
+}
+
+const sendFileSchema = z.object({
+  conversationId: id,
+  attachmentId: id,
+  clientMsgId: z.string().min(1).max(64),
+  replyToId: z.string().optional(),
+});
+
+/** 发送已上传的图片/文件附件消息 */
+export async function sendFileMessage(input: z.input<typeof sendFileSchema>) {
+  return runAction(null, async (user) => {
+    const v = parseInput(sendFileSchema, input);
+    const { dto } = await db.$transaction((tx) =>
+      sendAttachmentMessage(tx, {
+        conversationId: v.conversationId,
+        senderId: user.id,
+        attachmentId: v.attachmentId,
+        clientMsgId: v.clientMsgId,
+        replyToId: v.replyToId ?? null,
+      }),
+    );
+    return dto;
+  });
+}
+
+const bizGroupSchema = z.object({
+  bizType: z.enum(["project", "customer", "opportunity", "event"]),
+  bizId: id,
+});
+
+/** 打开或创建业务群（项目群 / 客户群 / 商机群 / 日程会议群） */
+export async function openBizGroup(input: z.input<typeof bizGroupSchema>) {
+  return runAction(null, async (user) => {
+    const v = parseInput(bizGroupSchema, input);
+    const res = await db.$transaction((tx) =>
+      getOrCreateBizGroup(tx, { id: user.id, name: user.name, permissions: user.permissions }, v.bizType, v.bizId),
+    );
+    if (v.bizType === "event") revalidatePath("/oa/calendar");
+    if (v.bizType === "project") revalidatePath(`/pms/projects/${v.bizId}`);
+    if (v.bizType === "customer") revalidatePath(`/crm/customers/${v.bizId}`);
+    if (v.bizType === "opportunity") revalidatePath(`/crm/opportunities/${v.bizId}`);
+    return res;
+  });
+}
+
+const shareRefSchema = z.object({
+  conversationId: z.string().min(1).optional(),
+  targetUserId: z.string().min(1).optional(),
+  refType: z.enum(["document", "approval", "customer", "opportunity", "sales", "purchase", "project", "transport", "event"]),
+  refId: id,
+  note: z.string().max(1000, "附言不能超过 1000 字").optional(),
+});
+
+/** 从文档/审批等业务页面直接分享到会话 */
+export async function shareRefToChat(input: z.input<typeof shareRefSchema>) {
+  return runAction(null, async (user) => {
+    const v = parseInput(shareRefSchema, input);
+    if (!v.conversationId && !v.targetUserId) throw new Error("请选择要分享的会话或成员");
+    return db.$transaction((tx) =>
+      shareRefMessage(
+        tx,
+        { id: user.id, permissions: user.permissions },
+        {
+          conversationId: v.conversationId ?? null,
+          targetUserId: v.targetUserId ?? null,
+          refType: v.refType,
+          refId: v.refId,
+          note: v.note ?? null,
+        },
+      ),
+    );
   });
 }

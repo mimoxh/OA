@@ -11,15 +11,18 @@ importers:
       '@floating-ui/dom':
         specifier: ^1.8.0
         version: 1.8.0
+      '@hocuspocus/extension-redis':
+        specifier: ^4.9.0
+        version: 4.9.0(supports-color@10.2.2)(y-protocols@1.0.7(yjs@13.6.33))(yjs@13.6.33)
       '@hocuspocus/provider':
-        specifier: ^4.8.0
-        version: 4.8.0(y-protocols@1.0.7(yjs@13.6.33))(yjs@13.6.33)
+        specifier: ^4.9.0
+        version: 4.9.0(y-protocols@1.0.7(yjs@13.6.33))(yjs@13.6.33)
       '@hocuspocus/server':
-        specifier: ^4.8.0
-        version: 4.8.0(y-protocols@1.0.7(yjs@13.6.33))(yjs@13.6.33)
+        specifier: ^4.9.0
+        version: 4.9.0(y-protocols@1.0.7(yjs@13.6.33))(yjs@13.6.33)
       '@hocuspocus/transformer':
-        specifier: ^4.8.0
-        version: 4.8.0(@tiptap/core@3.34.0(@tiptap/pm@3.34.0))(@tiptap/pm@3.34.0)(y-prosemirror@1.3.7(prosemirror-model@1.25.13)(prosemirror-state@1.4.4)(prosemirror-view@1.42.9)(y-protocols@1.0.7(yjs@13.6.33))(yjs@13.6.33))(yjs@13.6.33)
+        specifier: ^4.9.0
+        version: 4.9.0(@tiptap/core@3.34.0(@tiptap/pm@3.34.0))(@tiptap/pm@3.34.0)(y-prosemirror@1.3.7(prosemirror-model@1.25.13)(prosemirror-state@1.4.4)(prosemirror-view@1.42.9)(y-protocols@1.0.7(yjs@13.6.33))(yjs@13.6.33))(yjs@13.6.33)
       '@prisma/adapter-better-sqlite3':
         specifier: ^7.10.1
         version: 7.10.1
@@ -474,24 +477,30 @@ packages:
   '@floating-ui/utils@0.2.12':
     resolution: {integrity: sha512-HpCo8tmWzLVad5s2d19EhAz5zqrrQ6s69qd6moPMQvkOuSwDT1YgRfWSVuc4ennqrgv3OHppiOGMQ7oC13yIww==}
 
-  '@hocuspocus/common@4.8.0':
-    resolution: {integrity: sha512-UI8Vye3mds2aMUHaWfwkDq0+257JUpvKa0nyAOjXWLfyhYHsAq8eku+ynZc/PaShyOci/VD54cW/rLQJGHHPKg==}
+  '@hocuspocus/common@4.9.0':
+    resolution: {integrity: sha512-lrp5gtT8kvLt9/MuRRQPKaveihv5emSsP9+sMCq2rx8xVGn33PZIv0haSGyb37CbAIlVaHb/yG22VKKMx+clYg==}
 
-  '@hocuspocus/provider@4.8.0':
-    resolution: {integrity: sha512-WUwwu3W55n0fkMF1uYhx4WXlRjJ/t7OjsxiuzTMMQGDvvZrZA37CAysdqc7JXLVmN6A5IIWadE921pxN9/JotA==}
+  '@hocuspocus/extension-redis@4.9.0':
+    resolution: {integrity: sha512-DKKDKFhKhIhU3ZsQz21lKrIEhAwIjsY273pBMhYQMFo9p+qXGhxJI6EA4Yx5aPMPhl7kfNbvs+vPwLUJ6yPTPw==}
     peerDependencies:
       y-protocols: ^1.0.6
       yjs: ^13.6.8
 
-  '@hocuspocus/server@4.8.0':
-    resolution: {integrity: sha512-P8U4I4R4Ft+B37d4CFs4tG8oPJ3rnJJiFx3CXBJpKSIrXTz5YDldRmv7eGqmUq4QRSoWR6FjN4DUIX1QO0PccA==}
+  '@hocuspocus/provider@4.9.0':
+    resolution: {integrity: sha512-I+B/bJs8SRCBZRRevdNkMGtCAE6S13hsTFX2SZ33iSSJC/4IZcsl5+St9/OYYxxkETfvelJKsmhtwdyIwXnsEg==}
+    peerDependencies:
+      y-protocols: ^1.0.6
+      yjs: ^13.6.8
+
+  '@hocuspocus/server@4.9.0':
+    resolution: {integrity: sha512-8qRkIcFpcz4cw2WHLgUdwZGAqiUUdueh9iCdhujYfExHsnGnJ3iTiowGOs25HsNfUhxQRj6HJBGi4M2lP3rEpg==}
     engines: {node: '>=22'}
     peerDependencies:
       y-protocols: ^1.0.6
       yjs: ^13.6.8
 
-  '@hocuspocus/transformer@4.8.0':
-    resolution: {integrity: sha512-X5iRzYZH19HeUaekA/7/JJ0Z5wIRqocsVTwfk0IRYvQWbEjT8Jd+HjJZwBEictd2T9rNIwr1GFuFfc6eCDi7GA==}
+  '@hocuspocus/transformer@4.9.0':
+    resolution: {integrity: sha512-mPfKznaCzgnpL4AcnbWJqUfTgpMEH4WXzvBvIW9+BG88vDlBMIeDwoaUg5YaieVZMpXgy5YM/fsHpD6jkQfQ/A==}
     peerDependencies:
       '@tiptap/core': ^3.0.1
       '@tiptap/pm': ^3.0.1
@@ -679,6 +688,9 @@ packages:
     engines: {node: '>=20.9.0'}
     cpu: [x64]
     os: [win32]
+
+  '@ioredis/commands@1.11.0':
+    resolution: {integrity: sha512-tuMmOu6dtyGFv/fzCjtapCJj/zgoHaFsqs3wKsroJSRXtlLmyL/t+B7uaQiavGk1F3WWFQcUqZwk92bpp9jKcA==}
 
   '@ioredis/commands@2.0.0':
     resolution: {integrity: sha512-vrx0AE/T0h7cRZwfo1M39Cr+ZhZrkf0V8mQN75wucKCxCLD9l/VX6no3gFvrLqD1IlG/1LtzWovqEw3t0Vr9zg==}
@@ -1622,6 +1634,12 @@ packages:
 
   '@rtsao/scc@1.1.0':
     resolution: {integrity: sha512-zt6OdqaDoOnJ1ZYsCYGt9YmWzDXl4vQdKTyJev62gFhRGKdx7mcT54V9KIjg+d2wi9EXsPvAPKe7i7WjfVWB8g==}
+
+  '@sesamecare-oss/redlock@1.4.0':
+    resolution: {integrity: sha512-2z589R+yxKLN4CgKxP1oN4dsg6Y548SE4bVYam/R0kHk7Q9VrQ9l66q+k1ehhSLLY4or9hcchuF9/MhuuZdjJg==}
+    engines: {node: '>=16'}
+    peerDependencies:
+      ioredis: '>=5'
 
   '@standard-schema/spec@1.1.0':
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
@@ -3141,6 +3159,10 @@ packages:
     resolution: {integrity: sha512-5Hh7Y1wQbvY5ooGgPbDaL5iYLAPzMTUrjMulskHLH6wnv/A+1q5rgEaiuqEjB+oxGXIVZs1FF+R/KPN3ZSQYYg==}
     engines: {node: '>=12'}
 
+  ioredis@5.6.1:
+    resolution: {integrity: sha512-UxC0Yv1Y4WRJiGQxQkP0hfdL0/5/6YvdfOOClRgJ0qppSarkhneSa6UvkMkms0AkdGimSH3Ikqm+6mkMmX7vGA==}
+    engines: {node: '>=12.22.0'}
+
   ioredis@6.0.0:
     resolution: {integrity: sha512-f+Dtubxfpf6KYFq7WVXJoOLn0bk4TJrMrN9SzeE+jrWrCWj7XX3fA6vkryafhADX+GMymRxgDJDOI33COkJc0w==}
     engines: {node: '>=20.0.0'}
@@ -3415,6 +3437,12 @@ packages:
   locate-path@6.0.0:
     resolution: {integrity: sha512-iPZK6eYjbxRu3uB4/WZ3EsEIMJFMqAoopl3R+zuq0UjcAm/MO6KCweDgPfP3elTztoKP3KtnVHxTn2NHBSDVUw==}
     engines: {node: '>=10'}
+
+  lodash.defaults@4.2.0:
+    resolution: {integrity: sha512-qjxPLHd3r5DnsdGacqOMU6pb/avJzdh9tFX2ymgoZE27BmjXrNy/y4LoaiTeAb+O3gL8AfpJGtqfX/ae2leYYQ==}
+
+  lodash.isarguments@3.1.0:
+    resolution: {integrity: sha512-chi4NHZlZqZD18a0imDHnZPrDeBbTtVN7GXMwuGdRH9qotxAjYs3aVLKc7zNOG9eddR5Ksd8rvFEBc9SsggPpg==}
 
   lodash.merge@4.6.2:
     resolution: {integrity: sha512-0KpjqXRVvrYyCsX1swR/XTK0va6VQkQM6MNo7PqW77ByjAhoARA8EfrP1N4+KlKj8YS0ZUCtRT/YUuhyYDujIQ==}
@@ -3827,6 +3855,10 @@ packages:
 
   redis-errors@1.2.0:
     resolution: {integrity: sha512-1qny3OExCf0UvUV/5wpYKf2YwPcOqXzkwKKSmKHiE6ZMQs5heeE/c8eXK+PNllPvmjgAbfnsbpkGZWy8cBpn9w==}
+    engines: {node: '>=4'}
+
+  redis-parser@3.0.0:
+    resolution: {integrity: sha512-DJnGAeenTdpMEH6uAJRK/uiyEIH9WVsUmoLwzudwGJUwZPp80PDBWPHXSAGNPwNvIXAbe7MSUB1zQFugFml66A==}
     engines: {node: '>=4'}
 
   redux-thunk@3.1.0:
@@ -4597,21 +4629,34 @@ snapshots:
 
   '@floating-ui/utils@0.2.12': {}
 
-  '@hocuspocus/common@4.8.0':
+  '@hocuspocus/common@4.9.0':
     dependencies:
       lib0: 0.2.120
 
-  '@hocuspocus/provider@4.8.0(y-protocols@1.0.7(yjs@13.6.33))(yjs@13.6.33)':
+  '@hocuspocus/extension-redis@4.9.0(supports-color@10.2.2)(y-protocols@1.0.7(yjs@13.6.33))(yjs@13.6.33)':
     dependencies:
-      '@hocuspocus/common': 4.8.0
+      '@hocuspocus/common': 4.9.0
+      '@hocuspocus/server': 4.9.0(y-protocols@1.0.7(yjs@13.6.33))(yjs@13.6.33)
+      '@sesamecare-oss/redlock': 1.4.0(ioredis@5.6.1(supports-color@10.2.2))
+      ioredis: 5.6.1(supports-color@10.2.2)
+      kleur: 4.1.5
+      y-protocols: 1.0.7(yjs@13.6.33)
+      yjs: 13.6.33
+    transitivePeerDependencies:
+      - srvx
+      - supports-color
+
+  '@hocuspocus/provider@4.9.0(y-protocols@1.0.7(yjs@13.6.33))(yjs@13.6.33)':
+    dependencies:
+      '@hocuspocus/common': 4.9.0
       '@lifeomic/attempt': 3.1.0
       lib0: 0.2.120
       y-protocols: 1.0.7(yjs@13.6.33)
       yjs: 13.6.33
 
-  '@hocuspocus/server@4.8.0(y-protocols@1.0.7(yjs@13.6.33))(yjs@13.6.33)':
+  '@hocuspocus/server@4.9.0(y-protocols@1.0.7(yjs@13.6.33))(yjs@13.6.33)':
     dependencies:
-      '@hocuspocus/common': 4.8.0
+      '@hocuspocus/common': 4.9.0
       async-mutex: 0.5.0
       crossws: 0.4.17
       kleur: 4.1.5
@@ -4621,7 +4666,7 @@ snapshots:
     transitivePeerDependencies:
       - srvx
 
-  '@hocuspocus/transformer@4.8.0(@tiptap/core@3.34.0(@tiptap/pm@3.34.0))(@tiptap/pm@3.34.0)(y-prosemirror@1.3.7(prosemirror-model@1.25.13)(prosemirror-state@1.4.4)(prosemirror-view@1.42.9)(y-protocols@1.0.7(yjs@13.6.33))(yjs@13.6.33))(yjs@13.6.33)':
+  '@hocuspocus/transformer@4.9.0(@tiptap/core@3.34.0(@tiptap/pm@3.34.0))(@tiptap/pm@3.34.0)(y-prosemirror@1.3.7(prosemirror-model@1.25.13)(prosemirror-state@1.4.4)(prosemirror-view@1.42.9)(y-protocols@1.0.7(yjs@13.6.33))(yjs@13.6.33))(yjs@13.6.33)':
     dependencies:
       '@tiptap/core': 3.34.0(@tiptap/pm@3.34.0)
       '@tiptap/pm': 3.34.0
@@ -4751,6 +4796,8 @@ snapshots:
 
   '@img/sharp-win32-x64@0.35.5':
     optional: true
+
+  '@ioredis/commands@1.11.0': {}
 
   '@ioredis/commands@2.0.0': {}
 
@@ -5748,6 +5795,10 @@ snapshots:
       react-redux: 9.3.1(@types/react@19.3.0)(react@19.3.0)(redux@5.0.1)
 
   '@rtsao/scc@1.1.0': {}
+
+  '@sesamecare-oss/redlock@1.4.0(ioredis@5.6.1(supports-color@10.2.2))':
+    dependencies:
+      ioredis: 5.6.1(supports-color@10.2.2)
 
   '@standard-schema/spec@1.1.0': {}
 
@@ -7445,6 +7496,20 @@ snapshots:
 
   internmap@2.0.3: {}
 
+  ioredis@5.6.1(supports-color@10.2.2):
+    dependencies:
+      '@ioredis/commands': 1.11.0
+      cluster-key-slot: 1.1.1
+      debug: 4.4.3(supports-color@10.2.2)
+      denque: 2.1.0
+      lodash.defaults: 4.2.0
+      lodash.isarguments: 3.1.0
+      redis-errors: 1.2.0
+      redis-parser: 3.0.0
+      standard-as-callback: 2.1.0
+    transitivePeerDependencies:
+      - supports-color
+
   ioredis@6.0.0(supports-color@10.2.2):
     dependencies:
       '@ioredis/commands': 2.0.0
@@ -7697,6 +7762,10 @@ snapshots:
   locate-path@6.0.0:
     dependencies:
       p-locate: 5.0.0
+
+  lodash.defaults@4.2.0: {}
+
+  lodash.isarguments@3.1.0: {}
 
   lodash.merge@4.6.2: {}
 
@@ -8213,6 +8282,10 @@ snapshots:
       - redux
 
   redis-errors@1.2.0: {}
+
+  redis-parser@3.0.0:
+    dependencies:
+      redis-errors: 1.2.0
 
   redux-thunk@3.1.0(redux@5.0.1):
     dependencies:

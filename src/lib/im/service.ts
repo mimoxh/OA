@@ -2,10 +2,13 @@ import type { Conversation, ConversationMember, Message, User } from "@/generate
 import { Prisma } from "@/generated/prisma/client";
 import type { DbClient } from "@/lib/db";
 import { queueEvent } from "@/lib/realtime/buffer";
+import { SAFE_INLINE_IMAGES } from "@/lib/storage";
+import { REF_LABEL } from "./biz-meta";
 import { parseMessageContent } from "./content";
 import { conversationUserIds, toMessageDTO, userLiteSelect } from "./queries";
+import { resolveRefs } from "./refs";
 import type { BotKey } from "./bots";
-import type { MessageDTO, RefType } from "./types";
+import type { FileContent, ImageContent, MessageDTO, MessageKind, RefType } from "./types";
 
 const RECALL_WINDOW_MS = 2 * 60 * 1000;
 
@@ -28,8 +31,8 @@ async function requireGroup(client: DbClient, conversationId: string): Promise<C
 export type AppendMessageInput = {
   conversationId: string;
   senderId: string | null;
-  type: "TEXT" | "CARD" | "SYSTEM";
-  /** 结构化内容：Tiptap doc | Card | {text}（将被 JSON.stringify 存储） */
+  type: MessageKind;
+  /** 结构化内容：Tiptap doc | Card | {text} | ImageContent | FileContent（将被 JSON.stringify 存储） */
   content: unknown;
   text: string;
   mentions?: string[];
@@ -313,12 +316,131 @@ export async function sendTextMessage(
   });
 }
 
+export async function sendAttachmentMessage(
+  client: DbClient,
+  input: { conversationId: string; senderId: string; attachmentId: string; clientMsgId?: string | null; replyToId?: string | null },
+): Promise<{ message: Message; dto: MessageDTO; created: boolean }> {
+  const conv = await client.conversation.findUnique({ where: { id: input.conversationId }, select: { type: true } });
+  if (!conv) throw new Error("会话不存在");
+  await requireMember(client, input.conversationId, input.senderId);
+  if (conv.type === "BOT") throw new Error("机器人会话不能发送附件");
+  if (input.replyToId) {
+    const target = await client.message.findUnique({ where: { id: input.replyToId }, select: { conversationId: true } });
+    if (!target || target.conversationId !== input.conversationId) throw new Error("回复的消息不存在");
+  }
+  const att = await client.attachment.findUnique({ where: { id: input.attachmentId } });
+  if (!att) throw new Error("附件不存在");
+  if (att.uploaderId !== input.senderId || att.conversationId !== input.conversationId) {
+    throw new Error("无权发送该附件");
+  }
+  const isImage = SAFE_INLINE_IMAGES.has(att.mimeType);
+  const url = `/api/im/files/${att.id}`;
+  if (isImage) {
+    const content: ImageContent = {
+      attachmentId: att.id,
+      url,
+      filename: att.filename,
+      mimeType: att.mimeType,
+      size: att.size,
+      width: att.width,
+      height: att.height,
+    };
+    return appendMessage(client, {
+      conversationId: input.conversationId,
+      senderId: input.senderId,
+      type: "IMAGE",
+      content,
+      text: "[图片]",
+      clientMsgId: input.clientMsgId ?? null,
+      replyToId: input.replyToId ?? null,
+    });
+  }
+  const content: FileContent = {
+    attachmentId: att.id,
+    url,
+    filename: att.filename,
+    mimeType: att.mimeType,
+    size: att.size,
+  };
+  return appendMessage(client, {
+    conversationId: input.conversationId,
+    senderId: input.senderId,
+    type: "FILE",
+    content,
+    text: `[文件] ${att.filename}`,
+    clientMsgId: input.clientMsgId ?? null,
+    replyToId: input.replyToId ?? null,
+  });
+}
+
+function buildPlainTiptapDoc(text: string) {
+  const lines = text.split("\n");
+  return {
+    type: "doc",
+    content: lines.map((line) => ({
+      type: "paragraph",
+      ...(line ? { content: [{ type: "text", text: line }] } : {}),
+    })),
+  };
+}
+
+/**
+ * 从业务页面直接分享文档/审批等对象到指定会话或指定同事：
+ * - 先校验分享人自身拥有该对象的查看权限；
+ * - 实际以带 links 的 TEXT 消息发送，接收端通过 RefPreviewCard 按「查看者本人权限」动态渲染，防止敏感信息越权泄露。
+ */
+export async function shareRefMessage(
+  client: DbClient,
+  actor: { id: string; permissions: string[] },
+  input: {
+    conversationId?: string | null;
+    targetUserId?: string | null;
+    refType: RefType;
+    refId: string;
+    note?: string | null;
+    clientMsgId?: string | null;
+  },
+): Promise<{ conversationId: string; dto: MessageDTO }> {
+  const [preview] = await resolveRefs(actor, [{ type: input.refType, id: input.refId }], client);
+  if (!preview || !preview.ok) {
+    throw new Error(preview?.reason === "forbidden" ? "你无权分享该内容" : "要分享的内容不存在");
+  }
+
+  let conversationId = input.conversationId ?? null;
+  if (conversationId) {
+    const conv = await client.conversation.findUnique({ where: { id: conversationId }, select: { type: true } });
+    if (!conv) throw new Error("会话不存在");
+    if (conv.type === "BOT") throw new Error("不能分享到机器人会话");
+    await requireMember(client, conversationId, actor.id);
+  } else if (input.targetUserId) {
+    const conv = await getOrCreateDirect(client, actor.id, input.targetUserId);
+    conversationId = conv.id;
+  } else {
+    throw new Error("请选择要分享的会话或成员");
+  }
+
+  const trimmedNote = (input.note ?? "").trim().slice(0, 1000);
+  const text = trimmedNote || `分享了${REF_LABEL[input.refType] ?? "内容"}`;
+  const { dto } = await appendMessage(client, {
+    conversationId,
+    senderId: actor.id,
+    type: "TEXT",
+    content: buildPlainTiptapDoc(text),
+    text,
+    links: [{ type: input.refType, id: input.refId }],
+    refType: input.refType,
+    refId: input.refId,
+    clientMsgId: input.clientMsgId ?? null,
+  });
+  return { conversationId, dto };
+}
+
 export async function recallMessage(client: DbClient, messageId: string, userId: string) {
   const msg = await client.message.findUnique({ where: { id: messageId }, include: { sender: { select: userLiteSelect } } });
   if (!msg) throw new Error("消息不存在");
   await requireMember(client, msg.conversationId, userId);
   if (msg.senderId !== userId) throw new Error("只能撤回自己发送的消息");
-  if (msg.type !== "TEXT") throw new Error("仅文本消息可以撤回");
+  if (msg.type !== "TEXT" && msg.type !== "IMAGE" && msg.type !== "FILE") throw new Error("该类型消息不支持撤回");
   if (msg.recalledAt) return;
   if (Date.now() - msg.createdAt.getTime() > RECALL_WINDOW_MS) throw new Error("超过 2 分钟的消息不能撤回");
   const updated = await client.message.update({

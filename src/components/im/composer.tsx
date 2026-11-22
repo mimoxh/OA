@@ -1,23 +1,25 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
 import { Extension } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import Mention, { type MentionOptions } from "@tiptap/extension-mention";
 import { Placeholder } from "@tiptap/extensions";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
-import { CornerUpLeft, SendHorizontal, Smile, X } from "lucide-react";
+import { CornerUpLeft, Image as ImageIcon, Paperclip, SendHorizontal, Smile, X } from "lucide-react";
 import { toast } from "sonner";
 import type { ConversationDTO, MessageDTO, UserLite } from "@/lib/im/types";
 import { cn } from "@/lib/utils";
 import { mentionSuggestion, type MentionItem } from "@/components/docs/editor/suggestion";
 import { EmojiPicker } from "@/components/docs/emoji-picker";
 import { sendRealtime } from "@/components/realtime/provider";
-import { getDraft, setDraft, sendText, useGroupMembers } from "./store";
+import { getDraft, sendAttachment, sendText, setDraft, useGroupMembers } from "./store";
 import "@/components/docs/editor/editor.css";
 
 const MAX_CHARS = 5000;
+const MAX_FILE_BYTES = 25 * 1024 * 1024;
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 
 /**
  * 每个会话一条最新闭包：编辑器实例在 convId 变化前不重建，PM 插件（suggestion/快捷键）
@@ -77,7 +79,10 @@ export function Composer({
   const convId = conv.id;
   const members = useGroupMembers(convId);
   const [empty, setEmpty] = useState(true);
+  const [dragging, setDragging] = useState(false);
   const lastTyping = useRef(0);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const mentionItems = useMemo<MentionItem[]>(() => {
     if (conv.type === "GROUP") {
@@ -93,6 +98,7 @@ export function Composer({
     }
     return [];
   }, [conv.type, conv.peerId, conv.name, conv.avatarColor, members, me.id]);
+
   const editor = useEditor(
     {
       immediatelyRender: false,
@@ -119,7 +125,7 @@ export function Composer({
           gapcursor: false,
           trailingNode: false,
         }),
-        Placeholder.configure({ placeholder: conv.type === "GROUP" ? "输入消息，@ 提及成员" : "输入消息" }),
+        Placeholder.configure({ placeholder: conv.type === "GROUP" ? "输入消息，@ 提及成员，可粘贴或拖入图片/文件" : "输入消息，可粘贴或拖入图片/文件" }),
         Mention.configure({
           HTMLAttributes: { class: "doc-mention" },
           suggestion: mentionSuggestion(() => liveComposers.get(convId)?.items() ?? [], () => {}) as MentionOptions["suggestion"],
@@ -153,6 +159,50 @@ export function Composer({
     };
   }, [editor, convId]);
 
+  const sendFiles = (files: FileList | File[]) => {
+    const list = Array.from(files);
+    if (!list.length) return;
+    const replyId = replyTo?.id ?? null;
+    if (replyId) onClearReply();
+    for (const file of list.slice(0, 5)) {
+      if (file.size <= 0) {
+        toast.error(`「${file.name}」为空文件`);
+        continue;
+      }
+      const isImg = file.type.startsWith("image/") && file.type !== "image/svg+xml";
+      if (isImg && file.size > MAX_IMAGE_BYTES) {
+        toast.error(`图片「${file.name}」超过 10 MB 限制`);
+        continue;
+      }
+      if (file.size > MAX_FILE_BYTES) {
+        toast.error(`文件「${file.name}」超过 25 MB 限制`);
+        continue;
+      }
+      void sendAttachment(convId, file, replyId);
+    }
+  };
+
+  const onPaste = (e: ClipboardEvent<HTMLDivElement>) => {
+    const files = Array.from(e.clipboardData?.files ?? []);
+    if (!files.length) return;
+    e.preventDefault();
+    sendFiles(files);
+  };
+
+  const onDragOver = (e: DragEvent<HTMLDivElement>) => {
+    if (e.dataTransfer?.types?.includes("Files")) {
+      e.preventDefault();
+      if (!dragging) setDragging(true);
+    }
+  };
+
+  const onDrop = (e: DragEvent<HTMLDivElement>) => {
+    if (!e.dataTransfer?.files?.length) return;
+    e.preventDefault();
+    setDragging(false);
+    sendFiles(e.dataTransfer.files);
+  };
+
   const send = () => {
     const ed = editor;
     if (!ed || ed.isDestroyed || ed.isEmpty) return;
@@ -177,7 +227,34 @@ export function Composer({
   });
 
   return (
-    <div className="shrink-0 border-t border-line bg-white px-3 pb-2.5 pt-2">
+    <div
+      className="shrink-0 border-t border-line bg-white px-3 pb-2.5 pt-2"
+      onPaste={onPaste}
+      onDragOver={onDragOver}
+      onDragLeave={() => setDragging(false)}
+      onDrop={onDrop}
+    >
+      <input
+        ref={imageInputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/gif,image/webp"
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          if (e.target.files) sendFiles(e.target.files);
+          e.target.value = "";
+        }}
+      />
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          if (e.target.files) sendFiles(e.target.files);
+          e.target.value = "";
+        }}
+      />
       {replyTo && (
         <div className="mb-1.5 flex items-center gap-1.5 rounded-md bg-sidebar px-2.5 py-1.5 text-xs text-ink-2">
           <CornerUpLeft className="size-3.5 shrink-0 text-ink-3" />
@@ -190,16 +267,41 @@ export function Composer({
           </button>
         </div>
       )}
-      <div className="rounded-lg border border-line-strong transition-colors focus-within:border-accent">
+      <div
+        className={cn(
+          "rounded-lg border transition-colors focus-within:border-accent",
+          dragging ? "border-accent bg-accent-soft/40" : "border-line-strong",
+        )}
+      >
         <div className="max-h-36 overflow-y-auto">
           <EditorContent editor={editor} />
         </div>
         <div className="flex items-center justify-between px-2 pb-1.5">
-          <EmojiPicker onSelect={(e) => editor?.chain().focus().insertContent(e).run()}>
-            <button type="button" className="rounded-md p-1.5 text-ink-2 hover:bg-hover" aria-label="表情">
-              <Smile className="size-4" />
+          <div className="flex items-center gap-0.5">
+            <EmojiPicker onSelect={(e) => editor?.chain().focus().insertContent(e).run()}>
+              <button type="button" className="rounded-md p-1.5 text-ink-2 hover:bg-hover" title="表情" aria-label="表情">
+                <Smile className="size-4" />
+              </button>
+            </EmojiPicker>
+            <button
+              type="button"
+              onClick={() => imageInputRef.current?.click()}
+              className="rounded-md p-1.5 text-ink-2 hover:bg-hover"
+              title="发送图片"
+              aria-label="发送图片"
+            >
+              <ImageIcon className="size-4" />
             </button>
-          </EmojiPicker>
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="rounded-md p-1.5 text-ink-2 hover:bg-hover"
+              title="发送文件"
+              aria-label="发送文件"
+            >
+              <Paperclip className="size-4" />
+            </button>
+          </div>
           <button
             type="button"
             onClick={() => send()}
@@ -214,7 +316,7 @@ export function Composer({
           </button>
         </div>
       </div>
-      <div className="mt-1 text-[11px] text-ink-3">Enter 发送，Shift+Enter 换行</div>
+      <div className="mt-1 text-[11px] text-ink-3">Enter 发送，Shift+Enter 换行；支持拖拽或粘贴发送图片/文件</div>
     </div>
   );
 }

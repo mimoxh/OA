@@ -1,5 +1,6 @@
 import "dotenv/config";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { Redis } from "@hocuspocus/extension-redis";
 import { Server, type Hocuspocus } from "@hocuspocus/server";
 import { TiptapTransformer } from "@hocuspocus/transformer";
 import { getSchema } from "@tiptap/core";
@@ -132,15 +133,45 @@ async function broadcast(instance: Hocuspocus, body: Record<string, unknown>) {
   return { ok: true, delivered: !!live };
 }
 
+function createRedisExtension(redisUrl: string): Redis {
+  const url = new URL(redisUrl);
+  const host = url.hostname || "127.0.0.1";
+  const port = url.port ? Number(url.port) : 6379;
+  const dbIndex = url.pathname && url.pathname.length > 1 ? Number(url.pathname.slice(1)) : undefined;
+  const options: {
+    username?: string;
+    password?: string;
+    db?: number;
+    tls?: Record<string, never>;
+  } = {};
+  if (url.username) options.username = decodeURIComponent(url.username);
+  if (url.password) options.password = decodeURIComponent(url.password);
+  if (dbIndex !== undefined && Number.isInteger(dbIndex) && dbIndex >= 0) options.db = dbIndex;
+  if (url.protocol === "rediss:") options.tls = {};
+
+  const ext = new Redis({
+    host,
+    port,
+    prefix: "oa-docs",
+    options,
+  });
+  ext.pub.on("error", (err) => console.error("[collab] Redis pub 错误:", err.message));
+  ext.sub.on("error", (err) => console.error("[collab] Redis sub 错误:", err.message));
+  return ext;
+}
+
+const redisExt = process.env.REDIS_URL ? createRedisExtension(process.env.REDIS_URL) : null;
+
 const server = new Server<Context>({
   name: "oa-docs",
   port: PORT,
   quiet: true,
   debounce: 1500,
   maxDebounce: 8000,
+  extensions: redisExt ? [redisExt] : [],
 
   async onListen() {
-    log(`Hocuspocus 协同服务已启动 ws://localhost:${PORT}`);
+    log(`Hocuspocus 协同服务已启动 ws://localhost:${PORT}${redisExt ? "（已启用 Redis 多实例同步）" : ""}`);
   },
 
   async onAuthenticate({ token, documentName, connectionConfig }) {
@@ -182,7 +213,12 @@ const server = new Server<Context>({
   async onRequest({ request, response, instance }) {
     const url = request.url ?? "/";
     if (request.method === "GET" && url.startsWith("/health")) {
-      sendJson(response, 200, { ok: true, documents: instance.getDocumentsCount(), connections: instance.getConnectionsCount() });
+      sendJson(response, 200, {
+        ok: true,
+        documents: instance.getDocumentsCount(),
+        connections: instance.getConnectionsCount(),
+        redis: Boolean(redisExt),
+      });
       throw null;
     }
     if (request.method !== "POST" || !(url.startsWith("/restore") || url.startsWith("/broadcast"))) return;
@@ -201,3 +237,9 @@ const server = new Server<Context>({
 });
 
 server.listen();
+
+for (const sig of ["SIGINT", "SIGTERM"] as const) {
+  process.on(sig, () => {
+    void server.destroy().finally(() => process.exit(0));
+  });
+}

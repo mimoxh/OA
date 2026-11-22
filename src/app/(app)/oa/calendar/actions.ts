@@ -6,6 +6,7 @@ import { endOfDay, format, isValid, startOfDay } from "date-fns";
 import { db } from "@/lib/db";
 import { runAction } from "@/lib/action";
 import { notify } from "@/lib/services/notify";
+import { syncEventToMeetingGroup } from "@/lib/im/biz";
 import { parseInput } from "@/lib/oa/validate";
 
 const eventSchema = z.object({
@@ -109,6 +110,14 @@ export async function saveEvent(input: EventInput) {
           link,
         });
       }
+      await syncEventToMeetingGroup(tx, {
+        eventId: ev.id,
+        actorId: user.id,
+        actorName: user.name,
+        title: data.title,
+        addedUserIds: added,
+        changeSummary: changed ? [when, data.location].filter(Boolean).join(" · ") : null,
+      });
       return ev.id;
     });
     revalidatePath("/oa/calendar");

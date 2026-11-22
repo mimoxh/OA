@@ -16,6 +16,7 @@ import { NotificationsChanged } from "@/components/oa/notifications-changed";
 import { cn } from "@/lib/utils";
 import { DecisionBar, WithdrawButton } from "./approval-actions";
 import { ApprovalComments } from "./approval-comments";
+import { ShareToChatButton } from "@/components/im/share-to-chat";
 
 type NodeState = "approved" | "rejected" | "pending" | "waiting" | "skipped";
 
@@ -139,6 +140,7 @@ export default async function ApprovalDetailPage({ params }: PageProps<"/oa/appr
         crumbs={[{ label: "OA 办公", href: "/oa" }, { label: "审批中心", href: "/oa/approvals" }, { label: inst.no }]}
         actions={
           <>
+            <ShareToChatButton refType="approval" refId={inst.id} title={inst.title} subtitle={`${inst.flow.name} · ${inst.no}`} />
             {isApplicant && inst.status === "PENDING" && <WithdrawButton instanceId={inst.id} />}
             {canResubmit && (
               <LinkButton href={`/oa/approvals/new?flow=${inst.flow.key}&from=${inst.id}`}>

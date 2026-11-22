@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { useAction } from "@/components/ui/use-action";
 import { ColorPicker } from "@/components/oa/color-picker";
 import { MemberMultiSelect } from "@/components/oa/member-picker";
+import { BizGroupButton } from "@/components/im/biz-group-button";
 import { cn } from "@/lib/utils";
 import { deleteEvent, respondEvent, saveEvent } from "./actions";
 
@@ -29,6 +30,7 @@ export type CalEvent = {
   color: string;
   organizer: { id: string; name: string; avatarColor: string };
   attendees: { userId: string; name: string; avatarColor: string; status: string }[];
+  meetingGroupId?: string | null;
 };
 
 export type EventDraft = { start: Date; end: Date; allDay: boolean };
@@ -105,29 +107,38 @@ function EventDetail({ event, meId, onClose }: { event: CalEvent; meId: string; 
         </span>
       }
       footer={
-        mine ? (
-          <>
-            <span className="mr-auto text-[13px] text-ink-2">是否参加？</span>
-            <Button
-              variant={mine.status === "declined" ? "danger" : "default"}
-              loading={pending}
-              onClick={() => run(() => respondEvent(event.id, "declined"), { success: "已拒绝", onSuccess: onClose })}
-            >
-              <X className="size-3.5" />
-              拒绝
-            </Button>
-            <Button
-              variant={mine.status === "accepted" ? "primary" : "default"}
-              loading={pending}
-              onClick={() => run(() => respondEvent(event.id, "accepted"), { success: "已接受", onSuccess: onClose })}
-            >
-              <Check className="size-3.5" />
-              接受
-            </Button>
-          </>
-        ) : (
-          <Button onClick={onClose}>关闭</Button>
-        )
+        <>
+          <div className="mr-auto flex items-center gap-2">
+            <BizGroupButton
+              bizType="event"
+              bizId={event.id}
+              existingConversationId={event.meetingGroupId}
+              onAfterNavigate={onClose}
+            />
+          </div>
+          {mine ? (
+            <>
+              <Button
+                variant={mine.status === "declined" ? "danger" : "default"}
+                loading={pending}
+                onClick={() => run(() => respondEvent(event.id, "declined"), { success: "已拒绝", onSuccess: onClose })}
+              >
+                <X className="size-3.5" />
+                拒绝
+              </Button>
+              <Button
+                variant={mine.status === "accepted" ? "primary" : "default"}
+                loading={pending}
+                onClick={() => run(() => respondEvent(event.id, "accepted"), { success: "已接受", onSuccess: onClose })}
+              >
+                <Check className="size-3.5" />
+                接受
+              </Button>
+            </>
+          ) : (
+            <Button onClick={onClose}>关闭</Button>
+          )}
+        </>
       }
     >
       <div className="space-y-3 pb-2 text-sm">
@@ -229,7 +240,7 @@ function EditForm({
       footer={
         <>
           {event && (
-            <div className="mr-auto">
+            <div className="mr-auto flex items-center gap-1.5">
               <ConfirmButton
                 danger
                 variant="ghost"
@@ -241,6 +252,12 @@ function EditForm({
                 <Trash2 className="size-3.5" />
                 删除
               </ConfirmButton>
+              <BizGroupButton
+                bizType="event"
+                bizId={event.id}
+                existingConversationId={event.meetingGroupId}
+                onAfterNavigate={onClose}
+              />
             </div>
           )}
           <Button onClick={onClose}>取消</Button>

@@ -16,6 +16,8 @@ import { OpportunityProperties } from "@/components/crm/opportunity-properties";
 import { FollowUpDialog, FollowUpTimeline } from "@/components/crm/followups";
 import { ConvertOrderDialog } from "@/components/crm/convert-order-dialog";
 import { DeleteOpportunityButton } from "@/components/crm/opportunity-buttons";
+import { BizGroupButton } from "@/components/im/biz-group-button";
+import { bizDirectKey } from "@/lib/im/biz";
 
 const ACTION_LABEL: Record<string, string> = {
   created: "创建了商机",
@@ -41,7 +43,7 @@ export default async function OpportunityDetailPage({ params }: PageProps<"/crm/
   });
   if (!opp) notFound();
 
-  const [users, logs, warehouses, products, inventories] = await Promise.all([
+  const [users, logs, warehouses, products, inventories, bizGroup] = await Promise.all([
     getActiveUsers(),
     db.auditLog.findMany({
       where: { entityType: "opportunity", entityId: id },
@@ -54,6 +56,7 @@ export default async function OpportunityDetailPage({ params }: PageProps<"/crm/
       ? db.product.findMany({ where: { active: true }, select: { id: true, name: true, sku: true, unit: true, price: true }, orderBy: { sku: "asc" } })
       : [],
     canConvert ? db.inventory.findMany({ select: { productId: true, warehouseId: true, quantity: true, reservedQty: true } }) : [],
+    db.conversation.findUnique({ where: { directKey: bizDirectKey("opportunity", id) }, select: { id: true } }),
   ]);
   const stock: Record<string, Record<string, number>> = {};
   for (const inv of inventories) (stock[inv.warehouseId] ??= {})[inv.productId] = inv.quantity - inv.reservedQty;
@@ -65,6 +68,7 @@ export default async function OpportunityDetailPage({ params }: PageProps<"/crm/
         crumbs={[{ label: "CRM 客户", href: "/crm" }, { label: "商机", href: "/crm/opportunities" }, { label: opp.name }]}
         actions={
           <>
+            <BizGroupButton bizType="opportunity" bizId={opp.id} existingConversationId={bizGroup?.id} />
             {canEdit && (
               <FollowUpDialog
                 customerId={opp.customerId}

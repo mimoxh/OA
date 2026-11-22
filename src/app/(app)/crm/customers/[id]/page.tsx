@@ -18,6 +18,8 @@ import { DeleteCustomerButton } from "@/components/crm/customer-buttons";
 import { ContactsPanel } from "@/components/crm/contacts";
 import { FollowUpDialog, FollowUpTimeline } from "@/components/crm/followups";
 import { OpportunityDialog } from "@/components/crm/opportunity-dialog";
+import { BizGroupButton } from "@/components/im/biz-group-button";
+import { bizDirectKey } from "@/lib/im/biz";
 
 const TABS = ["overview", "contacts", "opportunities", "followups", "orders", "receivables", "projects", "transport"] as const;
 
@@ -46,7 +48,10 @@ export default async function CustomerDetailPage({ params, searchParams }: PageP
     },
   });
   if (!customer) notFound();
-  const users = await getActiveUsers();
+  const [users, bizGroup] = await Promise.all([
+    getActiveUsers(),
+    db.conversation.findUnique({ where: { directKey: bizDirectKey("customer", id) }, select: { id: true } }),
+  ]);
 
   const base = `/crm/customers/${id}`;
   const c = customer;
@@ -89,6 +94,7 @@ export default async function CustomerDetailPage({ params, searchParams }: PageP
         crumbs={[{ label: "CRM 客户", href: "/crm" }, { label: "客户", href: "/crm/customers" }, { label: c.name }]}
         actions={
           <>
+            <BizGroupButton bizType="customer" bizId={c.id} existingConversationId={bizGroup?.id} />
             {canEdit && followUpButton}
             {canOrder && (
               <LinkButton href={`/erp/sales/new?customerId=${c.id}`}>

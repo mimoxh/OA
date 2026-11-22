@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { LockKeyhole } from "lucide-react";
+import { REF_LABEL } from "@/lib/im/biz-meta";
 import type { RefPreview, RefType } from "@/lib/im/types";
 import { cn } from "@/lib/utils";
 
@@ -106,9 +107,13 @@ export function RefPreviewCard({ r, mine }: { r: { type: RefType; id: string }; 
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
             <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-ink">{p.title}</span>
-            {p.status && (
+            {p.status ? (
               <span className={cn("shrink-0 rounded px-1.5 py-0.5 text-[10px]", STATUS_CLS[p.status.color] ?? STATUS_CLS.gray)}>
                 {p.status.label}
+              </span>
+            ) : (
+              <span className="shrink-0 rounded bg-tag-gray px-1.5 py-0.5 text-[10px] text-tag-gray-ink">
+                {REF_LABEL[p.type]}
               </span>
             )}
           </div>

@@ -24,6 +24,7 @@ import { Menu, MenuContent, MenuItem, MenuTrigger } from "@/components/ui/menu";
 import { MemberMultiSelect, MemberSelect } from "@/components/oa/member-picker";
 import type { MemberOption } from "@/lib/oa/types";
 import type { BotKey } from "@/lib/im/bots";
+import { BIZ_META } from "@/lib/im/biz-meta";
 import type { ConversationDTO } from "@/lib/im/types";
 import { cn } from "@/lib/utils";
 import { useAction } from "@/components/ui/use-action";
@@ -74,9 +75,11 @@ function previewText(conv: ConversationDTO): string {
   const lm = conv.lastMessage;
   if (!lm) return "暂无消息";
   if (lm.recalled) return `${lm.senderName ?? ""} 撤回了一条消息`;
-  if (lm.type === "CARD") return `[卡片] ${lm.text}`;
-  const body = lm.text.replace(/\n/g, " ");
-  if (conv.type === "GROUP" && lm.senderName) return `${lm.senderName}：${body}`;
+  let body: string;
+  if (lm.type === "CARD") body = `[卡片] ${lm.text}`;
+  else if (lm.type === "IMAGE") body = "[图片]";
+  else body = lm.text.replace(/\n/g, " ");
+  if (conv.type === "GROUP" && lm.senderName && lm.type !== "SYSTEM") return `${lm.senderName}：${body}`;
   return body;
 }
 
@@ -147,7 +150,14 @@ export function ConversationList() {
               <ConvAvatar conv={conv} showPresence />
               <span className="min-w-0 flex-1">
                 <span className="flex items-baseline justify-between gap-2">
-                  <span className="truncate text-[13.5px] font-medium text-ink">{conv.name}</span>
+                  <span className="flex min-w-0 items-center gap-1">
+                    <span className="truncate text-[13.5px] font-medium text-ink">{conv.name}</span>
+                    {conv.bizType && (
+                      <span className="shrink-0 rounded bg-tag-blue px-1 py-px text-[10px] font-medium text-tag-blue-ink">
+                        {BIZ_META[conv.bizType].tag}
+                      </span>
+                    )}
+                  </span>
                   <span className="shrink-0 text-[11px] text-ink-3">{convTime(conv.lastMessageAt)}</span>
                 </span>
                 <span className="mt-0.5 flex items-center gap-1">

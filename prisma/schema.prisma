@@ -95,6 +95,7 @@ model User {
 
   imMemberships   ConversationMember[]
   imMessages      Message[]           @relation("MessageSender")
+  attachments     Attachment[]
 }
 
 model Notification {
@@ -1082,6 +1083,8 @@ enum MessageType {
   TEXT
   CARD
   SYSTEM
+  IMAGE
+  FILE
 }
 
 model Conversation {
@@ -1089,16 +1092,18 @@ model Conversation {
   type          ConversationType
   name          String?
   ownerId       String?
-  directKey     String?              @unique // DIRECT: sorted "uidA:uidB"
+  directKey     String?              @unique // DIRECT: "uidA:uidB" | BOT: "bot:<key>:<uid>" | BIZ: "biz:<type>:<id>"
   botKey        String?              // BOT: approval|project|docs|system
-  bizType       String?              // reserved for P2 business groups
+  bizType       String?              // project | customer | opportunity | event
   bizId         String?
   lastSeq       Int                  @default(0)
   lastMessageAt DateTime?
   members       ConversationMember[]
   messages      Message[]
+  attachments   Attachment[]
   createdAt     DateTime             @default(now())
 
+  @@index([bizType, bizId])
   @@index([botKey])
 }
 
@@ -1127,7 +1132,7 @@ model Message {
   sender         User?        @relation("MessageSender", fields: [senderId], references: [id])
   clientMsgId    String?
   type           MessageType
-  // JSON: Tiptap doc (TEXT) | Card (CARD) | {"text":...} (SYSTEM)
+  // JSON: Tiptap doc (TEXT) | Card (CARD) | {"text":...} (SYSTEM) | ImageContent (IMAGE) | FileContent (FILE)
   content        String
   text           String       @default("")
   // userIds 或 ["all"]
@@ -1145,4 +1150,22 @@ model Message {
   @@unique([conversationId, seq])
   @@unique([conversationId, senderId, clientMsgId])
   @@index([refType, refId])
+}
+
+model Attachment {
+  id             String        @id @default(cuid())
+  key            String        @unique
+  filename       String
+  mimeType       String
+  size           Int
+  width          Int?
+  height         Int?
+  uploaderId     String
+  uploader       User          @relation(fields: [uploaderId], references: [id])
+  conversationId String?
+  conversation   Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  createdAt      DateTime      @default(now())
+
+  @@index([conversationId])
+  @@index([uploaderId])
 }

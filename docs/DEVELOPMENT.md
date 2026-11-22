@@ -103,9 +103,12 @@ pnpm next dev --port 3103
 
 - `src/lib/realtime/buffer.ts`：AsyncLocalStorage 事件缓冲。不在缓冲上下文（种子脚本、离线任务）中 `queueEvent` 静默丢弃。
 - `src/lib/realtime/publish.ts`：配置了 `REDIS_URL` 走 Redis 频道 `rt:events`（多实例），否则 POST `${REALTIME_INTERNAL_URL}/publish`（`rt-publish` 作用域令牌）。1.5s 超时、失败仅记日志不抛出。
-- `server/realtime.ts`：`ws` 实时服务。`?token=` 连接（`rt` 作用域，`GET /api/realtime-token` 签发）；30s 心跳；typing 转发（校验会话成员，成员表缓存 60s）；presence 广播 + `presence.snapshot`；HTTP `POST /publish`、`GET /health`。
+- `server/realtime.ts`：`ws` 实时服务。`?token=` 连接（`rt` 作用域，`GET /api/realtime-token` 签发）；30s 心跳；typing 转发（校验会话成员，成员表缓存 60s）；presence 广播 + `presence.snapshot`；HTTP `POST /publish`、`GET /health`。配置 `REDIS_URL` 时通过 `rt:events`、`rt:presence`、`rt:instances` 与 `rt:online:<instanceId>` 实现跨实例事件、输入状态与在线状态同步。
+- `server/collab.ts`：Hocuspocus 协同服务。配置 `REDIS_URL` 时自动挂载 `@hocuspocus/extension-redis`（前缀 `oa-docs`），支持多实例 Yjs 文档同步与分布式写锁；`GET /health` 返回 `redis` 状态。
 - 令牌：`src/lib/auth/token.ts` 的 `signScopedToken/verifyScopedToken`，作用域 `collab`（文档协同）/ `rt`（实时通道）/ `rt-publish`（服务端投递）。带 scope 的令牌**不能**当会话 Cookie 用（`verifySessionToken` 会拒绝）。
-- IM 代码在 `src/lib/im/`：`service.ts`（会话/消息写路径，seq 由 `lastSeq increment` 原子分配）、`queries.ts`（DTO 与查询）、`content.ts`（Tiptap 消息校验 + 链接/提及提取）、`cards.ts`（审批卡片与刷新）、`refs.ts`（按查看者权限解析业务引用）、`bots.ts`/`types.ts`（客户端可引用的常量与类型）。该目录不得 import `server-only`（会被 tsx 脚本与 server/ 引用）。
+- IM 代码在 `src/lib/im/`：`service.ts`（会话/消息/附件/分享写路径，seq 由 `lastSeq increment` 原子分配）、`queries.ts`（DTO 与查询）、`content.ts`（Tiptap 消息校验 + 链接/提及提取）、`cards.ts`（审批卡片与刷新）、`refs.ts`（按查看者权限解析业务引用，含日程 `event`）、`biz.ts`（项目/客户/商机/会议业务群绑定与日程同步，`directKey = "biz:<bizType>:<bizId>"`）、`bots.ts`/`biz-meta.ts`/`types.ts`（客户端可引用的常量与类型）。该目录不得 import `server-only`（会被 tsx 脚本与 server/ 引用）。
+- 附件与可插拔存储：`src/lib/storage/` 提供 `StorageDriver` 接口，默认 `LocalStorageDriver`（`data/uploads`），也支持免额外依赖的 AWS SigV4 `S3StorageDriver`。上传走 `POST /api/im/upload`（会话成员校验、大小限制、图片魔数校验并禁止 SVG 内联），下载/预览走 `GET /api/im/files/[id]`（成员权限校验 + `X-Content-Type-Options: nosniff`）。
+- 分享到会话：`GET /api/im/share-targets` 与 `ShareToChatButton` 支持将文档、审批、项目等直接分享到会话，消息内仅保存业务引用与用户附言，由 `RefPreviewCard` 按查看者权限动态解析，避免标题越权泄露。
 - `notify()` 除写 Notification 表外，还会派发 `notification.new` 并向对应机器人会话投递卡片；审批状态变化时 `approval.ts` 末尾调用 `refreshApprovalCards` 刷新所有相关卡片。
 - 补 IM 演示数据：`pnpm db:seed:im`（幂等）：无群聊时建群/单聊，并为还没有机器人会话的用户按历史通知回填卡片。
 
@@ -116,14 +119,17 @@ pnpm next dev --port 3103
 | `REALTIME_PORT` | `1235` | 实时服务端口 |
 | `NEXT_PUBLIC_REALTIME_URL` | `ws://localhost:1235` | 客户端连接地址 |
 | `REALTIME_INTERNAL_URL` | `http://localhost:1235` | 服务端 /publish 入口 |
-| `REDIS_URL` | 未设置 | 设置后启用 Redis 总线（多实例） |
+| `REDIS_URL` | 未设置 | 设置后启用实时总线、跨实例在线状态与 Hocuspocus Redis 协同扩展 |
 | `COLLAB_PORT` / `NEXT_PUBLIC_COLLAB_URL` | `1234` | 文档协同 Hocuspocus |
+| `STORAGE_DRIVER` | `local` | 附件存储驱动：`local` 或 `s3` |
+| `STORAGE_LOCAL_DIR` | `./data/uploads` | 本地附件存储目录（`STORAGE_DRIVER=local`） |
+| `S3_BUCKET` / `S3_REGION` / `S3_ENDPOINT` / `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` / `S3_FORCE_PATH_STYLE` | 未设置 | S3 兼容对象存储配置（`STORAGE_DRIVER=s3`） |
 
 `docker-compose.yml` 提供可选的 `redis:7` 与 `postgres:16`（默认开发不需要启动）。
 
 ### 多实例与迁移说明
 
-- 多实例：所有实例共享同一 `REDIS_URL` 即可互通业务事件；**已知限制**——presence 不跨实例传播，`presence.snapshot` 只含本实例在线用户。文档协同多实例需要后续接入 `@hocuspocus/extension-redis`。
+- 多实例：所有实例共享同一 `REDIS_URL` 即可互通业务事件、跨实例 typing、跨实例在线状态（`rt:presence` + `rt:online:<instanceId>` 60s TTL 心跳）以及 Hocuspocus 文档实时协同（`@hocuspocus/extension-redis`）。附件在多实例部署时请切换为 `STORAGE_DRIVER=s3`（或共享持久化卷）。
 - 迁移 PostgreSQL：改 `schema.prisma` 的 `provider` 为 `postgresql`；`@prisma/adapter-better-sqlite3` 换成 `@prisma/adapter-pg`，`db.ts` 按 `DATABASE_URL` 选适配器；种子里的 `PRAGMA journal_mode` 仅限 SQLite（改为按 provider 跳过）；全库约 60 处 `contains` 查询需要一个大小写不敏感的辅助函数（SQLite 无 `mode: "insensitive"`，PG 有）。
 
 ### 事件类型（服务端 → 客户端）

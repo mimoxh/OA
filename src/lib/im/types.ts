@@ -2,6 +2,28 @@
 
 export type UserLite = { id: string; name: string; avatarColor: string };
 
+export type MessageKind = "TEXT" | "CARD" | "SYSTEM" | "IMAGE" | "FILE";
+
+export type BizType = "project" | "customer" | "opportunity" | "event";
+
+export type ImageContent = {
+  attachmentId: string;
+  url: string;
+  filename: string;
+  mimeType: string;
+  size: number;
+  width?: number | null;
+  height?: number | null;
+};
+
+export type FileContent = {
+  attachmentId: string;
+  url: string;
+  filename: string;
+  mimeType: string;
+  size: number;
+};
+
 export type ConversationDTO = {
   id: string;
   type: "DIRECT" | "GROUP" | "BOT";
@@ -10,6 +32,10 @@ export type ConversationDTO = {
   /** 对方颜色 | 机器人颜色 | 群会话按 id 派生 */
   avatarColor: string;
   botKey: string | null;
+  bizType: BizType | null;
+  bizId: string | null;
+  bizHref: string | null;
+  bizLabel: string | null;
   peerId: string | null;
   memberCount: number;
   role: "OWNER" | "ADMIN" | "MEMBER";
@@ -21,7 +47,7 @@ export type ConversationDTO = {
   muted: boolean;
   lastMessage: {
     seq: number;
-    type: "TEXT" | "CARD" | "SYSTEM";
+    type: MessageKind;
     text: string;
     senderName: string | null;
     recalled: boolean;
@@ -35,7 +61,7 @@ export type MessageDTO = {
   id: string;
   conversationId: string;
   seq: number;
-  type: "TEXT" | "CARD" | "SYSTEM";
+  type: MessageKind;
   sender: UserLite | null;
   /** 撤回后为 null */
   content: unknown | null;
@@ -49,7 +75,16 @@ export type MessageDTO = {
   createdAt: string;
 };
 
-export type RefType = "document" | "approval" | "customer" | "opportunity" | "sales" | "purchase" | "project" | "transport";
+export type RefType =
+  | "document"
+  | "approval"
+  | "customer"
+  | "opportunity"
+  | "sales"
+  | "purchase"
+  | "project"
+  | "transport"
+  | "event";
 
 export type Card = {
   template: "approval" | "generic";

@@ -16,7 +16,7 @@ const eventInclude = {
 
 type Row = Prisma.CalendarEventGetPayload<{ include: typeof eventInclude }>;
 
-function serialize(e: Row): CalEvent {
+function serialize(e: Row, meetingGroupId: string | null): CalEvent {
   return {
     id: e.id,
     title: e.title,
@@ -28,6 +28,7 @@ function serialize(e: Row): CalEvent {
     color: e.color,
     organizer: e.organizer,
     attendees: e.attendees.map((a) => ({ userId: a.userId, name: a.user.name, avatarColor: a.user.avatarColor, status: a.status })),
+    meetingGroupId,
   };
 }
 
@@ -57,6 +58,15 @@ export default async function CalendarPage({ searchParams }: PageProps<"/oa/cale
     if (extra) rows.push(extra);
   }
 
+  const eventIds = rows.map((r) => r.id);
+  const groups = eventIds.length
+    ? await db.conversation.findMany({
+        where: { bizType: "event", bizId: { in: eventIds } },
+        select: { id: true, bizId: true },
+      })
+    : [];
+  const groupByEvent = new Map(groups.filter((g) => g.bizId).map((g) => [g.bizId!, g.id]));
+
   return (
     <>
       <TopBar crumbs={[{ label: "OA 办公", href: "/oa" }, { label: "日程会议" }]} />
@@ -70,7 +80,7 @@ export default async function CalendarPage({ searchParams }: PageProps<"/oa/cale
           key={`${view}-${format(anchor, "yyyy-MM-dd")}-${eventId}`}
           view={view}
           anchor={format(anchor, "yyyy-MM-dd")}
-          events={rows.map(serialize)}
+          events={rows.map((r) => serialize(r, groupByEvent.get(r.id) ?? null))}
           members={members}
           meId={user.id}
           openEventId={eventId || undefined}

@@ -55,6 +55,7 @@ import { CollabEditor, type EditorCallbacks } from "./editor/collab-editor";
 import { StaticDoc } from "./editor/static-doc";
 import { useCollab } from "./editor/use-collab";
 import type { CommentThread, Member } from "./types";
+import { ShareToChatButton } from "@/components/im/share-to-chat";
 
 export type DocViewProps = {
   doc: {
@@ -374,6 +375,13 @@ export function DocView({ doc, ancestors, childPages, threads, members, me, canW
             <IconButton title="复制链接" onClick={copyLink}>
               <Link2 className="size-4" />
             </IconButton>
+            <ShareToChatButton
+              refType="document"
+              refId={doc.id}
+              title={title || "无标题"}
+              subtitle={doc.spaceName}
+              variant="icon"
+            />
             <IconButton
               title="评论"
               className={cn(commentsOpen && "bg-active text-ink")}

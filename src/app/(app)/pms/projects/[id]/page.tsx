@@ -19,6 +19,9 @@ import { Members } from "@/components/pms/members";
 import { ProjectOverview } from "@/components/pms/project-overview";
 import { TaskDialog } from "@/components/pms/task-dialog";
 import { TaskDrawer, type DrawerTask } from "@/components/pms/task-drawer";
+import { BizGroupButton } from "@/components/im/biz-group-button";
+import { ShareToChatButton } from "@/components/im/share-to-chat";
+import { bizDirectKey } from "@/lib/im/biz";
 
 const VIEWS = [
   { key: "board", label: "看板" },
@@ -50,7 +53,7 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
   });
   if (!project) notFound();
 
-  const [tasks, logs, users, customers, canEdit, canManage] = await Promise.all([
+  const [tasks, logs, users, customers, canEdit, canManage, bizGroup] = await Promise.all([
     db.task.findMany({
       where: { projectId: id },
       orderBy: [{ sortOrder: "asc" }, { no: "asc" }],
@@ -61,6 +64,7 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
     db.customer.findMany({ select: { id: true, name: true }, orderBy: { code: "asc" } }),
     canEditProjectTasks(user, id),
     canManageProject(user, id),
+    db.conversation.findUnique({ where: { directKey: bizDirectKey("project", id) }, select: { id: true } }),
   ]);
   const commentCounts = await db.comment.groupBy({
     by: ["targetId"],
@@ -177,6 +181,8 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
         crumbs={[{ label: "PMS 项目", href: "/pms" }, { label: `${project.icon} ${project.name}` }]}
         actions={
           <>
+            <BizGroupButton bizType="project" bizId={project.id} existingConversationId={bizGroup?.id} />
+            <ShareToChatButton refType="project" refId={project.id} title={project.name} subtitle={project.code} />
             <ProjectActions
               project={header}
               users={users}

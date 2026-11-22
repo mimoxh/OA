@@ -1,5 +1,6 @@
 import type { Conversation, ConversationMember, Message, User } from "@/generated/prisma/client";
 import { db, type DbClient } from "@/lib/db";
+import { BIZ_META, isBizType } from "./biz-meta";
 import { BOTS, type BotKey } from "./bots";
 import type { ConversationDTO, MessageDTO, UserLite } from "./types";
 
@@ -36,6 +37,9 @@ export function toConversationDTO(
     name = bot.name;
     avatarColor = bot.color;
   }
+  const bizType = isBizType(conv.bizType) ? conv.bizType : null;
+  const bizId = bizType && conv.bizId ? conv.bizId : null;
+  const bizMeta = bizType ? BIZ_META[bizType] : null;
   const lm = lastMessage;
   return {
     id: conv.id,
@@ -43,6 +47,10 @@ export function toConversationDTO(
     name,
     avatarColor,
     botKey: conv.botKey,
+    bizType,
+    bizId,
+    bizHref: bizMeta && bizId ? bizMeta.href(bizId) : null,
+    bizLabel: bizMeta ? bizMeta.detailLabel : null,
     peerId,
     memberCount: info.memberCount,
     role: member.role,

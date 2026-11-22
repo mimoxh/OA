@@ -4,11 +4,13 @@ import { useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import type { ConversationDTO, MessageDTO, UserLite } from "@/lib/im/types";
 import { subscribeRealtime, type RealtimeEvent } from "@/components/realtime/provider";
-import { markConversationRead, sendMessage } from "@/app/(app)/messages/actions";
+import { markConversationRead, sendFileMessage, sendMessage } from "@/app/(app)/messages/actions";
 
 export type PendingMsg = {
   clientMsgId: string;
+  kind?: "text" | "attachment";
   content: unknown;
+  file?: File;
   text: string;
   replyToId: string | null;
   createdAt: string;
@@ -244,6 +246,87 @@ async function doSend(convId: string, clientMsgId: string, content: unknown, rep
   emit();
 }
 
+async function readImageDims(file: File): Promise<{ width: number; height: number } | null> {
+  if (!file.type.startsWith("image/") || file.type === "image/svg+xml") return null;
+  try {
+    const bmp = await createImageBitmap(file);
+    const res = { width: bmp.width, height: bmp.height };
+    bmp.close();
+    return res;
+  } catch {
+    return null;
+  }
+}
+
+export async function sendAttachment(convId: string, file: File, replyToId: string | null) {
+  const clientMsgId = crypto.randomUUID();
+  const isImage = file.type.startsWith("image/") && file.type !== "image/svg+xml";
+  const text = isImage ? `正在上传图片 ${file.name}…` : `正在上传文件 ${file.name}…`;
+  const ms = state.messages.get(convId) ?? { items: [], hasMore: true, loading: false, pending: [] };
+  state.messages.set(convId, ms);
+  putMessages(convId, {
+    pending: [
+      ...ms.pending,
+      { clientMsgId, kind: "attachment", content: null, file, text, replyToId, createdAt: new Date().toISOString(), failed: false },
+    ],
+  });
+  emit();
+  await doSendAttachment(convId, clientMsgId, file, replyToId);
+}
+
+async function doSendAttachment(convId: string, clientMsgId: string, file: File, replyToId: string | null) {
+  const markFailed = (errMsg?: string) => {
+    const cur = state.messages.get(convId);
+    if (!cur) return;
+    putMessages(convId, {
+      pending: cur.pending.map((p) => (p.clientMsgId === clientMsgId ? { ...p, failed: true } : p)),
+    });
+    if (errMsg) toast.error(errMsg);
+    emit();
+  };
+
+  let attachmentId: string;
+  try {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("conversationId", convId);
+    const dims = await readImageDims(file);
+    if (dims) {
+      form.append("width", String(dims.width));
+      form.append("height", String(dims.height));
+    }
+    const res = await fetch("/api/im/upload", { method: "POST", body: form });
+    const data = (await res.json().catch(() => ({}))) as { id?: string; error?: string };
+    if (!res.ok || !data.id) {
+      markFailed(data.error || "文件上传失败");
+      return;
+    }
+    attachmentId = data.id;
+  } catch {
+    markFailed("网络异常，文件上传失败");
+    return;
+  }
+
+  const r = await sendFileMessage({
+    conversationId: convId,
+    attachmentId,
+    clientMsgId,
+    replyToId: replyToId ?? undefined,
+  });
+  const ms = state.messages.get(convId);
+  if (!ms) return;
+  if (r.ok) {
+    const dto = r.data;
+    const items = ms.items.some((m) => m.id === dto.id) ? ms.items : [...ms.items, dto].sort((a, b) => a.seq - b.seq);
+    putMessages(convId, { items, pending: ms.pending.filter((p) => p.clientMsgId !== clientMsgId) });
+    const conv = state.convs.get(convId);
+    if (conv) putConv(summarize(conv, dto, state.meId));
+    emit();
+  } else {
+    markFailed(r.error);
+  }
+}
+
 export function retryPending(convId: string, clientMsgId: string) {
   const ms = state.messages.get(convId);
   const p = ms?.pending.find((x) => x.clientMsgId === clientMsgId);
@@ -252,7 +335,11 @@ export function retryPending(convId: string, clientMsgId: string) {
     pending: ms!.pending.map((x) => (x.clientMsgId === clientMsgId ? { ...x, failed: false } : x)),
   });
   emit();
-  void doSend(convId, clientMsgId, p.content, p.replyToId);
+  if (p.kind === "attachment" && p.file) {
+    void doSendAttachment(convId, clientMsgId, p.file, p.replyToId);
+  } else {
+    void doSend(convId, clientMsgId, p.content, p.replyToId);
+  }
 }
 
 export function discardPending(convId: string, clientMsgId: string) {

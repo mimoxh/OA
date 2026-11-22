@@ -1,13 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { BellOff, Check, DoorOpen, Ellipsis, Pencil, Pin, PinOff, UserPlus, UserRound, Users, X } from "lucide-react";
+import { ArrowUpRight, BellOff, Check, DoorOpen, Ellipsis, Pencil, Pin, PinOff, UserPlus, UserRound, Users, X } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Menu, MenuContent, MenuItem, MenuTrigger } from "@/components/ui/menu";
 import { MemberMultiSelect } from "@/components/oa/member-picker";
 import type { MemberOption } from "@/lib/oa/types";
+import { BIZ_META } from "@/lib/im/biz-meta";
 import type { ConversationDTO, MessageDTO, UserLite } from "@/lib/im/types";
 import { cn } from "@/lib/utils";
 import { useAction } from "@/components/ui/use-action";
@@ -75,7 +77,7 @@ export function ChatView({
     conv.type === "DIRECT"
       ? [online ? "在线" : "离线", peerTitle].filter(Boolean).join(" · ")
       : conv.type === "GROUP"
-        ? `${conv.memberCount} 人`
+        ? [conv.bizType ? BIZ_META[conv.bizType].groupLabel : null, `${conv.memberCount} 人`].filter(Boolean).join(" · ")
         : "机器人";
 
   const set = (patch: { pinned?: boolean; muted?: boolean }) =>
@@ -88,9 +90,25 @@ export function ChatView({
         <div className="flex h-14 shrink-0 items-center gap-3 border-b border-line px-4">
           <ConvAvatar conv={conv} size={36} showPresence />
           <div className="min-w-0 flex-1">
-            <div className="truncate text-[15px] font-semibold text-ink">{conv.name}</div>
+            <div className="flex items-center gap-1.5">
+              <div className="truncate text-[15px] font-semibold text-ink">{conv.name}</div>
+              {conv.bizType && (
+                <span className="shrink-0 rounded bg-tag-blue px-1.5 py-0.5 text-[10px] font-medium text-tag-blue-ink">
+                  {BIZ_META[conv.bizType].tag}
+                </span>
+              )}
+            </div>
             <div className="truncate text-xs text-ink-3">{subtitle}</div>
           </div>
+          {conv.bizHref && conv.bizLabel && (
+            <Link
+              href={conv.bizHref}
+              className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md border border-line-strong bg-white px-2.5 text-xs font-medium text-ink-2 transition-colors hover:bg-hover hover:text-ink"
+            >
+              {conv.bizLabel}
+              <ArrowUpRight className="size-3.5" />
+            </Link>
+          )}
           {conv.type === "GROUP" && (
             <button
               onClick={() => setDrawer((v) => !v)}
