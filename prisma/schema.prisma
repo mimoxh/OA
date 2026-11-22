@@ -223,6 +223,8 @@ model Document {
   favorites   DocumentFavorite[]
   versions    DocumentVersion[]
   attachments Attachment[]
+  linksOut    DocumentLink[]     @relation("DocLinksOut")
+  linksIn     DocumentLink[]     @relation("DocLinksIn")
 
   @@index([spaceId, parentId])
 }
@@ -247,6 +249,22 @@ model DocumentVersion {
   createdById String
   createdBy   User     @relation(fields: [createdById], references: [id])
   createdAt   DateTime @default(now())
+}
+
+// 文档双链索引（由正文 /docs/<id> 链接自动同步）
+model DocumentLink {
+  id          String   @id @default(cuid())
+  sourceDocId String
+  sourceDoc   Document @relation("DocLinksOut", fields: [sourceDocId], references: [id], onDelete: Cascade)
+  targetDocId String
+  targetDoc   Document @relation("DocLinksIn", fields: [targetDocId], references: [id], onDelete: Cascade)
+  occurrence  Int
+  snippet     String   @default("")
+  createdAt   DateTime @default(now())
+
+  @@unique([sourceDocId, occurrence])
+  @@index([targetDocId])
+  @@index([sourceDocId])
 }
 
 // 文档附件：文件存磁盘（storage/attachments/<id>），user 文件名仅入库

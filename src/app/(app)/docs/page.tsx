@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Lock, Star } from "lucide-react";
+import { GitFork, Lock, Star } from "lucide-react";
 import { db } from "@/lib/db";
 import { can, requirePermission } from "@/lib/auth/dal";
 import { EmptyState, Page, PageHeader, Section, TopBar } from "@/components/ui/page";
@@ -51,6 +51,13 @@ export default async function DocsHomePage({ searchParams }: PageProps<"/docs">)
         crumbs={[{ label: "文档" }]}
         actions={
           <>
+            <Link
+              href="/docs/graph"
+              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-line bg-white px-2.5 text-[13px] font-medium text-ink-2 transition-colors hover:bg-hover hover:text-ink"
+            >
+              <GitFork className="size-3.5" />
+              关系图
+            </Link>
             {can(user, "docs:edit") && <NewSpaceButton />}
             {editableSpace && <NewPageButton spaceId={editableSpace.id} />}
           </>

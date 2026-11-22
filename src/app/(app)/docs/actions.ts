@@ -11,6 +11,7 @@ import { getDocAccess, getSpaceAccess, isDocsAdmin, spaceAccess } from "@/lib/do
 import { attachmentPath } from "@/lib/docs/attachments";
 import { broadcastToDoc, callCollab } from "@/lib/docs/collab-client";
 import { EMPTY_DOC, extractText, parseContent, type JSONNode } from "@/lib/docs/content";
+import { syncDocumentLinks } from "@/lib/docs/links";
 import { findTemplate } from "@/lib/docs/templates";
 import { collectDescendantIds, isDescendant } from "@/lib/docs/tree";
 
@@ -60,6 +61,7 @@ async function nextSortOrder(spaceId: string, parentId: string | null) {
 const createSchema = z.object({
   spaceId: z.string().min(1),
   parentId: z.string().nullish(),
+  title: z.string().max(200).optional(),
   template: z.string().nullish(),
   templateDocId: z.string().nullish(),
 });
@@ -73,21 +75,22 @@ export async function createDocument(input: z.input<typeof createSchema>) {
       const parent = await db.document.findUnique({ where: { id: parentId }, select: { spaceId: true, deletedAt: true } });
       if (!parent || parent.spaceId !== v.spaceId || parent.deletedAt) throw new Error("父页面不存在");
     }
-    let title = "";
+    let title = v.title?.trim() ?? "";
     let icon: string | null = null;
     let content = NEW_DOC_CONTENT;
     if (v.template) {
       const t = findTemplate(v.template);
       if (!t) throw new Error("模板不存在");
-      title = t.title();
+      title = title || t.title();
       icon = t.icon;
       content = JSON.stringify(t.content());
     } else if (v.templateDocId) {
       const t = await requireDocRead(user, v.templateDocId);
-      title = t.doc.title;
+      title = title || t.doc.title;
       icon = t.doc.icon;
       content = t.doc.content;
     }
+    const parsedContent = parseContent(content);
     const doc = await db.document.create({
       data: {
         spaceId: v.spaceId,
@@ -95,14 +98,15 @@ export async function createDocument(input: z.input<typeof createSchema>) {
         title,
         icon,
         content,
-        text: extractText(parseContent(content)),
+        text: extractText(parsedContent),
         sortOrder: await nextSortOrder(v.spaceId, parentId),
         createdById: user.id,
         updatedById: user.id,
       },
     });
+    await syncDocumentLinks(db, doc.id, parsedContent, { isTemplate: false });
     revalidateDocs();
-    return { id: doc.id };
+    return { id: doc.id, title: doc.title };
   });
 }
 
@@ -280,7 +284,7 @@ export async function duplicateDocument(id: string) {
         select: { id: true, sortOrder: true },
       });
       for (const s of siblings) await tx.document.update({ where: { id: s.id }, data: { sortOrder: s.sortOrder + 1 } });
-      return tx.document.create({
+      const created = await tx.document.create({
         data: {
           spaceId: doc.spaceId,
           parentId: doc.parentId,
@@ -295,6 +299,8 @@ export async function duplicateDocument(id: string) {
           updatedById: user.id,
         },
       });
+      await syncDocumentLinks(tx, created.id, parseContent(doc.content), { isTemplate: false });
+      return created;
     });
     revalidateDocs();
     return { id: copy.id };

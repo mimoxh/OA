@@ -7,7 +7,8 @@ import { getCurrentUser, isAppEnabled } from "@/lib/auth/dal";
 import { getDocAccess, getSpaceAccess } from "@/lib/docs/access";
 import { attachmentPath, storeAttachment } from "@/lib/docs/attachments";
 import { extractText, type JSONNode } from "@/lib/docs/content";
-import { checkDoc, finalizeImportedDoc, markdownToDoc, type AttachmentInfo, type ResolvedRef } from "@/lib/docs/markdown";
+import { syncDocumentLinks } from "@/lib/docs/links";
+import { checkDoc, finalizeImportedDoc, markdownToDoc, type AttachmentInfo, type ResolvedRef, type WikiLinkResolution } from "@/lib/docs/markdown";
 import { audit } from "@/lib/services/notify";
 
 const err = (error: string, status: number, extra?: object) => NextResponse.json({ error, ...extra }, { status });
@@ -450,7 +451,36 @@ export async function POST(req: NextRequest) {
           }
         }
 
-        // 定稿每页内容
+        // 双链标题索引：优先匹配本次导入批次内的唯一标题，其次匹配目标空间现有活跃页面的唯一标题
+        const normTitle = (s: string) => s.trim().toLowerCase();
+        const addTitle = (map: Map<string, string[]>, title: string, id: string) => {
+          const k = normTitle(title);
+          if (!k) return;
+          const list = map.get(k);
+          if (list) list.push(id);
+          else map.set(k, [id]);
+        };
+        const batchByTitle = new Map<string, string[]>();
+        const batchIdList = [...newIds.values()];
+        for (const p of plans) addTitle(batchByTitle, p.title, newIds.get(p.key)!);
+        const existingDocs = await tx.document.findMany({
+          where: { spaceId, deletedAt: null, isTemplate: false, id: { notIn: batchIdList } },
+          select: { id: true, title: true },
+        });
+        const spaceByTitle = new Map<string, string[]>();
+        for (const d of existingDocs) addTitle(spaceByTitle, d.title, d.id);
+
+        const resolveWikiLink = (target: string): WikiLinkResolution => {
+          const k = normTitle(target);
+          if (!k) return { kind: "not_found" };
+          const inBatch = batchByTitle.get(k);
+          if (inBatch) return inBatch.length === 1 ? { kind: "doc", docId: inBatch[0] } : { kind: "ambiguous" };
+          const inSpace = spaceByTitle.get(k);
+          if (inSpace) return inSpace.length === 1 ? { kind: "doc", docId: inSpace[0] } : { kind: "ambiguous" };
+          return { kind: "not_found" };
+        };
+
+        // 定稿每页内容并同步双链索引
         const rootIds: string[] = [];
         const created: { id: string; title: string; parentId: string | null }[] = [];
         for (const p of plans) {
@@ -474,6 +504,7 @@ export async function POST(req: NextRequest) {
             },
             checkDocLink: (id: string) => readableDocs.has(id),
             checkAttachment: (id: string) => ownedAtts.get(id) ?? null,
+            resolveWikiLink,
           };
           const warnings: string[] = [];
           const json = finalizeImportedDoc(p.json, resolvers, warnings);
@@ -483,6 +514,7 @@ export async function POST(req: NextRequest) {
             throw new ImportError(`页面内容校验失败：${p.file ?? p.title}`);
           }
           await tx.document.update({ where: { id: docId }, data: { content: JSON.stringify(json), text: extractText(json) } });
+          await syncDocumentLinks(tx, docId, json, { isTemplate: false });
           for (const w of [...p.warnings, ...warnings]) allWarnings.push({ file: p.file ?? p.title, message: w });
         }
         for (const rootId of rootIds) await audit(tx, { entityType: "document", entityId: rootId, action: "import", userId: user.id });

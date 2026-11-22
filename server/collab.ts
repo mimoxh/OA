@@ -10,6 +10,7 @@ import { verifySessionToken } from "@/lib/auth/token";
 import { getDocAccess, loadDocUser } from "@/lib/docs/access";
 import { COLLAB_FIELD, createSchemaExtensions } from "@/lib/docs/schema";
 import { extractText, parseContent } from "@/lib/docs/content";
+import { syncDocumentLinks } from "@/lib/docs/links";
 
 const PORT = Number(process.env.COLLAB_PORT ?? 1234);
 /** 编辑过程中距上一个历史版本超过该时长时自动生成新版本 */
@@ -28,7 +29,7 @@ function log(...args: unknown[]) {
 async function persist(document: Y.Doc, documentId: string, userId?: string) {
   const existing = await db.document.findUnique({
     where: { id: documentId },
-    select: { content: true, title: true, createdById: true, updatedAt: true },
+    select: { content: true, title: true, createdById: true, updatedAt: true, isTemplate: true },
   });
   if (!existing) return;
   const json = TiptapTransformer.fromYdoc(document, COLLAB_FIELD);
@@ -42,6 +43,7 @@ async function persist(document: Y.Doc, documentId: string, userId?: string) {
     where: { id: documentId },
     data: { ydoc: state, content, text: extractText(json), ...(userId ? { updatedById: userId } : {}) },
   });
+  await syncDocumentLinks(db, documentId, json, { isTemplate: existing.isTemplate });
   const last = await db.documentVersion.findFirst({
     where: { documentId },
     orderBy: { createdAt: "desc" },

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Globe, Lock } from "lucide-react";
+import { GitFork, Globe, Lock } from "lucide-react";
 import { db } from "@/lib/db";
 import type { CurrentUser } from "@/lib/auth/dal";
 import { Avatar, AvatarStack } from "@/components/ui/avatar";
@@ -67,6 +67,13 @@ export async function SpaceHome({ user, spaceId }: { user: CurrentUser; spaceId:
         crumbs={[{ label: "文档", href: "/docs" }, { label: `${space.icon} ${space.name}` }]}
         actions={
           <>
+            <Link
+              href={`/docs/graph?space=${encodeURIComponent(space.id)}`}
+              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-line bg-white px-2.5 text-[13px] font-medium text-ink-2 transition-colors hover:bg-hover hover:text-ink"
+            >
+              <GitFork className="size-3.5" />
+              关系图
+            </Link>
             <SpaceExportButton spaceId={space.id} />
             {access.canManage && (
               <SpaceActions

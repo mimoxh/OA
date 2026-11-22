@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
-import { ChevronRight, Copy, FilePlus2, FileUp, Link2, Lock, MoreHorizontal, Pencil, Plus, Settings2, Star, StarOff, Trash2 } from "lucide-react";
+import { ChevronRight, Copy, FilePlus2, FileUp, GitFork, Link2, Lock, MoreHorizontal, Pencil, Plus, Settings2, Star, StarOff, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from "@/components/ui/menu";
 import { useAction } from "@/components/ui/use-action";
@@ -255,16 +255,28 @@ export function DocsTree({
         open={isOpen("section:spaces", true)}
         onToggle={(v) => setOpen("section:spaces", v)}
         action={
-          canCreateSpace ? (
-            <button
-              type="button"
-              title="新建空间"
-              onClick={() => setSpaceDialog(true)}
-              className="flex size-5 items-center justify-center rounded text-ink-3 hover:bg-active hover:text-ink"
+          <div className="flex items-center gap-0.5">
+            <Link
+              href="/docs/graph"
+              title="文档关系图"
+              className={cn(
+                "flex size-5 items-center justify-center rounded text-ink-3 hover:bg-active hover:text-ink",
+                pathname === "/docs/graph" && "bg-active text-ink",
+              )}
             >
-              <Plus className="size-3.5" />
-            </button>
-          ) : null
+              <GitFork className="size-3.5" />
+            </Link>
+            {canCreateSpace && (
+              <button
+                type="button"
+                title="新建空间"
+                onClick={() => setSpaceDialog(true)}
+                className="flex size-5 items-center justify-center rounded text-ink-3 hover:bg-active hover:text-ink"
+              >
+                <Plus className="size-3.5" />
+              </button>
+            )}
+          </div>
         }
       >
         {spaces.map((s) => {

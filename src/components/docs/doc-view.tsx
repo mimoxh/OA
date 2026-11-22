@@ -11,6 +11,7 @@ import {
   Copy,
   FileDown,
   FilePlus2,
+  GitFork,
   History,
   Image as ImageIcon,
   Link2,
@@ -34,6 +35,7 @@ import { formatRelative } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { COVERS, coverStyle } from "@/lib/docs/constants";
 import { isEmptyDoc, parseContent } from "@/lib/docs/content";
+import type { BacklinkItem } from "@/lib/docs/links";
 import { BUILTIN_TEMPLATES } from "@/lib/docs/templates";
 import {
   duplicateDocument,
@@ -46,7 +48,9 @@ import {
   createDocument,
 } from "@/app/(app)/docs/actions";
 import { emitDocMeta } from "./events";
+import { BacklinksPanel } from "./backlinks-panel";
 import { EmojiPicker } from "./emoji-picker";
+import { GraphDialog } from "./graph/graph-dialog";
 import { HistoryDialog } from "./history-dialog";
 import { PagePickerDialog } from "./page-picker";
 import { UrlDialog } from "./url-dialog";
@@ -75,6 +79,8 @@ export type DocViewProps = {
   };
   ancestors: { id: string; title: string; icon: string | null }[];
   childPages: { id: string; title: string; icon: string | null }[];
+  backlinks: BacklinkItem[];
+  backlinksTruncated: boolean;
   threads: CommentThread[];
   members: Member[];
   me: { id: string; name: string; color: string };
@@ -112,7 +118,20 @@ function CoverPicker({ onPick, onRemove }: { onPick: (key: string) => void; onRe
   );
 }
 
-export function DocView({ doc, ancestors, childPages, threads, members, me, canWrite, canAdmin, favorite: favorite0, focusComment }: DocViewProps) {
+export function DocView({
+  doc,
+  ancestors,
+  childPages,
+  backlinks,
+  backlinksTruncated,
+  threads,
+  members,
+  me,
+  canWrite,
+  canAdmin,
+  favorite: favorite0,
+  focusComment,
+}: DocViewProps) {
   const router = useRouter();
   const { run, pending } = useAction();
   const [title, setTitle] = useState(doc.title);
@@ -124,6 +143,7 @@ export function DocView({ doc, ancestors, childPages, threads, members, me, canW
   const [focusThread, setFocusThread] = useState<string | null>(focusComment ?? null);
   const [pendingSel, setPendingSel] = useState<PendingSelection | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [graphOpen, setGraphOpen] = useState(false);
   const [pagePickerOpen, setPagePickerOpen] = useState(false);
   const [imageDialogOpen, setImageDialogOpen] = useState(false);
   const [editor, setEditor] = useState<Editor | null>(null);
@@ -280,8 +300,18 @@ export function DocView({ doc, ancestors, childPages, threads, members, me, canW
       onMention: (userId) => {
         void run(() => notifyDocMention({ documentId: doc.id, userIds: [userId] }), { refresh: false });
       },
+      onQuickCreatePage: async (pageTitle) => {
+        const res = await createDocument({ spaceId: doc.spaceId, title: pageTitle });
+        if (!res.ok) {
+          toast.error(res.error);
+          return null;
+        }
+        toast.success(`已新建页面「${res.data.title || pageTitle}」`);
+        router.refresh();
+        return { id: res.data.id, title: res.data.title || pageTitle };
+      },
     }),
-    [doc.id, canWrite, run],
+    [doc.id, doc.spaceId, canWrite, run, router],
   );
 
   const onEditorReady = useCallback((e: Editor | null) => {
@@ -411,6 +441,9 @@ export function DocView({ doc, ancestors, childPages, threads, members, me, canW
                 <MessageSquare className="size-4" />
                 {openCount > 0 && <span className="absolute -right-1.5 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-accent px-0.5 text-[9px] font-semibold text-white">{openCount}</span>}
               </span>
+            </IconButton>
+            <IconButton title="关系图" onClick={() => setGraphOpen(true)}>
+              <GitFork className="size-4" />
             </IconButton>
             <IconButton title="历史版本" onClick={() => setHistoryOpen(true)}>
               <History className="size-4" />
@@ -560,6 +593,7 @@ export function DocView({ doc, ancestors, childPages, threads, members, me, canW
             <div className="mt-4">
               {showEditor ? (
                 <CollabEditor
+                  docId={doc.id}
                   provider={session.provider}
                   ydoc={session.ydoc}
                   user={session.user}
@@ -640,6 +674,13 @@ export function DocView({ doc, ancestors, childPages, threads, members, me, canW
                 </div>
               </div>
             )}
+
+            <BacklinksPanel
+              docId={doc.id}
+              initialLinks={backlinks}
+              initialTruncated={backlinksTruncated}
+              onOpenGraph={() => setGraphOpen(true)}
+            />
           </div>
         </div>
 
@@ -661,6 +702,7 @@ export function DocView({ doc, ancestors, childPages, threads, members, me, canW
       </div>
 
       <HistoryDialog open={historyOpen} onOpenChange={setHistoryOpen} docId={doc.id} canRestore={canWrite} onSaveCurrent={saveCurrentVersion} />
+      <GraphDialog open={graphOpen} onOpenChange={setGraphOpen} docId={doc.id} docTitle={title} spaceId={doc.spaceId} />
       <PagePickerDialog
         open={pagePickerOpen}
         onOpenChange={setPagePickerOpen}

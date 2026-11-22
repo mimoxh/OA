@@ -12,6 +12,7 @@ import type { HocuspocusProvider } from "@hocuspocus/provider";
 import type * as Y from "yjs";
 import { COLLAB_FIELD, createSchemaExtensions } from "@/lib/docs/schema";
 import { SlashCommand, buildSlashItems, mentionSuggestion, type MentionItem } from "./suggestion";
+import { WikiLinkSuggestion } from "./wikilink-suggestion";
 import { BubbleToolbar, TableToolbar } from "./toolbars";
 import { FileAttachmentView } from "./file-attachment";
 
@@ -23,6 +24,7 @@ export type EditorCallbacks = {
   onFile: (range: Range) => void;
   onFiles: (files: File[], pos: number | null) => void;
   onMention: (userId: string) => void;
+  onQuickCreatePage: (title: string) => Promise<{ id: string; title: string } | null>;
 };
 
 /** 处理编辑器内链接点击：站内文档链接直接跳转，外链需 Ctrl/⌘ + 点击（只读时直接打开） */
@@ -53,6 +55,7 @@ export function useLinkClick() {
 }
 
 export function CollabEditor({
+  docId,
   provider,
   ydoc,
   user,
@@ -61,6 +64,7 @@ export function CollabEditor({
   callbacks,
   onReady,
 }: {
+  docId: string;
   provider: HocuspocusProvider;
   ydoc: Y.Doc;
   user: { id: string; name: string; color: string };
@@ -77,7 +81,6 @@ export function CollabEditor({
     linkRef.current = linkClick;
   });
 
-
   const editor = useEditor(
     {
       immediatelyRender: false,
@@ -87,7 +90,7 @@ export function CollabEditor({
           mention: { suggestion: mentionSuggestion(() => members, (id) => callbacks.onMention(id)) },
         }).map((e) => (e.name === "fileAttachment" ? FileAttachmentView : e)),
         Placeholder.configure({
-          placeholder: ({ node }) => (node.type.name === "heading" ? `标题 ${node.attrs.level}` : "输入 / 唤出命令，@ 提及成员"),
+          placeholder: ({ node }) => (node.type.name === "heading" ? `标题 ${node.attrs.level}` : "输入 / 唤出命令，[[ 链接页面，@ 提及成员"),
         }),
         Collaboration.configure({ document: ydoc, field: COLLAB_FIELD }),
         CollaborationCaret.configure({ provider, user: { id: user.id, name: user.name, color: user.color } }),
@@ -98,6 +101,10 @@ export function CollabEditor({
               onFile: (r) => callbacks.onFile(r),
               onLinkPage: (r) => callbacks.onLinkPage(r),
             }),
+        }),
+        WikiLinkSuggestion.configure({
+          docId,
+          onQuickCreate: (title) => callbacks.onQuickCreatePage(title),
         }),
       ],
       editorProps: {

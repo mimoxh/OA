@@ -315,6 +315,11 @@ export type ResolvedRef =
   | { kind: "doc"; docId: string }
   | { kind: "drop"; reason: string };
 
+export type WikiLinkResolution =
+  | { kind: "doc"; docId: string }
+  | { kind: "ambiguous" }
+  | { kind: "not_found" };
+
 export type ImportResolvers = {
   /** 相对路径引用（相对所在 md 文件目录解析后的原始 href）→ 目标 */
   resolveLocal?: (href: string) => ResolvedRef;
@@ -322,9 +327,12 @@ export type ImportResolvers = {
   checkDocLink?: (docId: string) => boolean;
   /** `/api/docs/attachments/<id>` 属于目标空间时返回附件信息，否则 null */
   checkAttachment?: (id: string) => AttachmentInfo | null;
+  /** 双链语法 `[[标题]]` / `[[标题|别名]]` → 目标文档 */
+  resolveWikiLink?: (target: string) => WikiLinkResolution;
 };
 
 const BAD_HREF_RE = /[\\\x00-\x1f\x7f]/;
+const WIKI_LINK_RE = /\[\[([^[\]\r\n]+?)\]\]/g;
 
 /** 链接目标分类：允许 http(s)/mailto/锚点/站内文档与附件/相对路径，其余丢弃 */
 function classifyHref(href: string, resolvers: ImportResolvers): ResolvedRef {
@@ -345,11 +353,67 @@ function classifyHref(href: string, resolvers: ImportResolvers): ResolvedRef {
 const imageFallback = (alt: string): JSONNode => ({ type: "text", text: `［图片：${alt}］` });
 
 /**
- * 二次处理导入的 JSON：校验/重写链接与图片、把单链接段落转成附件块。
+ * 二次处理导入的 JSON：校验/重写链接与图片、展开双链语法、把单链接段落转成附件块。
  * 在页面 id 与附件 id 都已知后调用（导入事务内）。
  */
 export function finalizeImportedDoc(input: JSONNode, resolvers: ImportResolvers, warnings: string[]): JSONNode {
   const stripLink = (n: JSONNode): JSONNode => ({ ...n, marks: (n.marks ?? []).filter((mk) => mk.type !== "link") });
+
+  const expandWikiLinks = (n: JSONNode): JSONNode[] => {
+    if (!resolvers.resolveWikiLink || n.type !== "text" || !n.text || !n.text.includes("[[")) return [n];
+    if (n.marks?.some((mk) => mk.type === "code" || mk.type === "link")) return [n];
+    const src = n.text;
+    const baseMarks = n.marks ?? [];
+    const out: JSONNode[] = [];
+    const pushPlain = (text: string) => {
+      if (!text) return;
+      const prev = out[out.length - 1];
+      if (prev && prev.type === "text" && prev.marks === (baseMarks.length ? baseMarks : undefined)) {
+        prev.text = (prev.text ?? "") + text;
+      } else {
+        out.push(baseMarks.length ? { type: "text", text, marks: baseMarks } : { type: "text", text });
+      }
+    };
+
+    WIKI_LINK_RE.lastIndex = 0;
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = WIKI_LINK_RE.exec(src)) !== null) {
+      const idx = match.index;
+      // 跳过 Obsidian 嵌入语法 `![[...]]`
+      if (idx > 0 && src[idx - 1] === "!") continue;
+      pushPlain(src.slice(lastIndex, idx));
+      lastIndex = idx + match[0].length;
+
+      const inner = match[1];
+      const pipe = inner.indexOf("|");
+      const rawTarget = (pipe >= 0 ? inner.slice(0, pipe) : inner).trim();
+      const rawLabel = pipe >= 0 ? inner.slice(pipe + 1).trim() : "";
+      const target = rawTarget.split("#")[0].trim();
+      if (!target) {
+        pushPlain(match[0]);
+        continue;
+      }
+      const resolved = resolvers.resolveWikiLink(target);
+      if (resolved.kind === "doc") {
+        const label = rawLabel || rawTarget;
+        out.push({
+          type: "text",
+          text: label,
+          marks: [...baseMarks, { type: "link", attrs: { href: `/docs/${resolved.docId}` } }],
+        });
+      } else if (resolved.kind === "ambiguous") {
+        warnings.push(`双链 [[${rawTarget}]] 匹配到多个同名页面，已保留原文`);
+        pushPlain(match[0]);
+      } else {
+        warnings.push(`未找到双链目标页面：[[${rawTarget}]]`);
+        pushPlain(match[0]);
+      }
+    }
+    if (lastIndex === 0) return [n];
+    pushPlain(src.slice(lastIndex));
+    return out;
+  };
 
   const resolveImage = (n: JSONNode): JSONNode => {
     const src = String(n.attrs?.src ?? "");
@@ -394,6 +458,7 @@ export function finalizeImportedDoc(input: JSONNode, resolvers: ImportResolvers,
           },
         ];
       }
+      if (n.type === "text") return expandWikiLinks(n);
       if (n.type === "image") {
         const resolved = resolveImage(n);
         if (inCallout && resolved.type === "image") {

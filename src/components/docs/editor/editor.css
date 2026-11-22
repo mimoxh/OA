@@ -55,13 +55,24 @@
 }
 .doc-prose a[href^="/docs/"] {
   font-weight: 500;
-  text-decoration-color: rgba(55, 53, 47, 0.25);
+  color: #37352f;
+  background: rgba(35, 131, 226, 0.08);
+  border-radius: 4px;
+  padding: 1px 5px 1px 4px;
+  text-decoration: underline;
+  text-decoration-color: rgba(35, 131, 226, 0.35);
+  text-underline-offset: 2px;
+  transition: background-color 0.12s ease, text-decoration-color 0.12s ease;
+}
+.doc-prose a[href^="/docs/"]:hover {
+  background: rgba(35, 131, 226, 0.15);
+  text-decoration-color: #2383e2;
 }
 .doc-prose a[href^="/docs/"]::before {
   content: "📄";
   display: inline-block;
   margin-right: 3px;
-  font-size: 0.95em;
+  font-size: 0.9em;
   text-decoration: none;
 }
 .doc-prose ul,
