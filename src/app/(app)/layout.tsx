@@ -1,8 +1,7 @@
-import { Suspense } from "react";
 import { requireUser } from "@/lib/auth/dal";
-import { Sidebar } from "@/components/shell/sidebar";
+import { AppRail } from "@/components/shell/app-rail";
 import { CommandPalette } from "@/components/shell/command-palette";
-import { DocsSidebar } from "@/components/docs/docs-sidebar";
+import { RealtimeProvider } from "@/components/realtime/provider";
 
 export default async function AppLayout({ children }: LayoutProps<"/">) {
   const user = await requireUser();
@@ -15,17 +14,12 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
     permissions: user.permissions,
   };
   return (
-    <div className="flex min-h-screen">
-      <Sidebar
-        user={shellUser}
-        docsSlot={
-          <Suspense fallback={<div className="px-2 text-xs text-ink-3">加载文档…</div>}>
-            <DocsSidebar userId={user.id} />
-          </Suspense>
-        }
-      />
-      <main className="min-w-0 flex-1">{children}</main>
-      <CommandPalette permissions={user.permissions} />
-    </div>
+    <RealtimeProvider meId={user.id}>
+      <div className="flex min-h-screen">
+        <AppRail user={shellUser} />
+        <div className="min-w-0 flex-1">{children}</div>
+        <CommandPalette permissions={user.permissions} />
+      </div>
+    </RealtimeProvider>
   );
 }

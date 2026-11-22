@@ -3,6 +3,7 @@ import type { ApprovalInstance } from "@/generated/prisma/client";
 import { nextNo } from "@/lib/sequence";
 import { audit, notify } from "@/lib/services/notify";
 import { approvalHooks } from "@/lib/services/approval-hooks";
+import { refreshApprovalCards } from "@/lib/im/cards";
 
 export type ApprovalStep = {
   name: string;
@@ -156,9 +157,12 @@ export async function startApproval(
   });
   await audit(tx, { entityType: "approval", entityId: instance.id, action: "submit", userId: input.applicantId });
   if (steps.length === 0) {
-    return finalize(tx, instance.id, "APPROVED", input.applicantId);
+    const done = await finalize(tx, instance.id, "APPROVED", input.applicantId);
+    await refreshApprovalCards(tx, instance.id);
+    return done;
   }
   await activateStep(tx, instance, 0, steps);
+  await refreshApprovalCards(tx, instance.id);
   return instance;
 }
 
@@ -198,15 +202,21 @@ export async function actOnApproval(
   });
 
   if (input.action === "REJECT") {
-    return finalize(tx, task.instanceId, "REJECTED", input.userId);
+    const rejected = await finalize(tx, task.instanceId, "REJECTED", input.userId);
+    await refreshApprovalCards(tx, task.instanceId);
+    return rejected;
   }
   const steps = parseSteps(task.instance.flow.steps);
   const next = task.step + 1;
   if (next < steps.length) {
     await activateStep(tx, task.instance, next, steps);
-    return tx.approvalInstance.findUniqueOrThrow({ where: { id: task.instanceId } });
+    const updated = await tx.approvalInstance.findUniqueOrThrow({ where: { id: task.instanceId } });
+    await refreshApprovalCards(tx, task.instanceId);
+    return updated;
   }
-  return finalize(tx, task.instanceId, "APPROVED", input.userId);
+  const approved = await finalize(tx, task.instanceId, "APPROVED", input.userId);
+  await refreshApprovalCards(tx, task.instanceId);
+  return approved;
 }
 
 /** 申请人撤回审批 */
@@ -216,5 +226,7 @@ export async function withdrawApproval(tx: Tx, input: { instanceId: string; user
   if (instance.applicantId !== input.userId) throw new Error("只有申请人可以撤回");
   if (instance.status !== "PENDING") throw new Error("审批单已结束，无法撤回");
   await audit(tx, { entityType: "approval", entityId: instance.id, action: "withdraw", userId: input.userId });
-  return finalize(tx, instance.id, "WITHDRAWN", input.userId);
+  const withdrawn = await finalize(tx, instance.id, "WITHDRAWN", input.userId);
+  await refreshApprovalCards(tx, instance.id);
+  return withdrawn;
 }

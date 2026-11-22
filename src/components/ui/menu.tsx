@@ -1,7 +1,7 @@
 "use client";
 
 import { DropdownMenu as M, Popover as P } from "radix-ui";
-import type { ComponentProps, ReactNode } from "react";
+import { cloneElement, isValidElement, type ComponentProps, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 export const Menu = M.Root;
@@ -27,6 +27,18 @@ export function MenuItem({
   children,
   ...props
 }: ComponentProps<typeof M.Item> & { icon?: ReactNode; danger?: boolean }) {
+  const iconNode = icon ? <span className="flex size-4 items-center justify-center text-ink-2 [&>svg]:size-4">{icon}</span> : null;
+  // asChild 时 M.Item 只接受单个子元素：把图标注入被 slot 的子元素内部（如 <Link>）
+  const asChildEl = isValidElement<{ children?: ReactNode }>(children) ? children : null;
+  const body =
+    props.asChild && asChildEl ? (
+      cloneElement(asChildEl, {}, iconNode, asChildEl.props.children)
+    ) : (
+      <>
+        {iconNode}
+        {children}
+      </>
+    );
   return (
     <M.Item
       className={cn(
@@ -36,8 +48,7 @@ export function MenuItem({
       )}
       {...props}
     >
-      {icon && <span className="flex size-4 items-center justify-center text-ink-2 [&>svg]:size-4">{icon}</span>}
-      {children}
+      {body}
     </M.Item>
   );
 }

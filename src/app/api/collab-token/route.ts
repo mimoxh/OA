@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth/dal";
-import { signSessionToken } from "@/lib/auth/token";
+import { signScopedToken } from "@/lib/auth/token";
 import { getDocAccess } from "@/lib/docs/access";
 
 const TOKEN_TTL_SECONDS = 60 * 60;
@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
   const docId = req.nextUrl.searchParams.get("doc") ?? "";
   const res = docId ? await getDocAccess(user, docId) : null;
   if (!res || !res.canRead) return NextResponse.json({ error: "没有权限访问该文档" }, { status: 403 });
-  const token = await signSessionToken({ userId: user.id }, TOKEN_TTL_SECONDS);
+  const token = await signScopedToken("collab", user.id, TOKEN_TTL_SECONDS);
   return NextResponse.json(
     {
       token,

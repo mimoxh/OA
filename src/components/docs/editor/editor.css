@@ -288,3 +288,24 @@
 .doc-title {
   field-sizing: content;
 }
+
+/* IM 输入框（复用 mention/placeholder 样式） */
+.im-composer p {
+  margin: 0;
+}
+.im-composer .doc-mention {
+  background: rgba(35, 131, 226, 0.1);
+  color: #1f6fc0;
+  border-radius: 4px;
+  padding: 0 3px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.im-composer .is-empty::before,
+.im-composer.is-editor-empty > p:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  color: #a5a29c;
+  pointer-events: none;
+}

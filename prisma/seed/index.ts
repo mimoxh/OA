@@ -7,6 +7,7 @@ import { seedCrm } from "./modules/crm";
 import { seedPms } from "./modules/pms";
 import { seedErp } from "./modules/erp";
 import { seedWmsTms } from "./modules/wms-tms";
+import { seedIm } from "./modules/im";
 
 async function main() {
   const existing = await db.user.count();
@@ -29,6 +30,8 @@ async function main() {
   await seedErp(ctx);
   console.log("→ WMS / TMS");
   await seedWmsTms(ctx);
+  console.log("→ IM 消息");
+  await seedIm(ctx);
   console.log("✓ 种子数据完成");
 }
 

@@ -5,9 +5,9 @@ import { LoginForm } from "./login-form";
 export const metadata = { title: "登录" };
 
 export default async function LoginPage({ searchParams }: PageProps<"/login">) {
-  if (await getCurrentUser()) redirect("/");
+  if (await getCurrentUser()) redirect("/messages");
   const sp = await searchParams;
-  const next = typeof sp.next === "string" ? sp.next : "/";
+  const next = typeof sp.next === "string" ? sp.next : "/messages";
   return (
     <div className="flex min-h-screen items-center justify-center bg-sidebar px-4">
       <div className="w-full max-w-[360px]">

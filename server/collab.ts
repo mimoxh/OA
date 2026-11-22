@@ -6,7 +6,7 @@ import { getSchema } from "@tiptap/core";
 import { prosemirrorJSONToYXmlFragment } from "y-prosemirror";
 import * as Y from "yjs";
 import { db } from "@/lib/db";
-import { verifySessionToken } from "@/lib/auth/token";
+import { verifyScopedToken } from "@/lib/auth/token";
 import { getDocAccess, loadDocUser } from "@/lib/docs/access";
 import { COLLAB_FIELD, createSchemaExtensions } from "@/lib/docs/schema";
 import { extractText, parseContent } from "@/lib/docs/content";
@@ -74,8 +74,8 @@ function sendJson(res: ServerResponse, status: number, body: unknown) {
 
 async function authorize(token: unknown, documentId: unknown) {
   if (typeof token !== "string" || typeof documentId !== "string") throw new HttpError(400, "参数错误");
-  const session = await verifySessionToken(token);
-  if (!session) throw new HttpError(401, "未登录");
+  const session = await verifyScopedToken(token, "collab");
+  if (!session?.userId) throw new HttpError(401, "未登录");
   const user = await loadDocUser(session.userId);
   if (!user) throw new HttpError(401, "用户不存在或已停用");
   const res = await getDocAccess(user, documentId);
@@ -144,8 +144,8 @@ const server = new Server<Context>({
   },
 
   async onAuthenticate({ token, documentName, connectionConfig }) {
-    const session = await verifySessionToken(token);
-    if (!session) throw new Error("未登录或登录已过期");
+    const session = await verifyScopedToken(token, "collab");
+    if (!session?.userId) throw new Error("未登录或登录已过期");
     const user = await loadDocUser(session.userId);
     if (!user) throw new Error("用户不存在或已停用");
     const res = await getDocAccess(user, documentName);

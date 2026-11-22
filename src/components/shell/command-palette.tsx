@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Command } from "cmdk";
 import { Dialog as D } from "radix-ui";
-import { CornerDownLeft, FileText, Loader2, Search } from "lucide-react";
+import { BookUser, CornerDownLeft, FileText, Inbox, LayoutGrid, Loader2, MessageCircle, Search } from "lucide-react";
 import { NAV_MODULES } from "@/lib/nav";
 import { hasPermission } from "@/lib/permissions";
 
@@ -66,11 +66,17 @@ export function CommandPalette({ permissions }: { permissions: string[] }) {
     return acc;
   }, {});
 
-  const pages = NAV_MODULES.filter((m) => hasPermission(permissions, m.perm)).flatMap((m) =>
-    m.items
-      .filter((i) => !i.perm || hasPermission(permissions, i.perm))
-      .map((i) => ({ ...i, module: m.label, color: m.color, Icon: m.icon })),
-  );
+  const pages = [
+    { href: "/messages", label: "消息", module: "导航", color: "#2383e2", Icon: MessageCircle },
+    { href: "/inbox", label: "收件箱", module: "导航", color: "#787774", Icon: Inbox },
+    { href: "/work", label: "工作台", module: "导航", color: "#787774", Icon: LayoutGrid },
+    { href: "/contacts", label: "通讯录", module: "导航", color: "#787774", Icon: BookUser },
+    ...NAV_MODULES.filter((m) => hasPermission(permissions, m.perm)).flatMap((m) =>
+      m.items
+        .filter((i) => !i.perm || hasPermission(permissions, i.perm))
+        .map((i) => ({ ...i, module: m.label, color: m.color, Icon: m.icon })),
+    ),
+  ];
 
   return (
     <D.Root open={open} onOpenChange={setOpen}>

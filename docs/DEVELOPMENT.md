@@ -82,7 +82,7 @@ export default async function Page({ searchParams }: PageProps<"/crm/customers">
 ```bash
 pnpm install
 pnpm db:reset      # 重建数据库并写入示例数据
-pnpm dev           # web: http://localhost:3000，协同: ws://localhost:1234
+pnpm dev           # web: http://localhost:3000，协同: ws://localhost:1234，实时: ws://localhost:1235
 ```
 
 演示账号密码均为 `123456`：admin@demo.com、ceo@demo.com、sales@demo.com、buyer@demo.com、wh@demo.com、dispatch@demo.com、driver@demo.com、pm@demo.com、dev@demo.com、finance@demo.com。
@@ -96,3 +96,36 @@ $env:NEXT_DIST_DIR=".next-crm"; $env:DATABASE_URL="file:./prisma/crm.db"; $env:S
 pnpm prisma db push --force-reset; pnpm db:seed
 pnpm next dev --port 3103
 ```
+
+## IM / 实时架构
+
+写入路径：Server Action（`runAction` 包 `withRealtimeBuffer`）→ 事务内 `queueEvent` 暂存事件 → 事务提交后 `flush()` → `publish()` → 实时服务 → 在线客户端。数据库是唯一事实源；客户端断线后按 `seq` 重新拉取补齐，事件只做「刷新提示」。
+
+- `src/lib/realtime/buffer.ts`：AsyncLocalStorage 事件缓冲。不在缓冲上下文（种子脚本、离线任务）中 `queueEvent` 静默丢弃。
+- `src/lib/realtime/publish.ts`：配置了 `REDIS_URL` 走 Redis 频道 `rt:events`（多实例），否则 POST `${REALTIME_INTERNAL_URL}/publish`（`rt-publish` 作用域令牌）。1.5s 超时、失败仅记日志不抛出。
+- `server/realtime.ts`：`ws` 实时服务。`?token=` 连接（`rt` 作用域，`GET /api/realtime-token` 签发）；30s 心跳；typing 转发（校验会话成员，成员表缓存 60s）；presence 广播 + `presence.snapshot`；HTTP `POST /publish`、`GET /health`。
+- 令牌：`src/lib/auth/token.ts` 的 `signScopedToken/verifyScopedToken`，作用域 `collab`（文档协同）/ `rt`（实时通道）/ `rt-publish`（服务端投递）。带 scope 的令牌**不能**当会话 Cookie 用（`verifySessionToken` 会拒绝）。
+- IM 代码在 `src/lib/im/`：`service.ts`（会话/消息写路径，seq 由 `lastSeq increment` 原子分配）、`queries.ts`（DTO 与查询）、`content.ts`（Tiptap 消息校验 + 链接/提及提取）、`cards.ts`（审批卡片与刷新）、`refs.ts`（按查看者权限解析业务引用）、`bots.ts`/`types.ts`（客户端可引用的常量与类型）。该目录不得 import `server-only`（会被 tsx 脚本与 server/ 引用）。
+- `notify()` 除写 Notification 表外，还会派发 `notification.new` 并向对应机器人会话投递卡片；审批状态变化时 `approval.ts` 末尾调用 `refreshApprovalCards` 刷新所有相关卡片。
+- 补 IM 演示数据：`pnpm db:seed:im`（幂等）：无群聊时建群/单聊，并为还没有机器人会话的用户按历史通知回填卡片。
+
+### 端口与环境变量
+
+| 变量 | 默认 | 用途 |
+| --- | --- | --- |
+| `REALTIME_PORT` | `1235` | 实时服务端口 |
+| `NEXT_PUBLIC_REALTIME_URL` | `ws://localhost:1235` | 客户端连接地址 |
+| `REALTIME_INTERNAL_URL` | `http://localhost:1235` | 服务端 /publish 入口 |
+| `REDIS_URL` | 未设置 | 设置后启用 Redis 总线（多实例） |
+| `COLLAB_PORT` / `NEXT_PUBLIC_COLLAB_URL` | `1234` | 文档协同 Hocuspocus |
+
+`docker-compose.yml` 提供可选的 `redis:7` 与 `postgres:16`（默认开发不需要启动）。
+
+### 多实例与迁移说明
+
+- 多实例：所有实例共享同一 `REDIS_URL` 即可互通业务事件；**已知限制**——presence 不跨实例传播，`presence.snapshot` 只含本实例在线用户。文档协同多实例需要后续接入 `@hocuspocus/extension-redis`。
+- 迁移 PostgreSQL：改 `schema.prisma` 的 `provider` 为 `postgresql`；`@prisma/adapter-better-sqlite3` 换成 `@prisma/adapter-pg`，`db.ts` 按 `DATABASE_URL` 选适配器；种子里的 `PRAGMA journal_mode` 仅限 SQLite（改为按 provider 跳过）；全库约 60 处 `contains` 查询需要一个大小写不敏感的辅助函数（SQLite 无 `mode: "insensitive"`，PG 有）。
+
+### 事件类型（服务端 → 客户端）
+
+`message.new` / `message.updated` / `conversation.updated` / `conversation.removed` / `read` / `notification.new` / `typing` / `presence` / `presence.snapshot`，载荷定义见 `src/lib/im/types.ts`。

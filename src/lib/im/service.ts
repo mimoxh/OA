@@ -1,0 +1,364 @@
+import type { Conversation, ConversationMember, Message, User } from "@/generated/prisma/client";
+import { Prisma } from "@/generated/prisma/client";
+import type { DbClient } from "@/lib/db";
+import { queueEvent } from "@/lib/realtime/buffer";
+import { parseMessageContent } from "./content";
+import { conversationUserIds, toMessageDTO, userLiteSelect } from "./queries";
+import type { BotKey } from "./bots";
+import type { MessageDTO, RefType } from "./types";
+
+const RECALL_WINDOW_MS = 2 * 60 * 1000;
+
+export type MemberWithUser = ConversationMember & { user: Pick<User, "id" | "name" | "avatarColor"> };
+type MessageWithSender = Message & { sender?: Pick<User, "id" | "name" | "avatarColor"> | null };
+
+export async function requireMember(client: DbClient, conversationId: string, userId: string): Promise<ConversationMember> {
+  const member = await client.conversationMember.findUnique({ where: { conversationId_userId: { conversationId, userId } } });
+  if (!member) throw new Error("你不在该会话中");
+  return member;
+}
+
+async function requireGroup(client: DbClient, conversationId: string): Promise<Conversation> {
+  const conv = await client.conversation.findUnique({ where: { id: conversationId } });
+  if (!conv) throw new Error("会话不存在");
+  if (conv.type !== "GROUP") throw new Error("仅群聊支持该操作");
+  return conv;
+}
+
+export type AppendMessageInput = {
+  conversationId: string;
+  senderId: string | null;
+  type: "TEXT" | "CARD" | "SYSTEM";
+  /** 结构化内容：Tiptap doc | Card | {text}（将被 JSON.stringify 存储） */
+  content: unknown;
+  text: string;
+  mentions?: string[];
+  links?: { type: RefType; id: string }[];
+  refType?: string | null;
+  refId?: string | null;
+  clientMsgId?: string | null;
+  replyToId?: string | null;
+  /** 仅种子/回填使用，默认 now() */
+  createdAt?: Date;
+  /** 发送后将其 lastReadSeq 推进到新 seq（默认 senderId；系统消息传操作者，机器人卡片传 null 表示无人已读） */
+  readBy?: string | null;
+};
+
+/** 追加消息：原子分配 seq、更新会话摘要、唤醒隐藏成员、派发 message.new（幂等 clientMsgId） */
+export async function appendMessage(
+  client: DbClient,
+  input: AppendMessageInput,
+): Promise<{ message: Message; dto: MessageDTO; created: boolean }> {
+  if (input.senderId && input.clientMsgId) {
+    const dup = await client.message.findFirst({
+      where: { conversationId: input.conversationId, senderId: input.senderId, clientMsgId: input.clientMsgId },
+      include: { sender: { select: userLiteSelect } },
+    });
+    if (dup) return { message: dup, dto: await toMessageDTO(client, dup), created: false };
+  }
+  try {
+    const conv = await client.conversation.update({
+      where: { id: input.conversationId },
+      data: { lastSeq: { increment: 1 }, lastMessageAt: input.createdAt ?? new Date() },
+      select: { lastSeq: true },
+    });
+    const msg = (await client.message.create({
+      data: {
+        conversationId: input.conversationId,
+        seq: conv.lastSeq,
+        senderId: input.senderId,
+        clientMsgId: input.clientMsgId ?? null,
+        type: input.type,
+        content: JSON.stringify(input.content),
+        text: input.text,
+        mentions: JSON.stringify(input.mentions ?? []),
+        links: JSON.stringify(input.links ?? []),
+        refType: input.refType ?? null,
+        refId: input.refId ?? null,
+        replyToId: input.replyToId ?? null,
+        ...(input.createdAt ? { createdAt: input.createdAt } : {}),
+      },
+      include: { sender: { select: userLiteSelect } },
+    })) as MessageWithSender;
+    await client.conversationMember.updateMany({
+      where: { conversationId: input.conversationId, hidden: true },
+      data: { hidden: false },
+    });
+    // 发送者/操作者自己的消息不产生未读
+    const readBy = input.readBy === undefined ? input.senderId : input.readBy;
+    if (readBy) {
+      await client.conversationMember.updateMany({
+        where: { conversationId: input.conversationId, userId: readBy, lastReadSeq: { lt: msg.seq } },
+        data: { lastReadSeq: msg.seq },
+      });
+    }
+    const dto = await toMessageDTO(client, msg);
+    const ids = await conversationUserIds(client, input.conversationId);
+    queueEvent(ids, { type: "message.new", conversationId: input.conversationId, message: dto });
+    return { message: msg, dto, created: true };
+  } catch (e) {
+    // 并发下同 clientMsgId 撞唯一索引：返回已存在消息
+    if (input.senderId && input.clientMsgId && e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+      const dup = await client.message.findFirst({
+        where: { conversationId: input.conversationId, senderId: input.senderId, clientMsgId: input.clientMsgId },
+        include: { sender: { select: userLiteSelect } },
+      });
+      if (dup) return { message: dup, dto: await toMessageDTO(client, dup), created: false };
+    }
+    throw e;
+  }
+}
+
+async function systemMessage(client: DbClient, conversationId: string, text: string, opts?: { createdAt?: Date; readBy?: string | null }) {
+  return appendMessage(client, {
+    conversationId,
+    senderId: null,
+    type: "SYSTEM",
+    content: { text },
+    text,
+    ...(opts?.createdAt ? { createdAt: opts.createdAt } : {}),
+    ...(opts?.readBy !== undefined ? { readBy: opts.readBy } : {}),
+  });
+}
+
+function directKeyOf(a: string, b: string) {
+  return [a, b].sort().join(":");
+}
+
+export async function getOrCreateDirect(client: DbClient, a: string, b: string): Promise<Conversation> {
+  if (a === b) throw new Error("不能和自己发起单聊");
+  const directKey = directKeyOf(a, b);
+  const existing = await client.conversation.findUnique({ where: { directKey } });
+  if (existing) return existing;
+  const count = await client.user.count({ where: { id: { in: [a, b] }, active: true } });
+  if (count !== 2) throw new Error("用户不存在或已停用");
+  try {
+    return await client.conversation.create({
+      data: {
+        type: "DIRECT",
+        directKey,
+        members: { create: [{ userId: a }, { userId: b }] },
+      },
+    });
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+      const conv = await client.conversation.findUnique({ where: { directKey } });
+      if (conv) return conv;
+    }
+    throw e;
+  }
+}
+
+/** 每个用户每个机器人一个会话，单成员；directKey "bot:<key>:<uid>" 兜底并发 P2002 */
+export async function getOrCreateBotConversation(client: DbClient, userId: string, botKey: BotKey): Promise<Conversation> {
+  const directKey = `bot:${botKey}:${userId}`;
+  const existing = await client.conversation.findUnique({ where: { directKey } });
+  if (existing) return existing;
+  // 兼容早期无 directKey 的机器人会话：命中则补键
+  const legacy = await client.conversation.findFirst({
+    where: { type: "BOT", botKey, directKey: null, members: { some: { userId } } },
+  });
+  if (legacy) {
+    try {
+      return await client.conversation.update({ where: { id: legacy.id }, data: { directKey } });
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+        const conv = await client.conversation.findUnique({ where: { directKey } });
+        if (conv) return conv;
+      }
+      return legacy;
+    }
+  }
+  try {
+    return await client.conversation.create({
+      data: { type: "BOT", botKey, directKey, members: { create: [{ userId }] } },
+    });
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+      const conv = await client.conversation.findUnique({ where: { directKey } });
+      if (conv) return conv;
+    }
+    throw e;
+  }
+}
+
+export async function createGroup(client: DbClient, ownerId: string, name: string | undefined, memberIds: string[]): Promise<Conversation> {
+  const others = [...new Set(memberIds.filter((id) => id !== ownerId))];
+  if (!others.length) throw new Error("群聊至少需要选择 1 位其他成员");
+  const users = await client.user.findMany({ where: { id: { in: [ownerId, ...others] }, active: true }, select: userLiteSelect });
+  if (users.length !== others.length + 1) throw new Error("有成员不存在或已停用");
+  const owner = users.find((u) => u.id === ownerId)!;
+  const trimmed = (name ?? "").trim().slice(0, 40);
+  const groupName =
+    trimmed || others
+      .map((id) => users.find((u) => u.id === id)?.name)
+      .filter(Boolean)
+      .slice(0, 3)
+      .join("、");
+  const conv = await client.conversation.create({
+    data: {
+      type: "GROUP",
+      name: groupName,
+      ownerId,
+      members: { create: [{ userId: ownerId, role: "OWNER" }, ...others.map((userId) => ({ userId }))] },
+    },
+  });
+  await systemMessage(client, conv.id, `${owner.name} 创建了群聊`, { readBy: ownerId });
+  return conv;
+}
+
+// ── 群管理 ──
+
+export async function renameGroup(client: DbClient, conversationId: string, actorId: string, name: string) {
+  await requireMember(client, conversationId, actorId);
+  const conv = await requireGroup(client, conversationId);
+  const trimmed = name.trim().slice(0, 40);
+  if (!trimmed) throw new Error("群名称不能为空");
+  if (trimmed === conv.name) return;
+  const user = await client.user.findUniqueOrThrow({ where: { id: actorId }, select: { name: true } });
+  await client.conversation.update({ where: { id: conversationId }, data: { name: trimmed } });
+  await systemMessage(client, conversationId, `${user.name} 将群聊名称改为「${trimmed}」`, { readBy: actorId });
+  queueEvent(await conversationUserIds(client, conversationId), { type: "conversation.updated", conversationId });
+}
+
+export async function addGroupMembers(client: DbClient, conversationId: string, actorId: string, userIds: string[]) {
+  await requireMember(client, conversationId, actorId);
+  await requireGroup(client, conversationId);
+  const existing = new Set(await conversationUserIds(client, conversationId));
+  const ids = [...new Set(userIds)].filter((id) => !existing.has(id));
+  if (!ids.length) throw new Error("所选成员已在群聊中");
+  const users = await client.user.findMany({ where: { id: { in: ids }, active: true }, select: userLiteSelect });
+  if (users.length !== ids.length) throw new Error("有成员不存在或已停用");
+  await client.conversationMember.createMany({ data: ids.map((userId) => ({ conversationId, userId })) });
+  const actor = await client.user.findUniqueOrThrow({ where: { id: actorId }, select: { name: true } });
+  const names = users.map((u) => u.name).join("、");
+  await systemMessage(client, conversationId, `${actor.name} 邀请 ${names} 加入群聊`, { readBy: actorId });
+  queueEvent(ids, { type: "conversation.updated", conversationId });
+}
+
+export async function removeGroupMember(client: DbClient, conversationId: string, actorId: string, targetId: string) {
+  const actor = await requireMember(client, conversationId, actorId);
+  await requireGroup(client, conversationId);
+  if (actor.role !== "OWNER" && actor.role !== "ADMIN") throw new Error("只有群主或管理员可以移除成员");
+  const target = await client.conversationMember.findUnique({ where: { conversationId_userId: { conversationId, userId: targetId } } });
+  if (!target) throw new Error("成员不在群聊中");
+  if (target.role === "OWNER") throw new Error("不能移除群主");
+  const [a, t] = await Promise.all([
+    client.user.findUniqueOrThrow({ where: { id: actorId }, select: { name: true } }),
+    client.user.findUniqueOrThrow({ where: { id: targetId }, select: { name: true } }),
+  ]);
+  await client.conversationMember.delete({ where: { conversationId_userId: { conversationId, userId: targetId } } });
+  await systemMessage(client, conversationId, `${a.name} 将 ${t.name} 移出群聊`, { readBy: actorId });
+  queueEvent([targetId], { type: "conversation.removed", conversationId });
+}
+
+export async function leaveGroup(client: DbClient, conversationId: string, userId: string) {
+  const member = await requireMember(client, conversationId, userId);
+  await requireGroup(client, conversationId);
+  const count = await client.conversationMember.count({ where: { conversationId } });
+  if (member.role === "OWNER" && count > 1) throw new Error("群主退出前请先转让群主");
+  const user = await client.user.findUniqueOrThrow({ where: { id: userId }, select: { name: true } });
+  await client.conversationMember.delete({ where: { conversationId_userId: { conversationId, userId } } });
+  queueEvent([userId], { type: "conversation.removed", conversationId });
+  if (count <= 1) {
+    await client.conversation.delete({ where: { id: conversationId } });
+    return;
+  }
+  await systemMessage(client, conversationId, `${user.name} 退出了群聊`, { readBy: userId });
+  queueEvent(await conversationUserIds(client, conversationId), { type: "conversation.updated", conversationId });
+}
+
+export async function transferGroupOwner(client: DbClient, conversationId: string, actorId: string, targetId: string) {
+  const actor = await requireMember(client, conversationId, actorId);
+  await requireGroup(client, conversationId);
+  if (actor.role !== "OWNER") throw new Error("只有群主可以转让");
+  await requireMember(client, conversationId, targetId);
+  if (targetId === actorId) throw new Error("不能转让给自己");
+  await client.conversationMember.update({ where: { conversationId_userId: { conversationId, userId: targetId } }, data: { role: "OWNER" } });
+  await client.conversationMember.update({ where: { conversationId_userId: { conversationId, userId: actorId } }, data: { role: "MEMBER" } });
+  await client.conversation.update({ where: { id: conversationId }, data: { ownerId: targetId } });
+  const [a, t] = await Promise.all([
+    client.user.findUniqueOrThrow({ where: { id: actorId }, select: { name: true } }),
+    client.user.findUniqueOrThrow({ where: { id: targetId }, select: { name: true } }),
+  ]);
+  await systemMessage(client, conversationId, `${a.name} 将群主转让给 ${t.name}`, { readBy: actorId });
+  queueEvent(await conversationUserIds(client, conversationId), { type: "conversation.updated", conversationId });
+}
+
+// ── 消息操作 ──
+
+export async function sendTextMessage(
+  client: DbClient,
+  input: { conversationId: string; senderId: string; content: unknown; clientMsgId?: string | null; replyToId?: string | null },
+): Promise<{ message: Message; dto: MessageDTO; created: boolean }> {
+  const conv = await client.conversation.findUnique({ where: { id: input.conversationId }, select: { type: true } });
+  if (!conv) throw new Error("会话不存在");
+  await requireMember(client, input.conversationId, input.senderId);
+  if (conv.type === "BOT") throw new Error("机器人会话不能回复");
+  if (input.replyToId) {
+    const target = await client.message.findUnique({ where: { id: input.replyToId }, select: { conversationId: true } });
+    if (!target || target.conversationId !== input.conversationId) throw new Error("回复的消息不存在");
+  }
+  const parsed = parseMessageContent(input.content);
+  return appendMessage(client, {
+    conversationId: input.conversationId,
+    senderId: input.senderId,
+    type: "TEXT",
+    content: parsed.content,
+    text: parsed.text,
+    mentions: parsed.mentions,
+    links: parsed.links,
+    clientMsgId: input.clientMsgId ?? null,
+    replyToId: input.replyToId ?? null,
+  });
+}
+
+export async function recallMessage(client: DbClient, messageId: string, userId: string) {
+  const msg = await client.message.findUnique({ where: { id: messageId }, include: { sender: { select: userLiteSelect } } });
+  if (!msg) throw new Error("消息不存在");
+  await requireMember(client, msg.conversationId, userId);
+  if (msg.senderId !== userId) throw new Error("只能撤回自己发送的消息");
+  if (msg.type !== "TEXT") throw new Error("仅文本消息可以撤回");
+  if (msg.recalledAt) return;
+  if (Date.now() - msg.createdAt.getTime() > RECALL_WINDOW_MS) throw new Error("超过 2 分钟的消息不能撤回");
+  const updated = await client.message.update({
+    where: { id: messageId },
+    data: { recalledAt: new Date() },
+    include: { sender: { select: userLiteSelect } },
+  });
+  const dto = await toMessageDTO(client, updated);
+  queueEvent(await conversationUserIds(client, msg.conversationId), {
+    type: "message.updated",
+    conversationId: msg.conversationId,
+    message: dto,
+  });
+}
+
+export async function markRead(client: DbClient, userId: string, conversationId: string, seq: number) {
+  const member = await requireMember(client, conversationId, userId);
+  const conv = await client.conversation.findUnique({ where: { id: conversationId }, select: { lastSeq: true } });
+  if (!conv) throw new Error("会话不存在");
+  const next = Math.min(Math.max(0, seq), conv.lastSeq);
+  if (next <= member.lastReadSeq) return;
+  await client.conversationMember.update({
+    where: { conversationId_userId: { conversationId, userId } },
+    data: { lastReadSeq: next },
+  });
+  queueEvent([userId], { type: "read", conversationId, userId, seq: next });
+}
+
+export async function setConversationPrefs(
+  client: DbClient,
+  userId: string,
+  conversationId: string,
+  prefs: { pinned?: boolean; muted?: boolean; hidden?: boolean },
+) {
+  await requireMember(client, conversationId, userId);
+  const data: Record<string, boolean> = {};
+  if (prefs.pinned !== undefined) data.pinned = prefs.pinned;
+  if (prefs.muted !== undefined) data.muted = prefs.muted;
+  if (prefs.hidden !== undefined) data.hidden = prefs.hidden;
+  if (!Object.keys(data).length) return;
+  await client.conversationMember.update({ where: { conversationId_userId: { conversationId, userId } }, data });
+  queueEvent([userId], { type: "conversation.updated", conversationId });
+}

@@ -2,6 +2,7 @@ import "server-only";
 import { unstable_rethrow } from "next/navigation";
 import { getCurrentUser, type CurrentUser } from "@/lib/auth/dal";
 import { hasPermission, type Permission } from "@/lib/permissions";
+import { withRealtimeBuffer } from "@/lib/realtime/buffer";
 
 export type ActionResult<T = undefined> = { ok: true; data: T } | { ok: false; error: string };
 
@@ -21,8 +22,10 @@ export async function runAction<T>(
     if (permission && !hasPermission(user.permissions, permission)) {
       return { ok: false, error: "没有权限执行该操作" };
     }
-    const data = await fn(user);
-    return { ok: true, data };
+    // 业务代码在实时事件缓冲区中执行：事务内 queueEvent 的事件在 fn 成功（事务已提交）后才下发
+    const { result, flush } = await withRealtimeBuffer(() => fn(user));
+    await flush();
+    return { ok: true, data: result };
   } catch (e) {
     unstable_rethrow(e);
     console.error(e);

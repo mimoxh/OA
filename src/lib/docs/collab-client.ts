@@ -1,5 +1,5 @@
 import "server-only";
-import { signSessionToken } from "@/lib/auth/token";
+import { signScopedToken } from "@/lib/auth/token";
 
 function collabHttpUrl() {
   return process.env.COLLAB_HTTP_URL ?? `http://127.0.0.1:${process.env.COLLAB_PORT ?? 1234}`;
@@ -7,7 +7,7 @@ function collabHttpUrl() {
 
 /** 调用协同服务的 HTTP 接口（以当前用户身份） */
 export async function callCollab<T = { ok: boolean }>(path: "/restore" | "/broadcast", userId: string, body: Record<string, unknown>): Promise<T> {
-  const token = await signSessionToken({ userId }, 120);
+  const token = await signScopedToken("collab", userId, 120);
   let res: Response;
   try {
     res = await fetch(collabHttpUrl() + path, {

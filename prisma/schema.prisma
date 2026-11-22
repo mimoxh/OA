@@ -92,6 +92,9 @@ model User {
   tasksAssigned  Task[]          @relation("TaskAssignee")
   tasksReported  Task[]          @relation("TaskReporter")
   timeLogs       TimeLog[]
+
+  imMemberships   ConversationMember[]
+  imMessages      Message[]           @relation("MessageSender")
 }
 
 model Notification {
@@ -1059,4 +1062,87 @@ model TimeLog {
   date      DateTime @default(now())
   note      String?
   createdAt DateTime @default(now())
+}
+
+// ───────────────────────────── IM ─────────────────────────────
+
+enum ConversationType {
+  DIRECT
+  GROUP
+  BOT
+}
+
+enum MemberRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum MessageType {
+  TEXT
+  CARD
+  SYSTEM
+}
+
+model Conversation {
+  id            String               @id @default(cuid())
+  type          ConversationType
+  name          String?
+  ownerId       String?
+  directKey     String?              @unique // DIRECT: sorted "uidA:uidB"
+  botKey        String?              // BOT: approval|project|docs|system
+  bizType       String?              // reserved for P2 business groups
+  bizId         String?
+  lastSeq       Int                  @default(0)
+  lastMessageAt DateTime?
+  members       ConversationMember[]
+  messages      Message[]
+  createdAt     DateTime             @default(now())
+
+  @@index([botKey])
+}
+
+model ConversationMember {
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role           MemberRole   @default(MEMBER)
+  lastReadSeq    Int          @default(0)
+  pinned         Boolean      @default(false)
+  muted          Boolean      @default(false)
+  hidden         Boolean      @default(false)
+  joinedAt       DateTime     @default(now())
+
+  @@id([conversationId, userId])
+  @@index([userId])
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  seq            Int
+  senderId       String?
+  sender         User?        @relation("MessageSender", fields: [senderId], references: [id])
+  clientMsgId    String?
+  type           MessageType
+  // JSON: Tiptap doc (TEXT) | Card (CARD) | {"text":...} (SYSTEM)
+  content        String
+  text           String       @default("")
+  // userIds 或 ["all"]
+  mentions       String       @default("[]")
+  // [{type,id}] 发送时从正文解析
+  links          String       @default("[]")
+  // CARD 业务引用，如 "approval"
+  refType        String?
+  refId          String?
+  replyToId      String?
+  editedAt       DateTime?
+  recalledAt     DateTime?
+  createdAt      DateTime     @default(now())
+
+  @@unique([conversationId, seq])
+  @@unique([conversationId, senderId, clientMsgId])
+  @@index([refType, refId])
 }
