@@ -24,6 +24,11 @@ export type FileContent = {
   size: number;
 };
 
+export type ReactionGroup = {
+  emoji: string;
+  users: UserLite[];
+};
+
 export type ConversationDTO = {
   id: string;
   type: "DIRECT" | "GROUP" | "BOT";
@@ -37,6 +42,8 @@ export type ConversationDTO = {
   bizHref: string | null;
   bizLabel: string | null;
   peerId: string | null;
+  /** 单聊对端已读位置（用于已读回执） */
+  peerLastReadSeq: number | null;
   memberCount: number;
   role: "OWNER" | "ADMIN" | "MEMBER";
   lastSeq: number;
@@ -72,6 +79,23 @@ export type MessageDTO = {
   replyTo: { id: string; seq: number; senderName: string | null; text: string; recalled: boolean } | null;
   clientMsgId: string | null;
   recalled: boolean;
+  editedAt: string | null;
+  reactions: ReactionGroup[];
+  threadRootId: string | null;
+  threadCount: number;
+  threadLastAt: string | null;
+  threadParticipants: UserLite[];
+  createdAt: string;
+};
+
+export type MessageSearchHit = {
+  id: string;
+  conversationId: string;
+  seq: number;
+  type: MessageKind;
+  text: string;
+  sender: UserLite | null;
+  threadRootId: string | null;
   createdAt: string;
 };
 

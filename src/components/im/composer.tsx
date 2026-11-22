@@ -14,7 +14,15 @@ import { cn } from "@/lib/utils";
 import { mentionSuggestion, type MentionItem } from "@/components/docs/editor/suggestion";
 import { EmojiPicker } from "@/components/docs/emoji-picker";
 import { sendRealtime } from "@/components/realtime/provider";
-import { getDraft, sendAttachment, sendText, setDraft, useGroupMembers } from "./store";
+import {
+  getDraft,
+  sendAttachment,
+  sendText,
+  sendThreadAttachment,
+  sendThreadText,
+  setDraft,
+  useGroupMembers,
+} from "./store";
 import "@/components/docs/editor/editor.css";
 
 const MAX_CHARS = 5000;
@@ -22,7 +30,7 @@ const MAX_FILE_BYTES = 25 * 1024 * 1024;
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 
 /**
- * 每个会话一条最新闭包：编辑器实例在 convId 变化前不重建，PM 插件（suggestion/快捷键）
+ * 每个输入框一条最新闭包：编辑器实例在 key 变化前不重建，PM 插件（suggestion/快捷键）
  * 通过此表拿到最新的成员列表与发送函数，避免在渲染期读写 ref。
  */
 const liveComposers = new Map<string, { items: () => MentionItem[]; send: () => void }>();
@@ -68,15 +76,20 @@ const SendKey = Extension.create<{ onSend: () => void }>({
 export function Composer({
   conv,
   me,
-  replyTo,
+  replyTo = null,
   onClearReply,
+  threadRootId = null,
+  compact = false,
 }: {
   conv: ConversationDTO;
   me: UserLite;
-  replyTo: MessageDTO | null;
-  onClearReply: () => void;
+  replyTo?: MessageDTO | null;
+  onClearReply?: () => void;
+  threadRootId?: string | null;
+  compact?: boolean;
 }) {
   const convId = conv.id;
+  const composerKey = threadRootId ? `${convId}:thread:${threadRootId}` : convId;
   const members = useGroupMembers(convId);
   const [empty, setEmpty] = useState(true);
   const [dragging, setDragging] = useState(false);
@@ -102,7 +115,7 @@ export function Composer({
   const editor = useEditor(
     {
       immediatelyRender: false,
-      content: (getDraft(convId) as never) ?? "",
+      content: (getDraft(composerKey) as never) ?? "",
       extensions: [
         StarterKit.configure({
           undoRedo: {},
@@ -125,12 +138,18 @@ export function Composer({
           gapcursor: false,
           trailingNode: false,
         }),
-        Placeholder.configure({ placeholder: conv.type === "GROUP" ? "输入消息，@ 提及成员，可粘贴或拖入图片/文件" : "输入消息，可粘贴或拖入图片/文件" }),
+        Placeholder.configure({
+          placeholder: threadRootId
+            ? "回复话题…"
+            : conv.type === "GROUP"
+              ? "输入消息，@ 提及成员，可粘贴或拖入图片/文件"
+              : "输入消息，可粘贴或拖入图片/文件",
+        }),
         Mention.configure({
           HTMLAttributes: { class: "doc-mention" },
-          suggestion: mentionSuggestion(() => liveComposers.get(convId)?.items() ?? [], () => {}) as MentionOptions["suggestion"],
+          suggestion: mentionSuggestion(() => liveComposers.get(composerKey)?.items() ?? [], () => {}) as MentionOptions["suggestion"],
         }),
-        SendKey.configure({ onSend: () => liveComposers.get(convId)?.send() }),
+        SendKey.configure({ onSend: () => liveComposers.get(composerKey)?.send() }),
       ],
       editorProps: {
         attributes: {
@@ -140,30 +159,32 @@ export function Composer({
       },
       onUpdate: ({ editor: ed }) => {
         setEmpty(ed.isEmpty);
-        const now = Date.now();
-        if (now - lastTyping.current > 3000) {
-          lastTyping.current = now;
-          sendRealtime({ type: "typing", conversationId: convId });
+        if (!threadRootId) {
+          const now = Date.now();
+          if (now - lastTyping.current > 3000) {
+            lastTyping.current = now;
+            sendRealtime({ type: "typing", conversationId: convId });
+          }
         }
       },
     },
-    [convId],
+    [composerKey],
   );
 
-  // 草稿：切换会话 / 卸载时保存
+  // 草稿：切换会话或话题 / 卸载时保存
   useEffect(() => {
     const ed = editor;
-    const cid = convId;
+    const key = composerKey;
     return () => {
-      if (ed && !ed.isDestroyed) setDraft(cid, ed.isEmpty ? null : ed.getJSON());
+      if (ed && !ed.isDestroyed) setDraft(key, ed.isEmpty ? null : ed.getJSON());
     };
-  }, [editor, convId]);
+  }, [editor, composerKey]);
 
   const sendFiles = (files: FileList | File[]) => {
     const list = Array.from(files);
     if (!list.length) return;
-    const replyId = replyTo?.id ?? null;
-    if (replyId) onClearReply();
+    const replyId = threadRootId ? null : (replyTo?.id ?? null);
+    if (replyId) onClearReply?.();
     for (const file of list.slice(0, 5)) {
       if (file.size <= 0) {
         toast.error(`「${file.name}」为空文件`);
@@ -178,7 +199,11 @@ export function Composer({
         toast.error(`文件「${file.name}」超过 25 MB 限制`);
         continue;
       }
-      void sendAttachment(convId, file, replyId);
+      if (threadRootId) {
+        void sendThreadAttachment(convId, threadRootId, file);
+      } else {
+        void sendAttachment(convId, file, replyId);
+      }
     }
   };
 
@@ -212,23 +237,28 @@ export function Composer({
       toast.error(`消息不能超过 ${MAX_CHARS} 字`);
       return;
     }
-    void sendText(convId, JSON.parse(JSON.stringify(json)), replyTo?.id ?? null);
-    onClearReply();
+    const payload = JSON.parse(JSON.stringify(json));
+    if (threadRootId) {
+      void sendThreadText(convId, threadRootId, payload);
+    } else {
+      void sendText(convId, payload, replyTo?.id ?? null);
+      onClearReply?.();
+    }
     ed.commands.clearContent(true);
-    setDraft(convId, null);
+    setDraft(composerKey, null);
   };
 
   // 每次渲染后刷新最新闭包，供创建期的 PM 插件回调使用
   useEffect(() => {
-    liveComposers.set(convId, { items: () => mentionItems, send });
+    liveComposers.set(composerKey, { items: () => mentionItems, send });
     return () => {
-      liveComposers.delete(convId);
+      liveComposers.delete(composerKey);
     };
   });
 
   return (
     <div
-      className="shrink-0 border-t border-line bg-white px-3 pb-2.5 pt-2"
+      className={cn("shrink-0 border-t border-line bg-white", compact ? "px-2.5 py-2" : "px-3 pb-2.5 pt-2")}
       onPaste={onPaste}
       onDragOver={onDragOver}
       onDragLeave={() => setDragging(false)}
@@ -255,7 +285,7 @@ export function Composer({
           e.target.value = "";
         }}
       />
-      {replyTo && (
+      {!threadRootId && replyTo && (
         <div className="mb-1.5 flex items-center gap-1.5 rounded-md bg-sidebar px-2.5 py-1.5 text-xs text-ink-2">
           <CornerUpLeft className="size-3.5 shrink-0 text-ink-3" />
           <span className="min-w-0 flex-1 truncate">
@@ -316,7 +346,9 @@ export function Composer({
           </button>
         </div>
       </div>
-      <div className="mt-1 text-[11px] text-ink-3">Enter 发送，Shift+Enter 换行；支持拖拽或粘贴发送图片/文件</div>
+      {!compact && (
+        <div className="mt-1 text-[11px] text-ink-3">Enter 发送，Shift+Enter 换行；支持拖拽或粘贴发送图片/文件</div>
+      )}
     </div>
   );
 }

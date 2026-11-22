@@ -3,8 +3,15 @@
 import { useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import type { ConversationDTO, MessageDTO, UserLite } from "@/lib/im/types";
+import { showDesktopNotification } from "@/lib/im/desktop-notify";
 import { subscribeRealtime, type RealtimeEvent } from "@/components/realtime/provider";
-import { markConversationRead, sendFileMessage, sendMessage } from "@/app/(app)/messages/actions";
+import {
+  editMessageAction,
+  markConversationRead,
+  sendFileMessage,
+  sendMessage,
+  toggleMessageReaction,
+} from "@/app/(app)/messages/actions";
 
 export type PendingMsg = {
   clientMsgId: string;
@@ -17,13 +24,27 @@ export type PendingMsg = {
   failed: boolean;
 };
 
-export type MsgState = { items: MessageDTO[]; hasMore: boolean; loading: boolean; pending: PendingMsg[] };
-export type GroupMember = UserLite & { role: string };
+export type MsgState = {
+  items: MessageDTO[];
+  hasMore: boolean;
+  hasNewer?: boolean;
+  loading: boolean;
+  pending: PendingMsg[];
+};
+export type ThreadState = {
+  root: MessageDTO | null;
+  items: MessageDTO[];
+  hasMore: boolean;
+  loading: boolean;
+};
+export type GroupMember = UserLite & { role: string; lastReadSeq?: number };
 
 type ImState = {
   meId: string | null;
+  activeConvId: string | null;
   convs: Map<string, ConversationDTO>;
   messages: Map<string, MsgState>;
+  threads: Map<string, ThreadState>;
   members: Map<string, GroupMember[]>;
   typing: Map<string, Map<string, number>>;
   online: Set<string>;
@@ -33,8 +54,10 @@ type ImState = {
 
 const state: ImState = {
   meId: null,
+  activeConvId: null,
   convs: new Map(),
   messages: new Map(),
+  threads: new Map(),
   members: new Map(),
   typing: new Map(),
   online: new Set(),
@@ -79,13 +102,29 @@ function patchConv(id: string, patch: Partial<ConversationDTO>) {
 }
 
 function putMessages(convId: string, patch: Partial<MsgState>) {
-  const cur = state.messages.get(convId) ?? { items: [], hasMore: true, loading: false, pending: [] };
+  const cur = state.messages.get(convId) ?? { items: [], hasMore: true, hasNewer: false, loading: false, pending: [] };
   state.messages.set(convId, { ...cur, ...patch });
 }
 
+function putThread(rootId: string, patch: Partial<ThreadState>) {
+  const cur = state.threads.get(rootId) ?? { root: null, items: [], hasMore: false, loading: false };
+  state.threads.set(rootId, { ...cur, ...patch });
+}
+
 function insertMessage(convId: string, msg: MessageDTO) {
+  if (msg.threadRootId) {
+    const ts = state.threads.get(msg.threadRootId);
+    if (!ts) return;
+    if (ts.items.some((m) => m.id === msg.id)) return;
+    const items = [...ts.items];
+    let i = items.length;
+    while (i > 0 && items[i - 1].seq > msg.seq) i--;
+    items.splice(i, 0, msg);
+    putThread(msg.threadRootId, { items });
+    return;
+  }
   const ms = state.messages.get(convId);
-  if (!ms) return;
+  if (!ms || ms.hasNewer) return;
   if (ms.items.some((m) => m.id === msg.id)) return;
   let pending = ms.pending;
   if (msg.clientMsgId && pending.some((p) => p.clientMsgId === msg.clientMsgId)) {
@@ -99,14 +138,37 @@ function insertMessage(convId: string, msg: MessageDTO) {
   putMessages(convId, { items, pending });
 }
 
+function applyUpdatedMessage(convId: string, msg: MessageDTO) {
+  const ms = state.messages.get(convId);
+  if (ms && ms.items.some((m) => m.id === msg.id)) {
+    putMessages(convId, { items: ms.items.map((m) => (m.id === msg.id ? msg : m)) });
+  }
+  // 同步话题抽屉内的根消息或子回复
+  if (state.threads.has(msg.id)) {
+    putThread(msg.id, { root: msg });
+  }
+  if (msg.threadRootId && state.threads.has(msg.threadRootId)) {
+    const ts = state.threads.get(msg.threadRootId)!;
+    if (ts.items.some((m) => m.id === msg.id)) {
+      putThread(msg.threadRootId, { items: ts.items.map((m) => (m.id === msg.id ? msg : m)) });
+    }
+  }
+  const conv = state.convs.get(convId);
+  if (conv?.lastMessage?.seq === msg.seq) {
+    patchConv(convId, {
+      lastMessage: { ...conv.lastMessage, text: msg.recalled ? "" : msg.text, recalled: msg.recalled },
+    });
+  }
+}
+
 function summarize(conv: ConversationDTO, msg: MessageDTO, meId: string | null): ConversationDTO {
   const fromMe = msg.sender?.id === meId;
   const lastReadSeq = fromMe ? Math.max(conv.lastReadSeq, msg.seq) : conv.lastReadSeq;
   return {
     ...conv,
-    lastSeq: msg.seq,
+    lastSeq: Math.max(conv.lastSeq, msg.seq),
     lastReadSeq,
-    unread: Math.max(0, msg.seq - lastReadSeq),
+    unread: Math.max(0, Math.max(conv.lastSeq, msg.seq) - lastReadSeq),
     lastMessageAt: msg.createdAt,
     lastMessage: {
       seq: msg.seq,
@@ -163,9 +225,43 @@ export async function loadMessages(convId: string) {
   const r = await fetchJson<{ messages: MessageDTO[]; hasMore: boolean }>(
     `/api/im/conversations/${convId}/messages?limit=50`,
   );
-  if (r) putMessages(convId, { items: r.messages, hasMore: r.hasMore, loading: false });
+  if (r) putMessages(convId, { items: r.messages, hasMore: r.hasMore, hasNewer: false, loading: false });
   else putMessages(convId, { loading: false });
   emit();
+}
+
+export async function reloadLatestMessages(convId: string) {
+  putMessages(convId, { loading: true });
+  emit();
+  const r = await fetchJson<{ messages: MessageDTO[]; hasMore: boolean }>(
+    `/api/im/conversations/${convId}/messages?limit=50`,
+  );
+  if (r) putMessages(convId, { items: r.messages, hasMore: r.hasMore, hasNewer: false, loading: false });
+  else putMessages(convId, { loading: false });
+  emit();
+}
+
+export async function loadMessagesAround(convId: string, seq: number): Promise<boolean> {
+  const ms = state.messages.get(convId);
+  if (ms && ms.items.some((m) => m.seq === seq)) return true;
+  putMessages(convId, { loading: true });
+  emit();
+  const r = await fetchJson<{ messages: MessageDTO[]; hasMore: boolean; hasNewer?: boolean }>(
+    `/api/im/conversations/${convId}/messages?around=${seq}&limit=50`,
+  );
+  if (r) {
+    putMessages(convId, {
+      items: r.messages,
+      hasMore: r.hasMore,
+      hasNewer: Boolean(r.hasNewer),
+      loading: false,
+    });
+    emit();
+    return r.messages.some((m) => m.seq === seq);
+  }
+  putMessages(convId, { loading: false });
+  emit();
+  return false;
 }
 
 export async function loadOlder(convId: string): Promise<void> {
@@ -186,7 +282,7 @@ export async function loadOlder(convId: string): Promise<void> {
 /** 断线/缺口补齐：按 seq 向后拉取直到无更多 */
 export async function syncAfter(convId: string, fromSeq?: number) {
   const ms = state.messages.get(convId);
-  if (!ms || !ms.items.length) return;
+  if (!ms || !ms.items.length || ms.hasNewer) return;
   let after = fromSeq ?? ms.items[ms.items.length - 1].seq;
   for (;;) {
     const r = await fetchJson<{ messages: MessageDTO[]; hasMore: boolean }>(
@@ -195,10 +291,17 @@ export async function syncAfter(convId: string, fromSeq?: number) {
     if (!r || !r.messages.length) break;
     const cur = state.messages.get(convId);
     if (!cur) return;
-    const seen = new Set(cur.items.map((m) => m.id));
-    const fresh = r.messages.filter((m) => !seen.has(m.id));
-    if (fresh.length) {
-      putMessages(convId, { items: [...cur.items, ...fresh].sort((a, b) => a.seq - b.seq) });
+    const mainIncoming = r.messages.filter((m) => !m.threadRootId);
+    const threadIncoming = r.messages.filter((m) => !!m.threadRootId);
+    if (mainIncoming.length) {
+      const seen = new Set(cur.items.map((m) => m.id));
+      const fresh = mainIncoming.filter((m) => !seen.has(m.id));
+      if (fresh.length) {
+        putMessages(convId, { items: [...cur.items, ...fresh].sort((a, b) => a.seq - b.seq) });
+      }
+    }
+    for (const tm of threadIncoming) {
+      insertMessage(convId, tm);
     }
     after = r.messages[r.messages.length - 1].seq;
     // 同步会话摘要
@@ -212,12 +315,77 @@ export async function syncAfter(convId: string, fromSeq?: number) {
   }
 }
 
-// ── 发送 ──
+// ── 话题（Thread）──
+
+export async function loadThread(convId: string, rootId: string) {
+  putThread(rootId, { loading: true });
+  emit();
+  const r = await fetchJson<{ root: MessageDTO; messages: MessageDTO[]; hasMore: boolean }>(
+    `/api/im/conversations/${convId}/threads/${rootId}?limit=50`,
+  );
+  if (r) {
+    putThread(rootId, { root: r.root, items: r.messages, hasMore: r.hasMore, loading: false });
+    applyUpdatedMessage(convId, r.root);
+  } else {
+    putThread(rootId, { loading: false });
+  }
+  emit();
+}
+
+export async function loadOlderThread(convId: string, rootId: string) {
+  const ts = state.threads.get(rootId);
+  if (!ts || ts.loading || !ts.hasMore || !ts.items.length) return;
+  putThread(rootId, { loading: true });
+  emit();
+  const before = ts.items[0].seq;
+  const r = await fetchJson<{ root: MessageDTO; messages: MessageDTO[]; hasMore: boolean }>(
+    `/api/im/conversations/${convId}/threads/${rootId}?before=${before}&limit=50`,
+  );
+  const cur = state.threads.get(rootId);
+  if (r && cur) {
+    putThread(rootId, { items: [...r.messages, ...cur.items], hasMore: r.hasMore, loading: false });
+  } else {
+    putThread(rootId, { loading: false });
+  }
+  emit();
+}
+
+export async function sendThreadText(convId: string, rootId: string, content: unknown) {
+  const clientMsgId = crypto.randomUUID();
+  const r = await sendMessage({ conversationId: convId, clientMsgId, content, threadRootId: rootId });
+  if (r.ok) {
+    insertMessage(convId, r.data);
+    const conv = state.convs.get(convId);
+    if (conv) putConv(summarize(conv, r.data, state.meId));
+    emit();
+    return true;
+  }
+  if (r.error) toast.error(r.error);
+  return false;
+}
+
+export async function sendThreadAttachment(convId: string, rootId: string, file: File) {
+  const clientMsgId = crypto.randomUUID();
+  const attachmentId = await uploadAttachment(convId, file);
+  if (!attachmentId) return false;
+  const r = await sendFileMessage({ conversationId: convId, attachmentId, clientMsgId, threadRootId: rootId });
+  if (r.ok) {
+    insertMessage(convId, r.data);
+    const conv = state.convs.get(convId);
+    if (conv) putConv(summarize(conv, r.data, state.meId));
+    emit();
+    return true;
+  }
+  if (r.error) toast.error(r.error);
+  return false;
+}
+
+// ── 发送 / 编辑 / 表态 ──
 
 export async function sendText(convId: string, content: unknown, replyToId: string | null) {
   const clientMsgId = crypto.randomUUID();
   const text = extractText(content);
-  const ms = state.messages.get(convId) ?? { items: [], hasMore: true, loading: false, pending: [] };
+  const ms = state.messages.get(convId) ?? { items: [], hasMore: true, hasNewer: false, loading: false, pending: [] };
   state.messages.set(convId, ms);
   putMessages(convId, {
     pending: [...ms.pending, { clientMsgId, content, text, replyToId, createdAt: new Date().toISOString(), failed: false }],
@@ -233,7 +401,9 @@ async function doSend(convId: string, clientMsgId: string, content: unknown, rep
   if (r.ok) {
     const dto = r.data;
     // message.new 可能已先到：去重 + 移除 pending
-    const items = ms.items.some((m) => m.id === dto.id) ? ms.items : [...ms.items, dto].sort((a, b) => a.seq - b.seq);
+    const items = ms.hasNewer || ms.items.some((m) => m.id === dto.id)
+      ? ms.items
+      : [...ms.items, dto].sort((a, b) => a.seq - b.seq);
     putMessages(convId, { items, pending: ms.pending.filter((p) => p.clientMsgId !== clientMsgId) });
     const conv = state.convs.get(convId);
     if (conv) putConv(summarize(conv, dto, state.meId));
@@ -258,11 +428,34 @@ async function readImageDims(file: File): Promise<{ width: number; height: numbe
   }
 }
 
+async function uploadAttachment(convId: string, file: File): Promise<string | null> {
+  try {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("conversationId", convId);
+    const dims = await readImageDims(file);
+    if (dims) {
+      form.append("width", String(dims.width));
+      form.append("height", String(dims.height));
+    }
+    const res = await fetch("/api/im/upload", { method: "POST", body: form });
+    const data = (await res.json().catch(() => ({}))) as { id?: string; error?: string };
+    if (!res.ok || !data.id) {
+      toast.error(data.error || "文件上传失败");
+      return null;
+    }
+    return data.id;
+  } catch {
+    toast.error("网络异常，文件上传失败");
+    return null;
+  }
+}
+
 export async function sendAttachment(convId: string, file: File, replyToId: string | null) {
   const clientMsgId = crypto.randomUUID();
   const isImage = file.type.startsWith("image/") && file.type !== "image/svg+xml";
   const text = isImage ? `正在上传图片 ${file.name}…` : `正在上传文件 ${file.name}…`;
-  const ms = state.messages.get(convId) ?? { items: [], hasMore: true, loading: false, pending: [] };
+  const ms = state.messages.get(convId) ?? { items: [], hasMore: true, hasNewer: false, loading: false, pending: [] };
   state.messages.set(convId, ms);
   putMessages(convId, {
     pending: [
@@ -285,25 +478,9 @@ async function doSendAttachment(convId: string, clientMsgId: string, file: File,
     emit();
   };
 
-  let attachmentId: string;
-  try {
-    const form = new FormData();
-    form.append("file", file);
-    form.append("conversationId", convId);
-    const dims = await readImageDims(file);
-    if (dims) {
-      form.append("width", String(dims.width));
-      form.append("height", String(dims.height));
-    }
-    const res = await fetch("/api/im/upload", { method: "POST", body: form });
-    const data = (await res.json().catch(() => ({}))) as { id?: string; error?: string };
-    if (!res.ok || !data.id) {
-      markFailed(data.error || "文件上传失败");
-      return;
-    }
-    attachmentId = data.id;
-  } catch {
-    markFailed("网络异常，文件上传失败");
+  const attachmentId = await uploadAttachment(convId, file);
+  if (!attachmentId) {
+    markFailed();
     return;
   }
 
@@ -317,13 +494,36 @@ async function doSendAttachment(convId: string, clientMsgId: string, file: File,
   if (!ms) return;
   if (r.ok) {
     const dto = r.data;
-    const items = ms.items.some((m) => m.id === dto.id) ? ms.items : [...ms.items, dto].sort((a, b) => a.seq - b.seq);
+    const items = ms.hasNewer || ms.items.some((m) => m.id === dto.id)
+      ? ms.items
+      : [...ms.items, dto].sort((a, b) => a.seq - b.seq);
     putMessages(convId, { items, pending: ms.pending.filter((p) => p.clientMsgId !== clientMsgId) });
     const conv = state.convs.get(convId);
     if (conv) putConv(summarize(conv, dto, state.meId));
     emit();
   } else {
     markFailed(r.error);
+  }
+}
+
+export async function editMsg(convId: string, messageId: string, content: unknown): Promise<boolean> {
+  const r = await editMessageAction({ messageId, content });
+  if (r.ok) {
+    applyUpdatedMessage(convId, r.data);
+    emit();
+    return true;
+  }
+  if (r.error) toast.error(r.error);
+  return false;
+}
+
+export async function toggleReactionAction(convId: string, messageId: string, emoji: string) {
+  const r = await toggleMessageReaction({ messageId, emoji });
+  if (r.ok) {
+    applyUpdatedMessage(convId, r.data.message);
+    emit();
+  } else if (r.error) {
+    toast.error(r.error);
   }
 }
 
@@ -358,7 +558,11 @@ export async function markRead(convId: string, seq: number) {
   await markConversationRead({ conversationId: convId, seq });
 }
 
-// ── 成员 ──
+// ── 成员 & 激活会话 ──
+
+export function setActiveConversation(convId: string | null) {
+  state.activeConvId = convId;
+}
 
 export async function loadMembers(convId: string): Promise<GroupMember[] | null> {
   const cached = state.members.get(convId);
@@ -405,6 +609,26 @@ export function setDraft(convId: string, content: unknown) {
 
 // ── 事件 ──
 
+function maybeNotifyMessage(convId: string, msg: MessageDTO) {
+  const meId = state.meId;
+  if (!meId || msg.type === "SYSTEM" || msg.sender?.id === meId) return;
+  const conv = state.convs.get(convId);
+  const mentionedMe = msg.mentions.includes(meId) || msg.mentions.includes("all");
+  if (conv?.muted && !mentionedMe) return;
+  const hidden = typeof document !== "undefined" && document.hidden;
+  if (!hidden && state.activeConvId === convId) return;
+
+  const title = conv ? conv.name : (msg.sender?.name ?? "新消息");
+  const prefix = conv?.type === "GROUP" && msg.sender?.name ? `${msg.sender.name}：` : "";
+  const body = `${mentionedMe ? "[有人@你] " : ""}${prefix}${msg.text || "发来一条消息"}`;
+  showDesktopNotification({
+    title,
+    body,
+    url: `/messages/${convId}`,
+    tag: `im-${convId}`,
+  });
+}
+
 function handleEvent(e: RealtimeEvent) {
   const meId = state.meId;
   switch (e.type) {
@@ -418,27 +642,21 @@ function handleEvent(e: RealtimeEvent) {
         void fetchConversation(convId);
       }
       const ms = state.messages.get(convId);
-      if (ms) {
+      if (ms && !ms.hasNewer) {
         const lastSeq = ms.items.length ? ms.items[ms.items.length - 1].seq : 0;
         insertMessage(convId, msg);
-        if (msg.seq > lastSeq + 1) void syncAfter(convId, lastSeq);
+        if (!msg.threadRootId && msg.seq > lastSeq + 1) void syncAfter(convId, lastSeq);
+      } else if (msg.threadRootId) {
+        insertMessage(convId, msg);
       }
+      maybeNotifyMessage(convId, msg);
       emit();
       break;
     }
     case "message.updated": {
       const convId = e.conversationId as string;
       const msg = e.message as MessageDTO;
-      const ms = state.messages.get(convId);
-      if (ms) {
-        putMessages(convId, { items: ms.items.map((m) => (m.id === msg.id ? msg : m)) });
-      }
-      const conv = state.convs.get(convId);
-      if (conv?.lastMessage?.seq === msg.seq) {
-        patchConv(convId, {
-          lastMessage: { ...conv.lastMessage, text: msg.recalled ? "" : msg.text, recalled: msg.recalled },
-        });
-      }
+      applyUpdatedMessage(convId, msg);
       emit();
       break;
     }
@@ -471,8 +689,22 @@ function handleEvent(e: RealtimeEvent) {
     case "read": {
       const convId = e.conversationId as string;
       const seq = e.seq as number;
+      const readerId = e.userId as string | undefined;
       const conv = state.convs.get(convId);
-      if (conv) patchConv(convId, { lastReadSeq: seq, unread: Math.max(0, conv.lastSeq - seq) });
+      if (!readerId || readerId === meId) {
+        if (conv) patchConv(convId, { lastReadSeq: Math.max(conv.lastReadSeq, seq), unread: Math.max(0, conv.lastSeq - seq) });
+      } else {
+        if (conv?.type === "DIRECT" && conv.peerId === readerId) {
+          patchConv(convId, { peerLastReadSeq: Math.max(conv.peerLastReadSeq ?? 0, seq) });
+        }
+        const members = state.members.get(convId);
+        if (members) {
+          state.members.set(
+            convId,
+            members.map((m) => (m.id === readerId ? { ...m, lastReadSeq: Math.max(m.lastReadSeq ?? 0, seq) } : m)),
+          );
+        }
+      }
       emit();
       break;
     }
@@ -560,8 +792,10 @@ export function initIm(meId: string) {
 /** 清空全部会话态（退出登录/切换用户时调用） */
 export function resetIm() {
   state.meId = null;
+  state.activeConvId = null;
   state.convs.clear();
   state.messages.clear();
+  state.threads.clear();
   state.members.clear();
   state.typing.clear();
   typingLists.clear();
@@ -584,6 +818,10 @@ export function useConversation(convId: string): ConversationDTO | undefined {
 
 export function useConvMessages(convId: string): MsgState | undefined {
   return useSyncExternalStore(subscribe, () => state.messages.get(convId), () => undefined);
+}
+
+export function useThread(rootId: string | null): ThreadState | undefined {
+  return useSyncExternalStore(subscribe, () => (rootId ? state.threads.get(rootId) : undefined), () => undefined);
 }
 
 export function useGroupMembers(convId: string): GroupMember[] | undefined {

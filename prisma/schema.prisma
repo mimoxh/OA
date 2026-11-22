@@ -96,6 +96,7 @@ model User {
   imMemberships   ConversationMember[]
   imMessages      Message[]           @relation("MessageSender")
   attachments     Attachment[]
+  messageReactions MessageReaction[]
 }
 
 model Notification {
@@ -1143,13 +1144,30 @@ model Message {
   refType        String?
   refId          String?
   replyToId      String?
+  threadRootId   String?
+  threadCount    Int               @default(0)
+  threadLastAt   DateTime?
   editedAt       DateTime?
   recalledAt     DateTime?
-  createdAt      DateTime     @default(now())
+  reactions      MessageReaction[]
+  createdAt      DateTime          @default(now())
 
   @@unique([conversationId, seq])
   @@unique([conversationId, senderId, clientMsgId])
   @@index([refType, refId])
+  @@index([conversationId, threadRootId, seq])
+}
+
+model MessageReaction {
+  messageId String
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emoji     String
+  createdAt DateTime @default(now())
+
+  @@id([messageId, userId, emoji])
+  @@index([messageId])
 }
 
 model Attachment {

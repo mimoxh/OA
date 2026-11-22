@@ -11,6 +11,7 @@ import type { BotKey } from "./bots";
 import type { FileContent, ImageContent, MessageDTO, MessageKind, RefType } from "./types";
 
 const RECALL_WINDOW_MS = 2 * 60 * 1000;
+const EDIT_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 export type MemberWithUser = ConversationMember & { user: Pick<User, "id" | "name" | "avatarColor"> };
 type MessageWithSender = Message & { sender?: Pick<User, "id" | "name" | "avatarColor"> | null };
@@ -28,6 +29,16 @@ async function requireGroup(client: DbClient, conversationId: string): Promise<C
   return conv;
 }
 
+async function validateThreadRoot(client: DbClient, conversationId: string, threadRootId: string) {
+  const root = await client.message.findUnique({
+    where: { id: threadRootId },
+    select: { conversationId: true, threadRootId: true, type: true, recalledAt: true },
+  });
+  if (!root || root.conversationId !== conversationId) throw new Error("话题根消息不存在");
+  if (root.threadRootId) throw new Error("暂不支持在话题回复中再创建子话题");
+  if (root.type === "SYSTEM" || root.recalledAt) throw new Error("该消息不支持发起话题");
+}
+
 export type AppendMessageInput = {
   conversationId: string;
   senderId: string | null;
@@ -41,6 +52,7 @@ export type AppendMessageInput = {
   refId?: string | null;
   clientMsgId?: string | null;
   replyToId?: string | null;
+  threadRootId?: string | null;
   /** 仅种子/回填使用，默认 now() */
   createdAt?: Date;
   /** 发送后将其 lastReadSeq 推进到新 seq（默认 senderId；系统消息传操作者，机器人卡片传 null 表示无人已读） */
@@ -60,9 +72,10 @@ export async function appendMessage(
     if (dup) return { message: dup, dto: await toMessageDTO(client, dup), created: false };
   }
   try {
+    const now = input.createdAt ?? new Date();
     const conv = await client.conversation.update({
       where: { id: input.conversationId },
-      data: { lastSeq: { increment: 1 }, lastMessageAt: input.createdAt ?? new Date() },
+      data: { lastSeq: { increment: 1 }, lastMessageAt: now },
       select: { lastSeq: true },
     });
     const msg = (await client.message.create({
@@ -79,6 +92,7 @@ export async function appendMessage(
         refType: input.refType ?? null,
         refId: input.refId ?? null,
         replyToId: input.replyToId ?? null,
+        threadRootId: input.threadRootId ?? null,
         ...(input.createdAt ? { createdAt: input.createdAt } : {}),
       },
       include: { sender: { select: userLiteSelect } },
@@ -98,6 +112,17 @@ export async function appendMessage(
     const dto = await toMessageDTO(client, msg);
     const ids = await conversationUserIds(client, input.conversationId);
     queueEvent(ids, { type: "message.new", conversationId: input.conversationId, message: dto });
+
+    // 若为话题回复：更新根消息回复计数与最后回复时间，并推送根消息刷新事件
+    if (input.threadRootId) {
+      const updatedRoot = (await client.message.update({
+        where: { id: input.threadRootId },
+        data: { threadCount: { increment: 1 }, threadLastAt: now },
+        include: { sender: { select: userLiteSelect } },
+      })) as MessageWithSender;
+      const rootDto = await toMessageDTO(client, updatedRoot);
+      queueEvent(ids, { type: "message.updated", conversationId: input.conversationId, message: rootDto });
+    }
     return { message: msg, dto, created: true };
   } catch (e) {
     // 并发下同 clientMsgId 撞唯一索引：返回已存在消息
@@ -292,7 +317,14 @@ export async function transferGroupOwner(client: DbClient, conversationId: strin
 
 export async function sendTextMessage(
   client: DbClient,
-  input: { conversationId: string; senderId: string; content: unknown; clientMsgId?: string | null; replyToId?: string | null },
+  input: {
+    conversationId: string;
+    senderId: string;
+    content: unknown;
+    clientMsgId?: string | null;
+    replyToId?: string | null;
+    threadRootId?: string | null;
+  },
 ): Promise<{ message: Message; dto: MessageDTO; created: boolean }> {
   const conv = await client.conversation.findUnique({ where: { id: input.conversationId }, select: { type: true } });
   if (!conv) throw new Error("会话不存在");
@@ -301,6 +333,9 @@ export async function sendTextMessage(
   if (input.replyToId) {
     const target = await client.message.findUnique({ where: { id: input.replyToId }, select: { conversationId: true } });
     if (!target || target.conversationId !== input.conversationId) throw new Error("回复的消息不存在");
+  }
+  if (input.threadRootId) {
+    await validateThreadRoot(client, input.conversationId, input.threadRootId);
   }
   const parsed = parseMessageContent(input.content);
   return appendMessage(client, {
@@ -313,12 +348,20 @@ export async function sendTextMessage(
     links: parsed.links,
     clientMsgId: input.clientMsgId ?? null,
     replyToId: input.replyToId ?? null,
+    threadRootId: input.threadRootId ?? null,
   });
 }
 
 export async function sendAttachmentMessage(
   client: DbClient,
-  input: { conversationId: string; senderId: string; attachmentId: string; clientMsgId?: string | null; replyToId?: string | null },
+  input: {
+    conversationId: string;
+    senderId: string;
+    attachmentId: string;
+    clientMsgId?: string | null;
+    replyToId?: string | null;
+    threadRootId?: string | null;
+  },
 ): Promise<{ message: Message; dto: MessageDTO; created: boolean }> {
   const conv = await client.conversation.findUnique({ where: { id: input.conversationId }, select: { type: true } });
   if (!conv) throw new Error("会话不存在");
@@ -327,6 +370,9 @@ export async function sendAttachmentMessage(
   if (input.replyToId) {
     const target = await client.message.findUnique({ where: { id: input.replyToId }, select: { conversationId: true } });
     if (!target || target.conversationId !== input.conversationId) throw new Error("回复的消息不存在");
+  }
+  if (input.threadRootId) {
+    await validateThreadRoot(client, input.conversationId, input.threadRootId);
   }
   const att = await client.attachment.findUnique({ where: { id: input.attachmentId } });
   if (!att) throw new Error("附件不存在");
@@ -353,6 +399,7 @@ export async function sendAttachmentMessage(
       text: "[图片]",
       clientMsgId: input.clientMsgId ?? null,
       replyToId: input.replyToId ?? null,
+      threadRootId: input.threadRootId ?? null,
     });
   }
   const content: FileContent = {
@@ -370,6 +417,7 @@ export async function sendAttachmentMessage(
     text: `[文件] ${att.filename}`,
     clientMsgId: input.clientMsgId ?? null,
     replyToId: input.replyToId ?? null,
+    threadRootId: input.threadRootId ?? null,
   });
 }
 
@@ -435,6 +483,72 @@ export async function shareRefMessage(
   return { conversationId, dto };
 }
 
+export async function editMessage(
+  client: DbClient,
+  input: { messageId: string; userId: string; content: unknown },
+): Promise<MessageDTO> {
+  const msg = await client.message.findUnique({ where: { id: input.messageId }, include: { sender: { select: userLiteSelect } } });
+  if (!msg) throw new Error("消息不存在");
+  await requireMember(client, msg.conversationId, input.userId);
+  if (msg.senderId !== input.userId) throw new Error("只能编辑自己发送的消息");
+  if (msg.type !== "TEXT") throw new Error("仅文本消息支持编辑");
+  if (msg.recalledAt) throw new Error("已撤回的消息不能编辑");
+  if (Date.now() - msg.createdAt.getTime() > EDIT_WINDOW_MS) throw new Error("超过 24 小时的消息不能编辑");
+
+  const parsed = parseMessageContent(input.content);
+  const updated = await client.message.update({
+    where: { id: input.messageId },
+    data: {
+      content: JSON.stringify(parsed.content),
+      text: parsed.text,
+      mentions: JSON.stringify(parsed.mentions),
+      links: JSON.stringify(parsed.links),
+      editedAt: new Date(),
+    },
+    include: { sender: { select: userLiteSelect } },
+  });
+  const dto = await toMessageDTO(client, updated);
+  queueEvent(await conversationUserIds(client, msg.conversationId), {
+    type: "message.updated",
+    conversationId: msg.conversationId,
+    message: dto,
+  });
+  return dto;
+}
+
+export async function toggleReaction(
+  client: DbClient,
+  input: { messageId: string; userId: string; emoji: string },
+): Promise<{ message: MessageDTO; added: boolean }> {
+  const emoji = input.emoji.trim();
+  if (!emoji || emoji.length > 16) throw new Error("无效的表情");
+  const msg = await client.message.findUnique({ where: { id: input.messageId }, include: { sender: { select: userLiteSelect } } });
+  if (!msg) throw new Error("消息不存在");
+  await requireMember(client, msg.conversationId, input.userId);
+  if (msg.type === "SYSTEM" || msg.recalledAt) throw new Error("该消息不支持表情回应");
+
+  const key = { messageId: msg.id, userId: input.userId, emoji };
+  const existing = await client.messageReaction.findUnique({ where: { messageId_userId_emoji: key } });
+  let added = false;
+  if (existing) {
+    await client.messageReaction.delete({ where: { messageId_userId_emoji: key } });
+  } else {
+    try {
+      await client.messageReaction.create({ data: key });
+      added = true;
+    } catch (e) {
+      if (!(e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002")) throw e;
+    }
+  }
+  const dto = await toMessageDTO(client, msg);
+  queueEvent(await conversationUserIds(client, msg.conversationId), {
+    type: "message.updated",
+    conversationId: msg.conversationId,
+    message: dto,
+  });
+  return { message: dto, added };
+}
+
 export async function recallMessage(client: DbClient, messageId: string, userId: string) {
   const msg = await client.message.findUnique({ where: { id: messageId }, include: { sender: { select: userLiteSelect } } });
   if (!msg) throw new Error("消息不存在");
@@ -458,7 +572,7 @@ export async function recallMessage(client: DbClient, messageId: string, userId:
 
 export async function markRead(client: DbClient, userId: string, conversationId: string, seq: number) {
   const member = await requireMember(client, conversationId, userId);
-  const conv = await client.conversation.findUnique({ where: { id: conversationId }, select: { lastSeq: true } });
+  const conv = await client.conversation.findUnique({ where: { id: conversationId }, select: { lastSeq: true, type: true } });
   if (!conv) throw new Error("会话不存在");
   const next = Math.min(Math.max(0, seq), conv.lastSeq);
   if (next <= member.lastReadSeq) return;
@@ -466,7 +580,8 @@ export async function markRead(client: DbClient, userId: string, conversationId:
     where: { conversationId_userId: { conversationId, userId } },
     data: { lastReadSeq: next },
   });
-  queueEvent([userId], { type: "read", conversationId, userId, seq: next });
+  const recipients = conv.type === "BOT" ? [userId] : await conversationUserIds(client, conversationId);
+  queueEvent(recipients, { type: "read", conversationId, userId, seq: next });
 }
 
 export async function setConversationPrefs(

@@ -106,7 +106,13 @@ pnpm next dev --port 3103
 - `server/realtime.ts`：`ws` 实时服务。`?token=` 连接（`rt` 作用域，`GET /api/realtime-token` 签发）；30s 心跳；typing 转发（校验会话成员，成员表缓存 60s）；presence 广播 + `presence.snapshot`；HTTP `POST /publish`、`GET /health`。配置 `REDIS_URL` 时通过 `rt:events`、`rt:presence`、`rt:instances` 与 `rt:online:<instanceId>` 实现跨实例事件、输入状态与在线状态同步。
 - `server/collab.ts`：Hocuspocus 协同服务。配置 `REDIS_URL` 时自动挂载 `@hocuspocus/extension-redis`（前缀 `oa-docs`），支持多实例 Yjs 文档同步与分布式写锁；`GET /health` 返回 `redis` 状态。
 - 令牌：`src/lib/auth/token.ts` 的 `signScopedToken/verifyScopedToken`，作用域 `collab`（文档协同）/ `rt`（实时通道）/ `rt-publish`（服务端投递）。带 scope 的令牌**不能**当会话 Cookie 用（`verifySessionToken` 会拒绝）。
-- IM 代码在 `src/lib/im/`：`service.ts`（会话/消息/附件/分享写路径，seq 由 `lastSeq increment` 原子分配）、`queries.ts`（DTO 与查询）、`content.ts`（Tiptap 消息校验 + 链接/提及提取）、`cards.ts`（审批卡片与刷新）、`refs.ts`（按查看者权限解析业务引用，含日程 `event`）、`biz.ts`（项目/客户/商机/会议业务群绑定与日程同步，`directKey = "biz:<bizType>:<bizId>"`）、`bots.ts`/`biz-meta.ts`/`types.ts`（客户端可引用的常量与类型）。该目录不得 import `server-only`（会被 tsx 脚本与 server/ 引用）。
+- IM 代码在 `src/lib/im/`：`service.ts`（会话/消息/附件/分享/编辑/表态/话题/已读回执写路径，seq 由 `lastSeq increment` 原子分配）、`queries.ts`（DTO、上下文定位 `?around=`、话题拉取、会话内搜索与已读明细查询）、`content.ts`（Tiptap 消息校验 + 链接/提及提取）、`cards.ts`（审批卡片与刷新）、`refs.ts`（按查看者权限解析业务引用，含日程 `event`）、`biz.ts`（项目/客户/商机/会议业务群绑定与日程同步，`directKey = "biz:<bizType>:<bizId>"`）、`desktop-notify.ts`（PWA Service Worker 注册与浏览器桌面通知）、`bots.ts`/`biz-meta.ts`/`types.ts`（客户端可引用的常量与类型）。该目录不得 import `server-only`（会被 tsx 脚本与 server/ 引用）。
+- 深度沟通交互（P3）：
+  - 表情回应（`MessageReaction`）与消息编辑（本人文本消息 24h 内可编辑，重解析 `@提及` 与业务链接并推送 `message.updated`）。
+  - 话题回复（`Message.threadRootId` / `threadCount` / `threadLastAt`）：主消息流只展示顶级消息，右侧 `ThreadDrawer` 展示根消息与回复列表（`GET /api/im/conversations/[id]/threads/[rootId]`）。
+  - 已读回执：`markRead` 对单聊/群聊全成员广播 `read` 事件，单聊显示「已读/未读」，群聊显示「X人已读/全部已读」并可通过 `GET /api/im/conversations/[id]/receipts?seq=<n>` 查看已读/未读名单。
+  - 消息搜索：会话内右侧 `SearchDrawer`（`GET /api/im/conversations/[id]/search`，支持关键词、图片/文件/链接类型、发送人筛选与 `?around=<seq>` 上下文跳转高亮），以及全局命令面板（`Cmd/Ctrl + K`，`/api/search`）中的「聊天消息」分组。
+  - PWA 与桌面通知：`src/app/manifest.ts` + `public/sw.js` + `public/icon.svg`，会话列表顶部可开关浏览器桌面通知（仅在页面切后台或非当前激活会话且未免打扰/被 @ 时触发）。
 - 附件与可插拔存储：`src/lib/storage/` 提供 `StorageDriver` 接口，默认 `LocalStorageDriver`（`data/uploads`），也支持免额外依赖的 AWS SigV4 `S3StorageDriver`。上传走 `POST /api/im/upload`（会话成员校验、大小限制、图片魔数校验并禁止 SVG 内联），下载/预览走 `GET /api/im/files/[id]`（成员权限校验 + `X-Content-Type-Options: nosniff`）。
 - 分享到会话：`GET /api/im/share-targets` 与 `ShareToChatButton` 支持将文档、审批、项目等直接分享到会话，消息内仅保存业务引用与用户附言，由 `RefPreviewCard` 按查看者权限动态解析，避免标题越权泄露。
 - `notify()` 除写 Notification 表外，还会派发 `notification.new` 并向对应机器人会话投递卡片；审批状态变化时 `approval.ts` 末尾调用 `refreshApprovalCards` 刷新所有相关卡片。

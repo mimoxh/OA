@@ -1,16 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowUpRight, BellOff, Check, DoorOpen, Ellipsis, Pencil, Pin, PinOff, UserPlus, UserRound, Users, X } from "lucide-react";
+import { ArrowUpRight, BellOff, Check, DoorOpen, Ellipsis, Pencil, Pin, PinOff, Search, UserPlus, UserRound, Users, X } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Menu, MenuContent, MenuItem, MenuTrigger } from "@/components/ui/menu";
 import { MemberMultiSelect } from "@/components/oa/member-picker";
 import type { MemberOption } from "@/lib/oa/types";
 import { BIZ_META } from "@/lib/im/biz-meta";
-import type { ConversationDTO, MessageDTO, UserLite } from "@/lib/im/types";
+import type { ConversationDTO, MessageDTO, MessageSearchHit, UserLite } from "@/lib/im/types";
 import { cn } from "@/lib/utils";
 import { useAction } from "@/components/ui/use-action";
 import {
@@ -25,6 +25,7 @@ import {
   loadMembers,
   seedConversation,
   seedMembers,
+  setActiveConversation,
   useConversation,
   useGroupMembers,
   useOnline,
@@ -33,8 +34,11 @@ import {
 import { ConvAvatar } from "./conversation-list";
 import { MessageList } from "./message-list";
 import { Composer } from "./composer";
+import { ThreadDrawer } from "./thread-drawer";
+import { SearchDrawer } from "./search-drawer";
 
 type Me = UserLite;
+type RightPanel = null | { kind: "settings" } | { kind: "search" } | { kind: "thread"; rootId: string };
 
 export function ChatView({
   initialConversation,
@@ -42,12 +46,16 @@ export function ChatView({
   me,
   peerTitle,
   memberOptions,
+  initialFocusSeq = null,
+  initialThreadRootId = null,
 }: {
   initialConversation: ConversationDTO;
   initialMembers: GroupMember[] | null;
   me: Me;
   peerTitle: string | null;
   memberOptions: MemberOption[];
+  initialFocusSeq?: number | null;
+  initialThreadRootId?: string | null;
 }) {
   const router = useRouter();
   const convId = initialConversation.id;
@@ -57,6 +65,11 @@ export function ChatView({
     if (initialMembers) seedMembers(convId, initialMembers);
     if (initialConversation.type === "GROUP") void loadMembers(convId);
   }, [convId, initialConversation, initialMembers]);
+
+  useEffect(() => {
+    setActiveConversation(convId);
+    return () => setActiveConversation(null);
+  }, [convId]);
 
   // 被移出/群解散 → 回列表
   useEffect(() => {
@@ -69,9 +82,32 @@ export function ChatView({
 
   const conv = useConversation(convId) ?? initialConversation;
   const online = useOnline(conv.peerId);
-  const [drawer, setDrawer] = useState(false);
+  const [panel, setPanel] = useState<RightPanel>(() =>
+    initialThreadRootId ? { kind: "thread", rootId: initialThreadRootId } : null,
+  );
   const [replyTo, setReplyTo] = useState<MessageDTO | null>(null);
+  const [jumpSeq, setJumpSeq] = useState<number | null>(null);
+  const [consumedInitial, setConsumedInitial] = useState<number | null>(null);
   const { run } = useAction();
+
+  const focusSeq = jumpSeq ?? (initialFocusSeq != null && initialFocusSeq !== consumedInitial ? initialFocusSeq : null);
+
+  const clearFocusSeq = useCallback(() => {
+    setJumpSeq(null);
+    if (initialFocusSeq != null) setConsumedInitial(initialFocusSeq);
+  }, [initialFocusSeq]);
+
+  const handleOpenThread = useCallback((msg: MessageDTO) => {
+    setPanel({ kind: "thread", rootId: msg.id });
+  }, []);
+
+  const handleSelectSearchHit = useCallback((hit: MessageSearchHit) => {
+    if (hit.threadRootId) {
+      setPanel({ kind: "thread", rootId: hit.threadRootId });
+    } else {
+      setJumpSeq(hit.seq);
+    }
+  }, []);
 
   const subtitle =
     conv.type === "DIRECT"
@@ -109,11 +145,20 @@ export function ChatView({
               <ArrowUpRight className="size-3.5" />
             </Link>
           )}
+          <button
+            onClick={() => setPanel((p) => (p?.kind === "search" ? null : { kind: "search" }))}
+            className={cn("rounded-md p-2", panel?.kind === "search" ? "bg-active text-accent" : "text-ink-2 hover:bg-hover")}
+            aria-label="查找聊天记录"
+            title="查找聊天记录"
+          >
+            <Search className="size-4.5" />
+          </button>
           {conv.type === "GROUP" && (
             <button
-              onClick={() => setDrawer((v) => !v)}
-              className={cn("rounded-md p-2", drawer ? "bg-active text-accent" : "text-ink-2 hover:bg-hover")}
+              onClick={() => setPanel((p) => (p?.kind === "settings" ? null : { kind: "settings" }))}
+              className={cn("rounded-md p-2", panel?.kind === "settings" ? "bg-active text-accent" : "text-ink-2 hover:bg-hover")}
               aria-label="群设置"
+              title="群设置"
             >
               <Users className="size-4.5" />
             </button>
@@ -135,7 +180,14 @@ export function ChatView({
           </Menu>
         </div>
 
-        <MessageList conv={conv} me={me} onReply={setReplyTo} />
+        <MessageList
+          conv={conv}
+          me={me}
+          onReply={setReplyTo}
+          onOpenThread={handleOpenThread}
+          focusSeq={focusSeq}
+          onClearFocusSeq={clearFocusSeq}
+        />
         {conv.type === "BOT" ? (
           <div className="shrink-0 border-t border-line bg-sidebar px-4 py-3 text-center text-[13px] text-ink-3">
             机器人会话不支持回复
@@ -145,8 +197,14 @@ export function ChatView({
         )}
       </div>
 
-      {drawer && conv.type === "GROUP" && (
-        <GroupSettings conv={conv} me={me} memberOptions={memberOptions} onClose={() => setDrawer(false)} />
+      {panel?.kind === "settings" && conv.type === "GROUP" && (
+        <GroupSettings conv={conv} me={me} memberOptions={memberOptions} onClose={() => setPanel(null)} />
+      )}
+      {panel?.kind === "search" && (
+        <SearchDrawer conv={conv} onSelectHit={handleSelectSearchHit} onClose={() => setPanel(null)} />
+      )}
+      {panel?.kind === "thread" && (
+        <ThreadDrawer conv={conv} me={me} rootId={panel.rootId} onClose={() => setPanel(null)} />
       )}
     </div>
   );

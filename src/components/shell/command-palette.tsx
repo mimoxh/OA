@@ -91,7 +91,7 @@ export function CommandPalette({ permissions }: { permissions: string[] }) {
               <Command.Input
                 value={q}
                 onValueChange={setQ}
-                placeholder="搜索文档、客户、订单、项目、任务…"
+                placeholder="搜索聊天消息、文档、客户、订单、项目、任务…"
                 className="h-12 flex-1 bg-transparent text-[15px] outline-none placeholder:text-ink-3"
               />
             </div>

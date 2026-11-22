@@ -9,8 +9,10 @@ import { cn } from "@/lib/utils";
 import {
   discardPending,
   loadMessages,
+  loadMessagesAround,
   loadOlder,
   markRead,
+  reloadLatestMessages,
   retryPending,
   useConvMessages,
   useGroupMembers,
@@ -30,16 +32,23 @@ export function MessageList({
   conv,
   me,
   onReply,
+  onOpenThread,
+  focusSeq = null,
+  onClearFocusSeq,
 }: {
   conv: ConversationDTO;
   me: UserLite;
   onReply: (msg: MessageDTO) => void;
+  onOpenThread: (msg: MessageDTO) => void;
+  focusSeq?: number | null;
+  onClearFocusSeq?: () => void;
 }) {
   const ms = useConvMessages(conv.id);
   const typingIds = useTypingIds(conv.id);
   const members = useGroupMembers(conv.id);
   const boxRef = useRef<HTMLDivElement>(null);
   const [newCount, setNewCount] = useState(0);
+  const [highlightedSeq, setHighlightedSeq] = useState<number | null>(null);
 
   // 打开时的已读位置（未读分隔线固定在这里）
   const [readAtOpen] = useState(conv.lastReadSeq);
@@ -51,11 +60,38 @@ export function MessageList({
   const prevCount = useRef(0);
 
   useEffect(() => {
+    if (focusSeq != null) return;
     void loadMessages(conv.id);
-  }, [conv.id]);
+  }, [conv.id, focusSeq]);
+
+  // 定位并高亮某条消息（来自搜索跳转或 URL ?seq=）
+  useEffect(() => {
+    if (focusSeq == null) return;
+    let cancelled = false;
+    let clearTimer: ReturnType<typeof setTimeout> | null = null;
+    void (async () => {
+      const found = await loadMessagesAround(conv.id, focusSeq);
+      if (cancelled) return;
+      didInit.current = true;
+      if (found) {
+        requestAnimationFrame(() => {
+          const el = boxRef.current?.querySelector(`[data-seq="${focusSeq}"]`);
+          el?.scrollIntoView({ block: "center", behavior: "smooth" });
+        });
+        setHighlightedSeq(focusSeq);
+        clearTimer = setTimeout(() => setHighlightedSeq(null), 2400);
+      }
+      onClearFocusSeq?.();
+    })();
+    return () => {
+      cancelled = true;
+      if (clearTimer) clearTimeout(clearTimer);
+    };
+  }, [conv.id, focusSeq, onClearFocusSeq]);
 
   const items = ms?.items;
   const pending = ms?.pending;
+  const hasNewer = Boolean(ms?.hasNewer);
 
   const scrollBottom = useCallback((smooth = false) => {
     const box = boxRef.current;
@@ -65,7 +101,7 @@ export function MessageList({
 
   // 初次加载：滚到未读分隔线或底部
   useLayoutEffect(() => {
-    if (didInit.current || !items?.length) return;
+    if (didInit.current || !items?.length || focusSeq != null) return;
     didInit.current = true;
     requestAnimationFrame(() => {
       const box = boxRef.current;
@@ -74,7 +110,7 @@ export function MessageList({
       if (divider) divider.scrollIntoView({ block: "start" });
       else box.scrollTop = box.scrollHeight;
     });
-  }, [items]);
+  }, [items, focusSeq]);
 
   // 向上翻页后保持视口位置
   useLayoutEffect(() => {
@@ -87,6 +123,7 @@ export function MessageList({
 
   // 新消息：近底部自动滚动，否则计数 pill；自己发的始终滚到底
   useEffect(() => {
+    if (hasNewer) return;
     const itemsNow = items ?? [];
     const count = itemsNow.length + (pending?.length ?? 0);
     if (count <= prevCount.current) {
@@ -112,9 +149,10 @@ export function MessageList({
       return () => cancelAnimationFrame(raf);
     }
     return undefined;
-  }, [items, pending, me.id]);
+  }, [items, pending, me.id, hasNewer]);
 
   const maybeMarkRead = useCallback(() => {
+    if (hasNewer) return;
     const box = boxRef.current;
     if (!box || document.hidden || !document.hasFocus()) return;
     if (box.scrollHeight - box.scrollTop - box.clientHeight > 8) return;
@@ -123,7 +161,7 @@ export function MessageList({
     const seq = c.lastSeq;
     if (readTimer.current) clearTimeout(readTimer.current);
     readTimer.current = setTimeout(() => markRead(c.id, seq), 500);
-  }, [conv]);
+  }, [conv, hasNewer]);
 
   useEffect(() => {
     maybeMarkRead();
@@ -186,14 +224,23 @@ export function MessageList({
               {daySep && (
                 <div className="px-4 pb-1 pt-4 text-center text-xs text-ink-3">{dayLabel(d)}</div>
               )}
-              {dividerSeq === m.seq && (
+              {dividerSeq === m.seq && !hasNewer && (
                 <div data-unread className="mx-4 mt-3 flex items-center gap-3">
                   <div className="h-px flex-1 bg-tag-red" />
                   <span className="text-xs text-danger">以下为新消息</span>
                   <div className="h-px flex-1 bg-tag-red" />
                 </div>
               )}
-              <MessageItem msg={m} conv={conv} me={me} grouped={grouped} onReply={onReply} />
+              <MessageItem
+                msg={m}
+                conv={conv}
+                me={me}
+                grouped={grouped}
+                onReply={onReply}
+                members={members}
+                onOpenThread={onOpenThread}
+                highlighted={highlightedSeq === m.seq}
+              />
             </div>
           );
         })}
@@ -207,14 +254,28 @@ export function MessageList({
           />
         ))}
       </div>
-      {newCount > 0 && (
+      {hasNewer ? (
         <button
-          onClick={() => scrollBottom(true)}
+          onClick={() =>
+            void reloadLatestMessages(conv.id).then(() => {
+              requestAnimationFrame(() => scrollBottom(true));
+            })
+          }
           className="absolute bottom-12 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-full bg-accent px-3 py-1.5 text-xs font-medium text-white shadow-pop hover:bg-accent-hover"
         >
           <ArrowDown className="size-3.5" />
-          {newCount} 条新消息
+          回到最新消息
         </button>
+      ) : (
+        newCount > 0 && (
+          <button
+            onClick={() => scrollBottom(true)}
+            className="absolute bottom-12 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-full bg-accent px-3 py-1.5 text-xs font-medium text-white shadow-pop hover:bg-accent-hover"
+          >
+            <ArrowDown className="size-3.5" />
+            {newCount} 条新消息
+          </button>
+        )
       )}
       <div className={cn("pointer-events-none absolute bottom-1 left-0 right-0 text-center text-xs text-ink-3 transition-opacity", typingNames.length ? "opacity-100" : "opacity-0")}>
         {typingNames.length > 0 && `${typingNames.slice(0, 3).join("、")} 正在输入…`}

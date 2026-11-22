@@ -172,6 +172,7 @@ export function RealtimeProvider({ meId, children }: { meId: string; children: R
   useEffect(() => {
     // initIm 内部幂等
     import("@/components/im/store").then((m) => m.initIm(meId));
+    import("@/lib/im/desktop-notify").then((m) => void m.registerServiceWorker());
     startRealtime(meId);
     return subscribeRealtime((event) => {
       if (event.type === "notification.new") {

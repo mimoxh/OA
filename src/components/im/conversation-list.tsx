@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Bell,
   BellOff,
+  BellRing,
   ClipboardCheck,
   Ellipsis,
   FileText,
@@ -18,6 +19,7 @@ import {
   Trash2,
   Users,
 } from "lucide-react";
+import { toast } from "sonner";
 import { Avatar } from "@/components/ui/avatar";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Menu, MenuContent, MenuItem, MenuTrigger } from "@/components/ui/menu";
@@ -25,6 +27,7 @@ import { MemberMultiSelect, MemberSelect } from "@/components/oa/member-picker";
 import type { MemberOption } from "@/lib/oa/types";
 import type { BotKey } from "@/lib/im/bots";
 import { BIZ_META } from "@/lib/im/biz-meta";
+import { getDesktopNotifyState, subscribeDesktopNotify, toggleDesktopNotify } from "@/lib/im/desktop-notify";
 import type { ConversationDTO } from "@/lib/im/types";
 import { cn } from "@/lib/utils";
 import { useAction } from "@/components/ui/use-action";
@@ -185,7 +188,44 @@ export function ConversationList() {
   );
 }
 
-/** 面板头部「+」菜单：发起单聊 / 发起群聊 */
+function DesktopNotifyButton() {
+  const status = useSyncExternalStore(subscribeDesktopNotify, getDesktopNotifyState, () => "unsupported" as const);
+  if (status === "unsupported") return null;
+
+  const onClick = async () => {
+    const next = await toggleDesktopNotify();
+    if (next === "on") toast.success("已开启浏览器桌面通知");
+    else if (next === "off") toast.info("已关闭浏览器桌面通知");
+    else if (next === "denied") toast.error("浏览器已禁止通知权限，请在地址栏设置中开启");
+  };
+
+  const title =
+    status === "on"
+      ? "桌面通知已开启（点击关闭）"
+      : status === "denied"
+        ? "浏览器通知权限已被禁用"
+        : "开启浏览器桌面通知";
+
+  return (
+    <button
+      type="button"
+      onClick={() => void onClick()}
+      className={cn("rounded-md p-1 transition-colors", status === "on" ? "text-accent hover:bg-hover" : "text-ink-3 hover:bg-hover hover:text-ink-2")}
+      aria-label={title}
+      title={title}
+    >
+      {status === "on" ? (
+        <BellRing className="size-4" />
+      ) : status === "denied" ? (
+        <BellOff className="size-4" />
+      ) : (
+        <Bell className="size-4" />
+      )}
+    </button>
+  );
+}
+
+/** 面板头部操作：桌面通知开关 + 发起会话菜单 */
 export function NewChatMenu({ members, meId }: { members: MemberOption[]; meId: string }) {
   const router = useRouter();
   const { run, pending } = useAction();
@@ -225,21 +265,24 @@ export function NewChatMenu({ members, meId }: { members: MemberOption[]; meId: 
 
   return (
     <>
-      <Menu>
-        <MenuTrigger asChild>
-          <button className="rounded-md p-1 text-ink-2 hover:bg-hover" aria-label="发起会话">
-            <Plus className="size-4" />
-          </button>
-        </MenuTrigger>
-        <MenuContent align="end">
-          <MenuItem icon={<MessageCirclePlus />} onSelect={() => setDialog("direct")}>
-            发起单聊
-          </MenuItem>
-          <MenuItem icon={<Users />} onSelect={() => setDialog("group")}>
-            发起群聊
-          </MenuItem>
-        </MenuContent>
-      </Menu>
+      <div className="flex items-center gap-0.5">
+        <DesktopNotifyButton />
+        <Menu>
+          <MenuTrigger asChild>
+            <button className="rounded-md p-1 text-ink-2 hover:bg-hover" aria-label="发起会话" title="发起会话">
+              <Plus className="size-4" />
+            </button>
+          </MenuTrigger>
+          <MenuContent align="end">
+            <MenuItem icon={<MessageCirclePlus />} onSelect={() => setDialog("direct")}>
+              发起单聊
+            </MenuItem>
+            <MenuItem icon={<Users />} onSelect={() => setDialog("group")}>
+              发起群聊
+            </MenuItem>
+          </MenuContent>
+        </Menu>
+      </div>
 
       <Dialog open={dialog === "direct"} onOpenChange={(o) => !o && close()}>
         <DialogContent

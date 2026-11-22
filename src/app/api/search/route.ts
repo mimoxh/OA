@@ -141,6 +141,51 @@ export async function GET(req: NextRequest) {
     );
   }
   tasks.push(
+    db.message
+      .findMany({
+        where: {
+          recalledAt: null,
+          type: { not: "SYSTEM" },
+          text: { contains: q },
+          conversation: { members: { some: { userId: user.id } } },
+        },
+        select: {
+          id: true,
+          conversationId: true,
+          seq: true,
+          threadRootId: true,
+          text: true,
+          sender: { select: { name: true } },
+          conversation: {
+            select: {
+              type: true,
+              name: true,
+              members: { where: { userId: { not: user.id } }, take: 1, select: { user: { select: { name: true } } } },
+            },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+        take: LIMIT,
+      })
+      .then((rows) =>
+        rows.map((m) => {
+          const convName =
+            m.conversation.type === "DIRECT"
+              ? (m.conversation.members[0]?.user.name ?? "单聊")
+              : (m.conversation.name ?? "群聊");
+          return {
+            type: "message",
+            group: "聊天消息",
+            id: m.id,
+            title: snippet(m.text, q, 64),
+            subtitle: [m.sender?.name, convName, m.threadRootId ? "话题回复" : null].filter(Boolean).join(" · "),
+            href: m.threadRootId
+              ? `/messages/${m.conversationId}?thread=${m.threadRootId}`
+              : `/messages/${m.conversationId}?seq=${m.seq}`,
+            icon: "💬",
+          };
+        }),
+      ),
     db.user
       .findMany({ where: { active: true, OR: [{ name: { contains: q } }, { email: { contains: q } }] }, select: { id: true, name: true, email: true, title: true }, take: LIMIT })
       .then((rows) => rows.map((r) => ({ type: "user", group: "成员", id: r.id, title: r.name, subtitle: [r.title, r.email].filter(Boolean).join(" · "), href: `/settings/members?user=${r.id}`, icon: "👤" }))),

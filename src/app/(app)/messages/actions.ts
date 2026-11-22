@@ -9,6 +9,7 @@ import { actOnApproval } from "@/lib/services/approval";
 import {
   addGroupMembers,
   createGroup,
+  editMessage,
   getOrCreateDirect,
   leaveGroup,
   markRead,
@@ -20,6 +21,7 @@ import {
   sendTextMessage,
   setConversationPrefs,
   shareRefMessage,
+  toggleReaction,
   transferGroupOwner,
 } from "@/lib/im/service";
 import { getOrCreateBizGroup } from "@/lib/im/biz";
@@ -53,6 +55,7 @@ const sendSchema = z.object({
   clientMsgId: z.string().min(1).max(64),
   content: z.unknown(),
   replyToId: z.string().optional(),
+  threadRootId: z.string().optional(),
 });
 
 export async function sendMessage(input: z.input<typeof sendSchema>) {
@@ -65,9 +68,34 @@ export async function sendMessage(input: z.input<typeof sendSchema>) {
         content: v.content,
         clientMsgId: v.clientMsgId,
         replyToId: v.replyToId ?? null,
+        threadRootId: v.threadRootId ?? null,
       }),
     );
     return dto;
+  });
+}
+
+const editSchema = z.object({
+  messageId: id,
+  content: z.unknown(),
+});
+
+export async function editMessageAction(input: z.input<typeof editSchema>) {
+  return runAction(null, async (user) => {
+    const v = parseInput(editSchema, input);
+    return db.$transaction((tx) => editMessage(tx, { messageId: v.messageId, userId: user.id, content: v.content }));
+  });
+}
+
+const reactionSchema = z.object({
+  messageId: id,
+  emoji: z.string().trim().min(1).max(16),
+});
+
+export async function toggleMessageReaction(input: z.input<typeof reactionSchema>) {
+  return runAction(null, async (user) => {
+    const v = parseInput(reactionSchema, input);
+    return db.$transaction((tx) => toggleReaction(tx, { messageId: v.messageId, userId: user.id, emoji: v.emoji }));
   });
 }
 
@@ -190,6 +218,7 @@ const sendFileSchema = z.object({
   attachmentId: id,
   clientMsgId: z.string().min(1).max(64),
   replyToId: z.string().optional(),
+  threadRootId: z.string().optional(),
 });
 
 /** 发送已上传的图片/文件附件消息 */
@@ -203,6 +232,7 @@ export async function sendFileMessage(input: z.input<typeof sendFileSchema>) {
         attachmentId: v.attachmentId,
         clientMsgId: v.clientMsgId,
         replyToId: v.replyToId ?? null,
+        threadRootId: v.threadRootId ?? null,
       }),
     );
     return dto;
