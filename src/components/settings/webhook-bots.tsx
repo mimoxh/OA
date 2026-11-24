@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Activity, Bot, Copy, KeyRound, MessageSquare, Pencil, Plus, Power, Trash2 } from "lucide-react";
+import { Activity, Bot, ChevronDown, Copy, KeyRound, MessageSquare, Pencil, Plus, Power, Trash2 } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button, LinkButton } from "@/components/ui/button";
 import { ConfirmButton } from "@/components/ui/common";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/menu";
 import { Checkbox, Field, Input, Select, Textarea } from "@/components/ui/input";
 import { Card, EmptyState } from "@/components/ui/page";
 import { Table, TBody, TD, TEmpty, TH, THead, TR } from "@/components/ui/table";
@@ -17,7 +18,8 @@ import { ColorPicker } from "@/components/oa/color-picker";
 import { PALETTE } from "@/lib/oa/types";
 import { formatDateTime } from "@/lib/format";
 import { AGENT_PRESETS, EFFORT_LEVELS, MODEL_SUGGESTIONS, SELF_MANAGED_AGENT_HINT } from "@/lib/im/webhook-run-config";
-import { RUN_FIELD_META } from "@/components/im/webhook-run-config-bar";
+import { RUN_FIELD_META, RunOption, onRunListKeyDown } from "@/components/im/webhook-run-config-bar";
+import { AgentIcon } from "@/components/im/agent-icon";
 import { cn } from "@/lib/utils";
 import {
   createWebhookBotAction,
@@ -95,6 +97,54 @@ function runConfigPayload(form: FormState) {
   return { defaultAgent: form.defaultAgent, defaultModel: form.defaultModel, defaultEffort: form.defaultEffort };
 }
 
+/** 默认基座选择器：与聊天页同一套 Popover 选项与品牌图标（原生 select 无法显示图标） */
+function AgentPicker({ form, setForm }: { form: FormState; setForm: (f: FormState) => void }) {
+  const [open, setOpen] = useState(false);
+  const value = form.customAgent ? CUSTOM_AGENT : form.defaultAgent;
+  const pick = (next: Partial<FormState>) => {
+    setOpen(false);
+    setForm({ ...form, ...next });
+  };
+  const label = form.customAgent ? "自定义…" : form.defaultAgent || UNSET;
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          aria-label={`默认${RUN_FIELD_META.agent.title}：${label}`}
+          className={cn(
+            "flex h-8 w-full items-center gap-1.5 rounded-md border border-line-strong bg-white px-2.5 text-left text-sm text-ink transition-shadow",
+            "focus:border-accent focus:outline-none focus:ring-[3px] focus:ring-accent/15 data-[state=open]:border-accent data-[state=open]:ring-[3px] data-[state=open]:ring-accent/15",
+          )}
+        >
+          <AgentIcon agent={form.customAgent ? form.defaultAgent || CUSTOM_AGENT : form.defaultAgent} size={14} />
+          <span className={cn("min-w-0 flex-1 truncate", !form.customAgent && !form.defaultAgent && "text-ink-3")}>{label}</span>
+          <ChevronDown className="size-4 shrink-0 text-ink-3" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] min-w-48 p-1" onKeyDown={onRunListKeyDown}>
+        <RunOption selected={value === ""} icon={<AgentIcon agent={null} size={14} />} onSelect={() => pick({ customAgent: false, defaultAgent: "" })}>
+          {UNSET}
+        </RunOption>
+        <div className="my-1 h-px bg-line" />
+        {AGENT_PRESETS.map((a) => (
+          <RunOption key={a} selected={value === a} icon={<AgentIcon agent={a} size={14} />} onSelect={() => pick({ customAgent: false, defaultAgent: a })}>
+            {a}
+          </RunOption>
+        ))}
+        <div className="my-1 h-px bg-line" />
+        <RunOption
+          selected={value === CUSTOM_AGENT}
+          icon={<AgentIcon agent={CUSTOM_AGENT} size={14} />}
+          onSelect={() => pick(form.customAgent ? {} : { customAgent: true, defaultAgent: "" })}
+        >
+          自定义…
+        </RunOption>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function RunConfigFields({ form, setForm }: { form: FormState; setForm: (f: FormState) => void }) {
   const agent = form.defaultAgent.trim().toLowerCase();
   const selfManagedHint = agent && !form.defaultModel.trim() ? SELF_MANAGED_AGENT_HINT[agent] : undefined;
@@ -106,22 +156,7 @@ function RunConfigFields({ form, setForm }: { form: FormState; setForm: (f: Form
       </p>
       <div className="grid grid-cols-3 gap-3">
         <Field label={<RunFieldLabel field="agent" />}>
-          <Select
-            value={form.customAgent ? CUSTOM_AGENT : form.defaultAgent}
-            onChange={(e) =>
-              e.target.value === CUSTOM_AGENT
-                ? setForm({ ...form, customAgent: true, defaultAgent: "" })
-                : setForm({ ...form, customAgent: false, defaultAgent: e.target.value })
-            }
-          >
-            <option value="">{UNSET}</option>
-            {AGENT_PRESETS.map((a) => (
-              <option key={a} value={a}>
-                {a}
-              </option>
-            ))}
-            <option value={CUSTOM_AGENT}>自定义…</option>
-          </Select>
+          <AgentPicker form={form} setForm={setForm} />
           {form.customAgent && (
             <Input
               className="mt-1.5 font-mono"
@@ -187,7 +222,7 @@ function RunConfigSummary({ bot }: { bot: WebhookBotRow }) {
         const Icon = RUN_FIELD_META[field].icon;
         return (
           <Badge key={field} color={value ? "blue" : "gray"} className={value ? undefined : "bg-transparent text-ink-2 ring-1 ring-inset ring-line"}>
-            <Icon className="mr-1 size-3 opacity-70" />
+            {field === "agent" ? <AgentIcon agent={value} size={13} className="mr-1" /> : <Icon className="mr-1 size-3 opacity-70" />}
             {RUN_FIELD_META[field].label}
             <span className={cn("ml-1", value ? "font-mono" : "opacity-70")}>{value ?? UNSET}</span>
           </Badge>

@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Brain, Check, ChevronDown, Cpu, Layers, Loader2, RotateCcw, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { AgentIcon } from "@/components/im/agent-icon";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/menu";
 import { useAction } from "@/components/ui/use-action";
@@ -39,7 +40,7 @@ function defaultMeta(s: Shared) {
 }
 
 /** 方向键在选项之间移动焦点（Popover 不自带列表导航） */
-function onListKeyDown(e: KeyboardEvent<HTMLDivElement>) {
+export function onRunListKeyDown(e: KeyboardEvent<HTMLDivElement>) {
   if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
   const opts = Array.from(e.currentTarget.querySelectorAll<HTMLButtonElement>("[data-run-opt]"));
   if (!opts.length) return;
@@ -49,15 +50,17 @@ function onListKeyDown(e: KeyboardEvent<HTMLDivElement>) {
   opts[i < 0 ? 0 : next].focus();
 }
 
-function Option({
+export function RunOption({
   selected,
   onSelect,
+  icon,
   meta,
   mono,
   children,
 }: {
   selected: boolean;
   onSelect: () => void;
+  icon?: ReactNode;
   meta?: ReactNode;
   mono?: boolean;
   children: ReactNode;
@@ -72,6 +75,7 @@ function Option({
       className="flex h-7 w-full items-center gap-2 rounded px-2 text-left text-[13px] text-ink outline-none hover:bg-hover focus-visible:bg-hover"
     >
       <span className="flex size-3.5 shrink-0 items-center justify-center">{selected && <Check className="size-3.5 text-accent" />}</span>
+      {icon && <span className="flex size-4 shrink-0 items-center justify-center">{icon}</span>}
       <span className={cn("min-w-0 flex-1 truncate", mono && "font-mono text-xs")}>{children}</span>
       {meta && <span className="max-w-[45%] shrink-0 truncate text-xs text-ink-3">{meta}</span>}
     </button>
@@ -122,7 +126,11 @@ function Pill({
             : "text-ink-2 hover:bg-hover hover:text-ink data-[state=open]:bg-hover data-[state=open]:text-ink",
         )}
       >
-        <Icon className={cn("size-3.5 shrink-0", overridden ? "text-accent" : "text-ink-3")} />
+        {field === "agent" ? (
+          <AgentIcon agent={value} size={14} className={cn(!value && "text-ink-3")} />
+        ) : (
+          <Icon className={cn("size-3.5 shrink-0", overridden ? "text-accent" : "text-ink-3")} />
+        )}
         <span className={cn("truncate", mono && value && "font-mono text-[11px]", !value && "text-ink-3")}>{value ?? placeholder}</span>
         <ChevronDown className="size-3 shrink-0 opacity-50" />
       </button>
@@ -226,21 +234,26 @@ export function WebhookRunConfigBar({
           disabled={pending}
           title={stateTitle("agent")}
         />
-        <PopoverContent side="top" align="end" className={panel} onKeyDown={onListKeyDown}>
+        <PopoverContent side="top" align="end" className={panel} onKeyDown={onRunListKeyDown}>
           <PanelHeader field="agent" who={who} />
-          <Option selected={!override.agent} meta={defaultMeta(defaults.agent)} onSelect={() => choose({ agent: null })}>
+          <RunOption
+            selected={!override.agent}
+            icon={<AgentIcon agent={defaults.agent.value} size={14} />}
+            meta={defaultMeta(defaults.agent)}
+            onSelect={() => choose({ agent: null })}
+          >
             跟随机器人默认
-          </Option>
+          </RunOption>
           <div className="my-1 h-px bg-line" />
           {AGENT_PRESETS.map((a) => (
-            <Option key={a} selected={override.agent === a} onSelect={() => choose({ agent: a })}>
+            <RunOption key={a} selected={override.agent === a} icon={<AgentIcon agent={a} size={14} />} onSelect={() => choose({ agent: a })}>
               {a}
-            </Option>
+            </RunOption>
           ))}
           {customAgent && (
-            <Option selected meta="自定义" onSelect={() => choose({ agent: customAgent })}>
+            <RunOption selected icon={<AgentIcon agent={customAgent} size={14} />} meta="自定义" onSelect={() => choose({ agent: customAgent })}>
               {customAgent}
-            </Option>
+            </RunOption>
           )}
           <div className="my-1 h-px bg-line" />
           <form
@@ -275,7 +288,7 @@ export function WebhookRunConfigBar({
           side="top"
           align="end"
           className={panel}
-          onKeyDown={onListKeyDown}
+          onKeyDown={onRunListKeyDown}
           onEscapeKeyDown={() => {
             skipCommit.current = true;
           }}
@@ -297,19 +310,19 @@ export function WebhookRunConfigBar({
               onChange={(e) => setModelDraft(e.target.value)}
             />
           </form>
-          <Option selected={!override.model} meta={defaultMeta(defaults.model)} onSelect={() => choose({ model: null })}>
+          <RunOption selected={!override.model} meta={defaultMeta(defaults.model)} onSelect={() => choose({ model: null })}>
             跟随机器人默认
-          </Option>
+          </RunOption>
           <div className="my-1 h-px bg-line" />
           {MODEL_SUGGESTIONS.map((m) => (
-            <Option key={m} mono selected={override.model === m} onSelect={() => choose({ model: m })}>
+            <RunOption key={m} mono selected={override.model === m} onSelect={() => choose({ model: m })}>
               {m}
-            </Option>
+            </RunOption>
           ))}
           {override.model && !MODEL_SUGGESTIONS.includes(override.model) && (
-            <Option mono selected meta="自定义" onSelect={() => choose({ model: override.model })}>
+            <RunOption mono selected meta="自定义" onSelect={() => choose({ model: override.model })}>
               {override.model}
-            </Option>
+            </RunOption>
           )}
           {selfManagedHint && <p className="mt-1 border-t border-line px-2 pb-0.5 pt-1.5 text-[11px] leading-relaxed text-ink-3">{selfManagedHint}</p>}
         </PopoverContent>
@@ -324,16 +337,16 @@ export function WebhookRunConfigBar({
           disabled={pending}
           title={stateTitle("effort")}
         />
-        <PopoverContent side="top" align="end" className="w-52 p-1" onKeyDown={onListKeyDown}>
+        <PopoverContent side="top" align="end" className="w-52 p-1" onKeyDown={onRunListKeyDown}>
           <PanelHeader field="effort" who={who} />
-          <Option selected={!override.effort} meta={defaultMeta(defaults.effort)} onSelect={() => choose({ effort: null })}>
+          <RunOption selected={!override.effort} meta={defaultMeta(defaults.effort)} onSelect={() => choose({ effort: null })}>
             跟随机器人默认
-          </Option>
+          </RunOption>
           <div className="my-1 h-px bg-line" />
           {EFFORT_LEVELS.map((x) => (
-            <Option key={x} selected={override.effort === x} onSelect={() => choose({ effort: x })}>
+            <RunOption key={x} selected={override.effort === x} onSelect={() => choose({ effort: x })}>
               {x}
-            </Option>
+            </RunOption>
           ))}
         </PopoverContent>
       </Popover>
