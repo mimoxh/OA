@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useTransition, type ReactNode } from "react";
+import { ContextMenu as CM } from "radix-ui";
+import { toast } from "sonner";
 import {
   BookUser,
   CalendarDays,
@@ -11,6 +13,7 @@ import {
   LayoutGrid,
   LogOut,
   MessageCircle,
+  PinOff,
   Search,
   Settings,
   UserRound,
@@ -26,6 +29,7 @@ import { useUnreadCount } from "./use-unread";
 import { resetIm, useTotalUnread } from "@/components/im/store";
 import { stopRealtime } from "@/components/realtime/provider";
 import { setDesktopUnreadBadge } from "@/lib/desktop-bridge";
+import { setRailPin } from "@/app/(app)/work/actions";
 
 export type ShellUser = {
   id: string;
@@ -77,6 +81,36 @@ function RailItem({
   );
 }
 
+/** 固定到侧边栏的应用：右键可移除 */
+function PinnedRailItem({ appKey, href, icon, label, fullLabel, active }: { appKey: string; href: string; icon: ReactNode; label: string; fullLabel: string; active: boolean }) {
+  const [pending, startTransition] = useTransition();
+  const unpin = () =>
+    startTransition(async () => {
+      const r = await setRailPin(appKey, false);
+      if (!r.ok) toast.error(r.error);
+    });
+  return (
+    <CM.Root>
+      <CM.Trigger asChild>
+        <div className={cn("w-full", pending && "opacity-50")} title={fullLabel}>
+          <RailItem href={href} icon={icon} label={label} active={active} />
+        </div>
+      </CM.Trigger>
+      <CM.Portal>
+        <CM.Content className="z-50 min-w-40 rounded-md bg-white p-1 text-sm shadow-pop animate-pop-in">
+          <CM.Item
+            onSelect={unpin}
+            className="flex h-7 cursor-pointer select-none items-center gap-2 rounded px-2 text-ink outline-none data-[highlighted]:bg-hover [&>svg]:size-4 [&>svg]:text-ink-2"
+          >
+            <PinOff />
+            从侧边栏移除
+          </CM.Item>
+        </CM.Content>
+      </CM.Portal>
+    </CM.Root>
+  );
+}
+
 function badgeNode(n: number) {
   return n > 0 ? (
     <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger px-1 text-[10px] font-medium leading-none text-white">
@@ -85,7 +119,7 @@ function badgeNode(n: number) {
   ) : undefined;
 }
 
-export function AppRail({ user, enabledApps }: { user: ShellUser; enabledApps: string[] }) {
+export function AppRail({ user, enabledApps, railPins }: { user: ShellUser; enabledApps: string[]; railPins: string[] }) {
   const pathname = usePathname();
   const unread = useUnreadCount();
   const imUnread = useTotalUnread();
@@ -100,8 +134,11 @@ export function AppRail({ user, enabledApps }: { user: ShellUser; enabledApps: s
     setDesktopUnreadBadge(imUnread);
   }, [imUnread, pathname]);
 
-  const inModule = NAV_MODULES.some((m) => pathname === m.href || pathname.startsWith(m.href + "/"));
-  const workActive = pathname === "/work" || pathname.startsWith("/work/") || (inModule && !pathname.startsWith("/oa/calendar"));
+  const inCalendar = pathname.startsWith("/oa/calendar");
+  const inMod = (href: string) => !inCalendar && (pathname === href || pathname.startsWith(href + "/"));
+  const pinned = railPins.flatMap((k) => NAV_MODULES.filter((m) => m.key === k && canUse(m.key, m.perm)));
+  const pinnedActive = pinned.some((m) => inMod(m.href));
+  const workActive = pathname === "/work" || pathname.startsWith("/work/") || (!pinnedActive && NAV_MODULES.some((m) => inMod(m.href)));
 
   const items = [
     { label: "消息", href: "/messages", icon: <MessageCircle />, show: true, active: pathname.startsWith("/messages"), badge: badgeNode(imUnread) },
@@ -160,12 +197,27 @@ export function AppRail({ user, enabledApps }: { user: ShellUser; enabledApps: s
         </Menu>
       </div>
 
-      <nav className="mt-1 flex w-full flex-1 flex-col items-center gap-0.5 px-1.5">
+      <nav className="mt-1 flex min-h-0 w-full flex-1 flex-col items-center gap-0.5 overflow-y-auto px-1.5 [scrollbar-width:none]">
         {items
           .filter((i) => i.show)
           .map((i) => (
             <RailItem key={i.label} href={i.href} icon={i.icon} label={i.label} active={i.active} badge={i.badge} />
           ))}
+        {pinned.length > 0 && <div className="my-1 h-px w-8 shrink-0 bg-line" />}
+        {pinned.map((m) => {
+          const Icon = m.icon;
+          return (
+            <PinnedRailItem
+              key={m.key}
+              appKey={m.key}
+              href={m.href}
+              icon={<Icon />}
+              label={m.shortLabel}
+              fullLabel={m.label}
+              active={inMod(m.href)}
+            />
+          );
+        })}
       </nav>
 
       <div className="flex w-full flex-col items-center gap-0.5 px-1.5 pb-2">

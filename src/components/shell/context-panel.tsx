@@ -32,15 +32,19 @@ export function ContextPanel({
     localStorage.setItem(COLLAPSED_KEY, v ? "1" : "0");
   };
 
+  // 收起后保留一条窄栏占位，避免展开按钮浮在页面内容（面包屑、标题）上
   if (collapsed) {
     return (
-      <button
-        onClick={() => toggle(false)}
-        className="fixed left-[72px] top-2 z-40 rounded-md p-1.5 text-ink-2 hover:bg-hover"
-        aria-label="展开面板"
-      >
-        <ChevronsRight className="size-4" />
-      </button>
+      <aside className="sticky top-0 flex h-screen w-10 shrink-0 flex-col items-center border-r border-line bg-sidebar pt-2">
+        <button
+          onClick={() => toggle(false)}
+          className="rounded-md p-1.5 text-ink-2 hover:bg-active/70 hover:text-ink"
+          aria-label="展开面板"
+          title="展开面板"
+        >
+          <ChevronsRight className="size-4" />
+        </button>
+      </aside>
     );
   }
 

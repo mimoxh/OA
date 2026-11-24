@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { endOfDay, format, isBefore, startOfDay, startOfMonth } from "date-fns";
 import { zhCN } from "date-fns/locale";
-import { ArrowRight, BookOpen, FileText } from "lucide-react";
+import { ArrowRight, BookOpen, FileText, Pin } from "lucide-react";
 import type { ReactNode } from "react";
 import { db } from "@/lib/db";
 import { can, getEnabledApps, requireUser } from "@/lib/auth/dal";
@@ -15,6 +15,7 @@ import { Page, TopBar } from "@/components/ui/page";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge, StatusBadge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { RailPinButton } from "./rail-pin-button";
 
 function greeting(h: number) {
   if (h < 6) return { text: "夜深了", icon: "🌙" };
@@ -52,17 +53,39 @@ function SectionTitle({ children }: { children: ReactNode }) {
   return <h2 className="mb-3 mt-10 text-xs font-medium text-ink-3">{children}</h2>;
 }
 
-function AppTile({ href, color, icon, label, description }: { href: string; color: string; icon: ReactNode; label: string; description: string }) {
+function AppTile({
+  href,
+  color,
+  icon,
+  label,
+  description,
+  pin,
+}: {
+  href: string;
+  color: string;
+  icon: ReactNode;
+  label: string;
+  description: string;
+  pin?: { appKey: string; pinned: boolean };
+}) {
   return (
-    <Link href={href} className="flex items-center gap-3 rounded-xl border border-line bg-white p-3 transition-colors hover:bg-sidebar">
-      <span className="flex size-10 shrink-0 items-center justify-center rounded-lg" style={{ backgroundColor: `${color}1f`, color }}>
-        {icon}
-      </span>
-      <span className="min-w-0">
-        <span className="block truncate text-sm font-medium text-ink">{label}</span>
-        <span className="block truncate text-xs text-ink-3">{description}</span>
-      </span>
-    </Link>
+    <div className="group/tile relative">
+      <Link href={href} className="flex items-center gap-3 rounded-xl border border-line bg-white p-3 transition-colors hover:bg-sidebar">
+        <span className="relative flex size-10 shrink-0 items-center justify-center rounded-lg" style={{ backgroundColor: `${color}1f`, color }}>
+          {icon}
+          {pin?.pinned && (
+            <span title="已添加到侧边栏" className="absolute -right-1 -top-1 flex size-4 items-center justify-center rounded-full bg-white text-accent shadow-sm ring-1 ring-line">
+              <Pin className="size-2.5 fill-current" />
+            </span>
+          )}
+        </span>
+        <span className="min-w-0">
+          <span className="block truncate text-sm font-medium text-ink">{label}</span>
+          <span className="block truncate text-xs text-ink-3">{description}</span>
+        </span>
+      </Link>
+      {pin && <RailPinButton appKey={pin.appKey} label={label} pinned={pin.pinned} />}
+    </div>
   );
 }
 
@@ -209,6 +232,7 @@ export default async function WorkPage() {
                 icon={<Icon className="size-5" />}
                 label={m.label}
                 description={MODULES.find((x) => x.key === m.key)?.description ?? ""}
+                pin={{ appKey: m.key, pinned: user.railPins.includes(m.key) }}
               />
             );
           })}

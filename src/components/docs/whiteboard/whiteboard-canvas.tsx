@@ -1,23 +1,30 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import {
-  ArrowUpRight, Circle, Diamond, Eraser, ExternalLink, FileText, Frame, Hand, ImagePlus, Maximize2,
-  Minus, MousePointer2, Pencil, Plus, Redo2, Square, StickyNote, Trash2, Type, Undo2, ImageDown,
+  useEffect, useLayoutEffect, useMemo, useRef, useState,
+  type KeyboardEvent, type MouseEvent, type PointerEvent,
+} from "react";
+import {
+  AlignCenterHorizontal, AlignEndHorizontal, AlignStartHorizontal, ArrowUpRight, Circle, Diamond, Eraser,
+  ExternalLink, FileText, Frame, Hand, ImageDown, ImagePlus, Maximize2, Minus, MousePointer2, Pencil, Plus,
+  Redo2, Square, StickyNote, TextAlignCenter, TextAlignEnd, TextAlignStart, Trash2, Type, Undo2,
   type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button, IconButton } from "@/components/ui/button";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { exportWhiteboardPng, paintWhiteboard, type WhiteboardImages } from "@/lib/docs/whiteboard/canvas";
 import {
-  WHITEBOARD_COLORS, WHITEBOARD_MAX_ELEMENTS, WHITEBOARD_MAX_POINTS, whiteboardAttachmentIds,
-  type WhiteboardColor, type WhiteboardElement, type WhiteboardPoint, type WhiteboardReference,
+  exportWhiteboardPng, getWhiteboardTextEditorLayout, paintWhiteboard, type WhiteboardImages,
+} from "@/lib/docs/whiteboard/canvas";
+import {
+  DEFAULT_WHITEBOARD_TEXT_ALIGN, DEFAULT_WHITEBOARD_VERTICAL_ALIGN, resolveWhiteboardTextAlign,
+  resolveWhiteboardVerticalAlign, WHITEBOARD_COLORS, WHITEBOARD_MAX_ELEMENTS, WHITEBOARD_MAX_POINTS,
+  whiteboardAttachmentIds, type WhiteboardColor, type WhiteboardElement, type WhiteboardPoint,
+  type WhiteboardReference, type WhiteboardTextAlign, type WhiteboardTextElement, type WhiteboardVerticalAlign,
 } from "@/lib/docs/whiteboard/content";
 import {
-  clampPoint, fitView, hitElement, makeFigure, makeStroke, offsetElement, palette, removeElement, resizeElement,
-  type WhiteboardTool, type WhiteboardView,
+  clampPoint, fitView, hitElement, makeArrow, makeFigure, makeStroke, offsetElement, palette, removeElement,
+  resizeElement, type WhiteboardTool, type WhiteboardView,
 } from "@/lib/docs/whiteboard/geometry";
 import { PagePickerDialog } from "../page-picker";
 import { uploadAttachment } from "../editor/upload";
@@ -34,6 +41,18 @@ const tools: { tool: WhiteboardTool; label: string; icon: LucideIcon; key?: stri
   { tool: "pen", label: "画笔", icon: Pencil, key: "p" },
   { tool: "arrow", label: "连线", icon: ArrowUpRight, key: "c" },
   { tool: "erase", label: "橡皮擦", icon: Eraser, key: "e" },
+];
+
+const horizontalAligns: { value: WhiteboardTextAlign; label: string; icon: LucideIcon }[] = [
+  { value: "left", label: "文字左对齐", icon: TextAlignStart },
+  { value: "center", label: "文字水平居中", icon: TextAlignCenter },
+  { value: "right", label: "文字右对齐", icon: TextAlignEnd },
+];
+
+const verticalAligns: { value: WhiteboardVerticalAlign; label: string; icon: LucideIcon }[] = [
+  { value: "top", label: "文字顶部对齐", icon: AlignStartHorizontal },
+  { value: "middle", label: "文字垂直居中", icon: AlignCenterHorizontal },
+  { value: "bottom", label: "文字底部对齐", icon: AlignEndHorizontal },
 ];
 
 type Shape = Exclude<WhiteboardElement, { type: "arrow" }>;
@@ -78,6 +97,8 @@ export function WhiteboardCanvas({
 }) {
   const [tool, setTool] = useState<WhiteboardTool>("select");
   const [color, setColor] = useState<WhiteboardColor>("blue");
+  const [textAlign, setTextAlign] = useState<WhiteboardTextAlign>(DEFAULT_WHITEBOARD_TEXT_ALIGN);
+  const [verticalAlign, setVerticalAlign] = useState<WhiteboardVerticalAlign>(DEFAULT_WHITEBOARD_VERTICAL_ALIGN);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [view, setView] = useState<WhiteboardView | null>(null);
   const [selection, setSelection] = useState<string | null>(null);
@@ -90,18 +111,32 @@ export function WhiteboardCanvas({
   const [uploading, setUploading] = useState(false);
   const canvas = useRef<HTMLCanvasElement>(null);
   const container = useRef<HTMLDivElement>(null);
+  const editorInput = useRef<HTMLTextAreaElement>(null);
   const imageInput = useRef<HTMLInputElement>(null);
   const images = useRef<WhiteboardImages>(new Map());
   const gesture = useRef<Gesture | null>(null);
   const latestElements = useRef(elements);
   const changeElements = useRef(onChange);
+  const editorRef = useRef<{ id: string; text: string } | null>(null);
+  const composingRef = useRef(false);
   const readOnly = !onChange;
   const activeTool = readOnly && tool !== "pan" ? "select" : tool;
   const viewport = useMemo(
     () => view ?? fitView(elements, size.width, size.height),
     [view, elements, size],
   );
-  const active = elements.find((item) => item.id === selection);
+  const byId = useMemo(() => new Map(elements.map((item) => [item.id, item])), [elements]);
+  const active = selection ? byId.get(selection) : undefined;
+  const editingItem = useMemo<WhiteboardTextElement | null>(() => {
+    if (!editor || readOnly) return null;
+    const item = byId.get(editor.id);
+    return item && "text" in item ? item : null;
+  }, [editor, readOnly, byId]);
+  const editorLayout = useMemo(
+    () => (editingItem ? getWhiteboardTextEditorLayout(editingItem, byId, viewport) : null),
+    [editingItem, byId, viewport],
+  );
+  const editingId = editorLayout ? editingItem?.id ?? null : null;
   const refById = useMemo(
     () => new Map([...references, ...newReferences].map((ref) => [ref.id, ref])),
     [references, newReferences],
@@ -112,6 +147,29 @@ export function WhiteboardCanvas({
     latestElements.current = elements;
     changeElements.current = onChange;
   }, [elements, onChange]);
+
+  useEffect(() => {
+    if (!editingId) return;
+    const el = editorInput.current;
+    if (!el) return;
+    el.focus({ preventScroll: true });
+    const item = latestElements.current.find((entry) => entry.id === editingId);
+    if (item?.type === "frame" && item.text === "框架") {
+      el.select();
+    } else {
+      const end = el.value.length;
+      el.setSelectionRange(end, end);
+    }
+  }, [editingId]);
+
+  useLayoutEffect(() => {
+    const el = editorInput.current;
+    if (!el || !editorLayout) return;
+    el.style.height = "0px";
+    const maxHeight = Math.max(editorLayout.height, editorLayout.lineHeight);
+    const nextHeight = Math.min(Math.max(el.scrollHeight, editorLayout.lineHeight), maxHeight);
+    el.style.height = `${nextHeight}px`;
+  }, [editor?.text, editorLayout]);
 
   useEffect(() => {
     if (!container.current) return;
@@ -161,11 +219,11 @@ export function WhiteboardCanvas({
       }
       paintWhiteboard(ctx, visibleItems, {
         ...size, view: viewport, references: refById, images: images.current, grid: true,
-        selectedId: selection, showResizeHandle: !readOnly,
+        selectedId: selection, editingId, showResizeHandle: !readOnly,
       });
     });
     return () => cancelAnimationFrame(frame);
-  }, [size, viewport, elements, selection, preview, refById, imageVersion, readOnly]);
+  }, [size, viewport, elements, selection, editingId, preview, refById, imageVersion, readOnly]);
 
   useEffect(() => {
     const el = canvas.current;
@@ -200,9 +258,53 @@ export function WhiteboardCanvas({
     change(next);
   };
 
+  const startEditing = (item: WhiteboardTextElement) => {
+    if (readOnly) return;
+    const next = { id: item.id, text: item.text };
+    composingRef.current = false;
+    editorRef.current = next;
+    setSelection(item.id);
+    setEditor(next);
+  };
+
+  const updateEditorText = (text: string) => {
+    const current = editorRef.current;
+    if (!current) return;
+    const next = { ...current, text };
+    editorRef.current = next;
+    setEditor(next);
+  };
+
+  const commitEditor = (focusCanvas = false) => {
+    const current = editorRef.current;
+    if (!current) return;
+    composingRef.current = false;
+    editorRef.current = null;
+    setEditor(null);
+    const currentElements = latestElements.current;
+    const item = currentElements.find((entry) => entry.id === current.id);
+    if (item && "text" in item && item.text !== current.text) {
+      commit(replaceElement(currentElements, { ...item, text: current.text }));
+    }
+    if (focusCanvas) canvas.current?.focus({ preventScroll: true });
+  };
+
+  const cancelEditor = (focusCanvas = false) => {
+    if (!editorRef.current) return;
+    composingRef.current = false;
+    editorRef.current = null;
+    setEditor(null);
+    if (focusCanvas) canvas.current?.focus({ preventScroll: true });
+  };
+
+  const keepEditorFocus = (event: MouseEvent<HTMLButtonElement>) => {
+    if (editorRef.current) event.preventDefault();
+  };
+
   const undo = () => {
     const previous = history.undo.at(-1);
     if (!previous || !onChange) return;
+    cancelEditor();
     setHistory({ undo: history.undo.slice(0, -1), redo: [...history.redo, elements] });
     onChange(previous);
   };
@@ -210,6 +312,7 @@ export function WhiteboardCanvas({
   const redo = () => {
     const next = history.redo.at(-1);
     if (!next || !onChange) return;
+    cancelEditor();
     setHistory({ undo: [...history.undo, elements], redo: history.redo.slice(0, -1) });
     onChange(next);
   };
@@ -222,7 +325,10 @@ export function WhiteboardCanvas({
   function pointerDown(event: PointerEvent<HTMLCanvasElement>) {
     if (!event.isPrimary || (event.button !== 0 && event.button !== 1)) return;
     event.preventDefault();
+    if (editorRef.current) commitEditor();
     event.currentTarget.focus();
+    const currentElements = latestElements.current;
+    const currentActive = currentElements.find((item) => item.id === selection);
     const screen = screenPoint(event);
     const point = pointOnBoard(screen, viewport);
     setView(viewport);
@@ -231,13 +337,13 @@ export function WhiteboardCanvas({
       gesture.current = { kind: "pan", start: screen, view: viewport };
     } else if (activeTool === "select" || activeTool === "erase") {
       const tolerance = 7 / viewport.scale;
-      if (activeTool === "select" && !readOnly && active && active.type !== "arrow" &&
-        Math.hypot(point.x - active.x - active.width, point.y - active.y - active.height) <= tolerance) {
-        gesture.current = { kind: "resize", item: active };
+      if (activeTool === "select" && !readOnly && currentActive && currentActive.type !== "arrow" &&
+        Math.hypot(point.x - currentActive.x - currentActive.width, point.y - currentActive.y - currentActive.height) <= tolerance) {
+        gesture.current = { kind: "resize", item: currentActive };
       } else {
-        const hit = hitElement(elements, point, tolerance);
+        const hit = hitElement(currentElements, point, tolerance);
         if (activeTool === "erase") {
-          if (hit) commit(removeElement(elements, hit.id));
+          if (hit) commit(removeElement(currentElements, hit.id));
           setSelection(null);
           return;
         }
@@ -246,7 +352,7 @@ export function WhiteboardCanvas({
       }
     } else {
       const fromId = activeTool === "arrow"
-        ? hitElement(elements, point, 5 / viewport.scale, true)?.id
+        ? hitElement(currentElements, point, 5 / viewport.scale, true)?.id
         : undefined;
       gesture.current = { kind: "draw", start: point, tool: activeTool, id: crypto.randomUUID(), points: [point], fromId };
       setSelection(null);
@@ -255,17 +361,20 @@ export function WhiteboardCanvas({
   }
 
   function gestureElement(current: Exclude<Gesture, { kind: "pan" }>, point: WhiteboardPoint) {
+    const currentElements = latestElements.current;
     if (current.kind === "move") {
-      return offsetElement(current.item, point.x - current.start.x, point.y - current.start.y, elements);
+      return offsetElement(current.item, point.x - current.start.x, point.y - current.start.y, currentElements);
     }
     if (current.kind === "resize") return resizeElement(current.item, point);
     if (current.tool === "arrow") {
-      const endId = hitElement(elements, point, 5 / viewport.scale, true)?.id;
-      return {
-        id: current.id, type: "arrow", color, text: "",
-        from: { ...current.start, ...(current.fromId ? { elementId: current.fromId } : {}) },
-        to: { ...point, ...(endId && endId !== current.fromId ? { elementId: endId } : {}) },
-      } satisfies WhiteboardElement;
+      const endId = hitElement(currentElements, point, 5 / viewport.scale, true)?.id;
+      return makeArrow(
+        current.id,
+        { ...current.start, ...(current.fromId ? { elementId: current.fromId } : {}) },
+        { ...point, ...(endId && endId !== current.fromId ? { elementId: endId } : {}) },
+        color,
+        textAlign,
+      );
     }
     if (current.tool === "pen") {
       const last = current.points.at(-1)!;
@@ -274,7 +383,19 @@ export function WhiteboardCanvas({
       }
       return makeStroke(current.id, current.points, color);
     }
-    return makeFigure(current.id, current.tool, current.start, point, current.tool === "note" && color === "blue" ? "yellow" : color);
+    return makeFigure(
+      current.id,
+      current.tool,
+      current.start,
+      point,
+      current.tool === "note" && color === "blue" ? "yellow" : color,
+      {
+        textAlign,
+        verticalAlign: current.tool === "frame" && verticalAlign === DEFAULT_WHITEBOARD_VERTICAL_ALIGN
+          ? "top"
+          : verticalAlign,
+      },
+    );
   }
 
   function pointerMove(event: PointerEvent<HTMLCanvasElement>) {
@@ -305,11 +426,12 @@ export function WhiteboardCanvas({
     if (current.kind === "draw" && current.tool === "arrow" &&
       Math.hypot(point.x - current.start.x, point.y - current.start.y) < 8 / viewport.scale) return;
     const next = gestureElement(current, point);
-    commit(current.kind === "draw" ? [...elements, next] : replaceElement(elements, next));
+    const currentElements = latestElements.current;
+    commit(current.kind === "draw" ? [...currentElements, next] : replaceElement(currentElements, next));
     setSelection(next.id);
     if (current.kind === "draw") {
       setTool("select");
-      if (next.type === "text" || next.type === "note") setEditor({ id: next.id, text: next.text });
+      if (next.type === "text" || next.type === "note") startEditing(next);
     }
   }
 
@@ -318,7 +440,7 @@ export function WhiteboardCanvas({
     if (item.type === "page" && refById.has(item.documentId)) {
       window.open(`/docs/${item.documentId}`, "_blank", "noopener,noreferrer");
     } else if ("text" in item && !readOnly) {
-      setEditor({ id: item.id, text: item.text });
+      startEditing(item);
     }
   }
 
@@ -440,7 +562,7 @@ export function WhiteboardCanvas({
         )}
       </div>
 
-      <div ref={container} className={cn("relative bg-slate-50", compact ? "h-[360px]" : "h-[max(320px,calc(100dvh-15rem))]")}>
+      <div ref={container} className={cn("relative overflow-hidden bg-slate-50", compact ? "h-[360px]" : "h-[max(320px,calc(100dvh-15rem))]")}>
         <canvas
           ref={canvas}
           aria-label="白板画布"
@@ -457,7 +579,7 @@ export function WhiteboardCanvas({
             if (activeTool !== "select") return;
             const rect = event.currentTarget.getBoundingClientRect();
             const point = pointOnBoard({ x: event.clientX - rect.left, y: event.clientY - rect.top }, viewport);
-            openItem(hitElement(elements, point, 7 / viewport.scale));
+            openItem(hitElement(latestElements.current, point, 7 / viewport.scale));
           }}
           onPaste={(event) => {
             if (readOnly || uploading) return;
@@ -467,6 +589,63 @@ export function WhiteboardCanvas({
             void uploadImage(file);
           }}
         />
+        {editor && editingItem && editorLayout && (
+          <div
+            data-whiteboard-inline-editor={editingItem.id}
+            className="pointer-events-none absolute flex flex-col"
+            style={{
+              left: `${editorLayout.left}px`,
+              top: `${editorLayout.top}px`,
+              width: `${Math.max(editorLayout.width, 24)}px`,
+              height: `${Math.max(editorLayout.height, editorLayout.lineHeight)}px`,
+              justifyContent:
+                editorLayout.verticalAlign === "top"
+                  ? "flex-start"
+                  : editorLayout.verticalAlign === "bottom"
+                    ? "flex-end"
+                    : "center",
+            }}
+          >
+            <textarea
+              ref={editorInput}
+              aria-label="画布文字"
+              rows={1}
+              spellCheck={false}
+              maxLength={4_000}
+              placeholder={editingItem.type === "text" || editingItem.type === "arrow" ? "输入文字" : undefined}
+              value={editor.text}
+              className={cn(
+                "pointer-events-auto m-0 block w-full resize-none overflow-y-auto border-0 p-0 outline-none placeholder:text-slate-400/70",
+                editorLayout.isArrow
+                  ? "rounded bg-white/90 px-1.5 shadow-xs ring-1 ring-accent/40"
+                  : "bg-transparent",
+              )}
+              style={{
+                fontFamily: "system-ui",
+                fontSize: `${editorLayout.fontSize}px`,
+                lineHeight: `${editorLayout.lineHeight}px`,
+                textAlign: editorLayout.textAlign,
+                color: editorLayout.color,
+                overflowWrap: "anywhere",
+              }}
+              onChange={(event) => updateEditorText(event.target.value)}
+              onCompositionStart={() => { composingRef.current = true; }}
+              onCompositionEnd={() => { composingRef.current = false; }}
+              onBlur={() => commitEditor()}
+              onKeyDown={(event) => {
+                event.stopPropagation();
+                if (composingRef.current || event.nativeEvent.isComposing || event.keyCode === 229) return;
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  cancelEditor(true);
+                } else if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+                  event.preventDefault();
+                  commitEditor(true);
+                }
+              }}
+            />
+          </div>
+        )}
         {!elements.length && !preview && (
           <span className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-md bg-white px-3 py-1.5 text-sm text-ink-3 shadow-xs">
             {readOnly ? "白板暂无内容" : "选择画笔、便签或图形开始绘制"}
@@ -475,7 +654,7 @@ export function WhiteboardCanvas({
       </div>
 
       <div className="flex min-h-10 flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-line px-2 py-1">
-        <div className="flex items-center gap-1">
+        <div className="flex flex-wrap items-center gap-1">
           {!readOnly && (!active || "color" in active) && WHITEBOARD_COLORS.map((value) => {
             const current = active && "color" in active ? active.color : color;
             return (
@@ -486,36 +665,118 @@ export function WhiteboardCanvas({
                 aria-pressed={current === value}
                 className={cn("size-5 rounded-full border", current === value ? "ring-2 ring-slate-500 ring-offset-1" : "opacity-80 hover:opacity-100")}
                 style={{ backgroundColor: palette[value].fill, borderColor: palette[value].stroke }}
+                onMouseDown={keepEditorFocus}
                 onClick={() => {
                   setColor(value);
-                  if (active && "color" in active && active.color !== value) commit(replaceElement(elements, { ...active, color: value }));
+                  const currentElements = latestElements.current;
+                  const target = active ? currentElements.find((entry) => entry.id === active.id) : null;
+                  if (target && "color" in target && target.color !== value) {
+                    commit(replaceElement(currentElements, { ...target, color: value }));
+                  }
                 }}
               />
             );
           })}
+          {!readOnly && (!active || "text" in active) && (
+            <>
+              <span className="mx-1 h-4 shrink-0 border-l border-line" />
+              {horizontalAligns.map(({ value, label, icon: Icon }) => {
+                const current = active && "text" in active ? resolveWhiteboardTextAlign(active) : textAlign;
+                return (
+                  <IconButton
+                    key={value}
+                    title={label}
+                    aria-label={label}
+                    aria-pressed={current === value}
+                    className={cn(current === value && "bg-accent-soft text-accent")}
+                    onMouseDown={keepEditorFocus}
+                    onClick={() => {
+                      setTextAlign(value);
+                      const currentElements = latestElements.current;
+                      const target = active ? currentElements.find((entry) => entry.id === active.id) : null;
+                      if (target && "text" in target && resolveWhiteboardTextAlign(target) !== value) {
+                        commit(replaceElement(currentElements, { ...target, textAlign: value }));
+                      }
+                    }}
+                  >
+                    <Icon className="size-3.5" />
+                  </IconButton>
+                );
+              })}
+            </>
+          )}
+          {!readOnly && (!active || ("text" in active && active.type !== "arrow")) && (
+            <>
+              <span className="mx-1 h-4 shrink-0 border-l border-line" />
+              {verticalAligns.map(({ value, label, icon: Icon }) => {
+                const current = active ? resolveWhiteboardVerticalAlign(active) : verticalAlign;
+                return (
+                  <IconButton
+                    key={value}
+                    title={label}
+                    aria-label={label}
+                    aria-pressed={current === value}
+                    className={cn(current === value && "bg-accent-soft text-accent")}
+                    onMouseDown={keepEditorFocus}
+                    onClick={() => {
+                      setVerticalAlign(value);
+                      const currentElements = latestElements.current;
+                      const target = active ? currentElements.find((entry) => entry.id === active.id) : null;
+                      if (target && "text" in target && target.type !== "arrow" && resolveWhiteboardVerticalAlign(target) !== value) {
+                        commit(replaceElement(currentElements, { ...target, verticalAlign: value }));
+                      }
+                    }}
+                  >
+                    <Icon className="size-3.5" />
+                  </IconButton>
+                );
+              })}
+            </>
+          )}
           {active && "text" in active && !readOnly && (
-            <IconButton title="编辑文字" aria-label="编辑文字" onClick={() => openItem(active)}><Type className="size-4" /></IconButton>
+            <IconButton
+              title={editingId === active.id ? "完成文字编辑 (Ctrl+Enter)" : "编辑文字 (Enter)"}
+              aria-label="编辑文字"
+              aria-pressed={editingId === active.id}
+              className={cn(editingId === active.id && "bg-accent-soft text-accent")}
+              onMouseDown={keepEditorFocus}
+              onClick={() => {
+                if (editingId === active.id) commitEditor(true);
+                else openItem(active);
+              }}
+            >
+              <Type className="size-4" />
+            </IconButton>
           )}
           {active?.type === "page" && refById.has(active.documentId) && (
             <Button variant="ghost" size="sm" onClick={() => openItem(active)}><ExternalLink className="size-3.5" />打开文档</Button>
           )}
           {active && !readOnly && (
-            <IconButton title="删除元素" aria-label="删除元素" onClick={() => { commit(removeElement(elements, active.id)); setSelection(null); }}>
+            <IconButton
+              title="删除元素"
+              aria-label="删除元素"
+              onClick={() => {
+                cancelEditor();
+                commit(removeElement(latestElements.current, active.id));
+                setSelection(null);
+              }}
+            >
               <Trash2 className="size-4" />
             </IconButton>
           )}
         </div>
         <div className="ml-auto flex items-center gap-1">
-          <IconButton title="缩小" aria-label="缩小" onClick={() => zoom(1 / 1.25)}><Minus className="size-4" /></IconButton>
+          <IconButton title="缩小" aria-label="缩小" onMouseDown={keepEditorFocus} onClick={() => zoom(1 / 1.25)}><Minus className="size-4" /></IconButton>
           <span className="w-12 text-center text-xs tabular-nums text-ink-2">{Math.round(viewport.scale * 100)}%</span>
-          <IconButton title="放大" aria-label="放大" onClick={() => zoom(1.25)}><Plus className="size-4" /></IconButton>
-          <IconButton title="适合画布" aria-label="适合画布" onClick={() => setView(fitView(elements, size.width, size.height))}><Maximize2 className="size-4" /></IconButton>
+          <IconButton title="放大" aria-label="放大" onMouseDown={keepEditorFocus} onClick={() => zoom(1.25)}><Plus className="size-4" /></IconButton>
+          <IconButton title="适合画布" aria-label="适合画布" onMouseDown={keepEditorFocus} onClick={() => setView(fitView(elements, size.width, size.height))}><Maximize2 className="size-4" /></IconButton>
           <IconButton
             title="导出 PNG"
             aria-label="导出 PNG"
             onClick={async () => {
+              commitEditor();
               await Promise.allSettled([...images.current.values()].map((image) => image.decode()));
-              exportWhiteboardPng(elements, refById, images.current, title);
+              exportWhiteboardPng(latestElements.current, refById, images.current, title);
             }}
           >
             <ImageDown className="size-4" />
@@ -530,33 +791,12 @@ export function WhiteboardCanvas({
         onPick={(page) => {
           const item = { id: crypto.randomUUID(), type: "page", ...insertNearCenter(216, 66), width: 216, height: 66, documentId: page.id } as const;
           setNewReferences((previous) => [...previous.filter((ref) => ref.id !== page.id), page]);
-          commit([...elements, item]);
+          commit([...latestElements.current, item]);
           setSelection(item.id);
           setTool("select");
           setPicker(false);
         }}
       />
-      <Dialog open={!!editor} onOpenChange={(open) => !open && setEditor(null)}>
-        <DialogContent
-          title="编辑画布文字"
-          footer={<Button variant="primary" onClick={() => {
-            const item = elements.find((entry) => entry.id === editor?.id);
-            if (editor && item && "text" in item && item.text !== editor.text) commit(replaceElement(elements, { ...item, text: editor.text }));
-            setEditor(null);
-          }}>应用</Button>}
-        >
-          <textarea
-            aria-label="画布文字"
-            className="min-h-24 w-full rounded-md border border-line px-3 py-2 text-sm outline-none focus:border-accent"
-            maxLength={4_000}
-            value={editor?.text ?? ""}
-            onChange={(event) => {
-              const text = event.target.value;
-              setEditor((current) => current && { ...current, text });
-            }}
-          />
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

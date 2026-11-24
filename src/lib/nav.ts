@@ -15,6 +15,8 @@ export type NavLink = { href: string; label: string; perm?: Permission };
 export type NavModule = {
   key: string;
   label: string;
+  /** 固定到左侧导航栏时显示的短名称 */
+  shortLabel: string;
   icon: LucideIcon;
   color: string;
   href: string;
@@ -25,6 +27,7 @@ export type NavModule = {
 export const NAV_MODULES: NavModule[] = [
   {
     key: "oa",
+    shortLabel: "OA",
     label: "OA 办公",
     icon: ClipboardCheck,
     color: "#e16b16",
@@ -40,6 +43,7 @@ export const NAV_MODULES: NavModule[] = [
   },
   {
     key: "crm",
+    shortLabel: "客户",
     label: "CRM 客户",
     icon: Users,
     color: "#d44c8a",
@@ -54,6 +58,7 @@ export const NAV_MODULES: NavModule[] = [
   },
   {
     key: "erp",
+    shortLabel: "ERP",
     label: "ERP 企业资源",
     icon: Building2,
     color: "#2383e2",
@@ -69,6 +74,7 @@ export const NAV_MODULES: NavModule[] = [
   },
   {
     key: "finance",
+    shortLabel: "财务",
     label: "财务",
     icon: Landmark,
     color: "#448361",
@@ -84,6 +90,7 @@ export const NAV_MODULES: NavModule[] = [
   },
   {
     key: "wms",
+    shortLabel: "仓储",
     label: "WMS 仓储",
     icon: Warehouse,
     color: "#9065b0",
@@ -100,6 +107,7 @@ export const NAV_MODULES: NavModule[] = [
   },
   {
     key: "tms",
+    shortLabel: "运输",
     label: "TMS 运输",
     icon: Truck,
     color: "#cb912f",
@@ -115,6 +123,7 @@ export const NAV_MODULES: NavModule[] = [
   },
   {
     key: "pms",
+    shortLabel: "项目",
     label: "PMS 项目",
     icon: FolderKanban,
     color: "#337ea9",
@@ -128,3 +137,14 @@ export const NAV_MODULES: NavModule[] = [
 ];
 
 export const PRODUCT_ICON = Package;
+
+/** 解析 User.railPins，丢弃未知或重复的应用 key */
+export function parseRailPins(json: string | null | undefined): string[] {
+  try {
+    const v: unknown = JSON.parse(json ?? "[]");
+    if (!Array.isArray(v)) return [];
+    return [...new Set(v.filter((x): x is string => typeof x === "string" && NAV_MODULES.some((m) => m.key === x)))];
+  } catch {
+    return [];
+  }
+}

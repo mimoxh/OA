@@ -18,7 +18,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   return (
     <RealtimeProvider meId={user.id}>
       <div className="flex min-h-screen">
-        <AppRail user={shellUser} enabledApps={enabledApps} />
+        <AppRail user={shellUser} enabledApps={enabledApps} railPins={user.railPins} />
         <div className="min-w-0 flex-1">{children}</div>
         <CommandPalette permissions={user.permissions} enabledApps={enabledApps} />
         <CallOverlay me={{ id: user.id, name: user.name, avatarColor: user.avatarColor }} />

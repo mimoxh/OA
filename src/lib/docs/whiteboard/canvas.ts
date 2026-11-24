@@ -1,24 +1,216 @@
-import type { WhiteboardElement, WhiteboardReference } from "./content";
+import {
+  DEFAULT_WHITEBOARD_TEXT_ALIGN,
+  DEFAULT_WHITEBOARD_VERTICAL_ALIGN,
+  resolveWhiteboardTextAlign,
+  resolveWhiteboardVerticalAlign,
+  type WhiteboardElement,
+  type WhiteboardReference,
+  type WhiteboardTextAlign,
+  type WhiteboardTextElement,
+  type WhiteboardVerticalAlign,
+} from "./content";
 import { arrowPoints, elementBounds, palette, sceneBounds, type WhiteboardView } from "./geometry";
+
+const BOX_TEXT_INSET_X = 12;
+const BOX_TEXT_INSET_Y = 11;
+const BOX_TEXT_LINE_HEIGHT = 21;
+const ARROW_LABEL_MAX_WIDTH = 200;
+const ARROW_LABEL_LINE_HEIGHT = 18;
+const ARROW_LABEL_OFFSET_X = 5;
+const ARROW_LABEL_OFFSET_Y = 6;
+const ARROW_EDITOR_LINES = 4;
 
 export type WhiteboardImages = Map<string, HTMLImageElement>;
 export type WhiteboardReferences = Map<string, WhiteboardReference>;
+export type TextLayoutLine = { text: string; x: number; y: number };
+export type TextLayoutOptions = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  lineHeight: number;
+  textAlign?: WhiteboardTextAlign;
+  verticalAlign?: WhiteboardVerticalAlign;
+};
+export type WhiteboardTextEditorLayout = {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+  fontSize: number;
+  lineHeight: number;
+  textAlign: WhiteboardTextAlign;
+  verticalAlign: WhiteboardVerticalAlign;
+  color: string;
+  isArrow: boolean;
+};
 
-function drawText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, width: number, height: number, lineHeight: number) {
-  if (!text || width <= 0 || height < lineHeight) return;
-  let line = "";
-  let offset = 0;
-  for (const char of text) {
-    if (char === "\n" || (line && ctx.measureText(line + char).width > width)) {
-      ctx.fillText(line, x, y + offset, width);
-      line = char === "\n" ? "" : char;
-      offset += lineHeight;
-      if (offset + lineHeight > height) return;
-    } else {
-      line += char;
+export function wrapWhiteboardText(
+  text: string,
+  maxWidth: number,
+  measureWidth: (segment: string) => number,
+): string[] {
+  if (!text || maxWidth <= 0) return [];
+  const lines: string[] = [];
+  for (const paragraph of text.split("\n")) {
+    if (!paragraph) {
+      lines.push("");
+      continue;
     }
+    let line = "";
+    for (const char of paragraph) {
+      if (line && measureWidth(line + char) > maxWidth) {
+        lines.push(line);
+        line = char;
+      } else {
+        line += char;
+      }
+    }
+    lines.push(line);
   }
-  if (line) ctx.fillText(line, x, y + offset, width);
+  while (lines.length > 1 && lines.at(-1) === "") lines.pop();
+  return lines;
+}
+
+export function layoutWhiteboardText(
+  text: string,
+  options: TextLayoutOptions,
+  measureWidth: (segment: string) => number,
+): { textAlign: WhiteboardTextAlign; lines: TextLayoutLine[] } {
+  const {
+    x,
+    y,
+    width,
+    height,
+    lineHeight,
+    textAlign = DEFAULT_WHITEBOARD_TEXT_ALIGN,
+    verticalAlign = DEFAULT_WHITEBOARD_VERTICAL_ALIGN,
+  } = options;
+  if (!text || width <= 0 || height < lineHeight || lineHeight <= 0) {
+    return { textAlign, lines: [] };
+  }
+  const maxLines = Math.floor(height / lineHeight);
+  const wrapped = wrapWhiteboardText(text, width, measureWidth).slice(0, maxLines);
+  if (!wrapped.length) return { textAlign, lines: [] };
+  const anchorX = textAlign === "left" ? x : textAlign === "right" ? x + width : x + width / 2;
+  const totalHeight = wrapped.length * lineHeight;
+  const startY = verticalAlign === "top"
+    ? y
+    : verticalAlign === "bottom"
+      ? y + height - totalHeight
+      : y + (height - totalHeight) / 2;
+  return {
+    textAlign,
+    lines: wrapped.map((line, index) => ({
+      text: line,
+      x: anchorX,
+      y: startY + (index + 0.5) * lineHeight,
+    })),
+  };
+}
+
+export function layoutArrowLabel(
+  text: string,
+  midpoint: { x: number; y: number },
+  textAlign: WhiteboardTextAlign,
+  measureWidth: (segment: string) => number,
+  maxWidth = ARROW_LABEL_MAX_WIDTH,
+  lineHeight = ARROW_LABEL_LINE_HEIGHT,
+): { textAlign: WhiteboardTextAlign; lines: TextLayoutLine[] } {
+  const wrapped = wrapWhiteboardText(text, maxWidth, measureWidth);
+  if (!wrapped.length) return { textAlign, lines: [] };
+  const anchorX = textAlign === "left"
+    ? midpoint.x + ARROW_LABEL_OFFSET_X
+    : textAlign === "right"
+      ? midpoint.x - ARROW_LABEL_OFFSET_X
+      : midpoint.x;
+  const startY = midpoint.y - ARROW_LABEL_OFFSET_Y - wrapped.length * lineHeight;
+  return {
+    textAlign,
+    lines: wrapped.map((line, index) => ({
+      text: line,
+      x: anchorX,
+      y: startY + (index + 0.5) * lineHeight,
+    })),
+  };
+}
+
+export function getWhiteboardTextEditorLayout(
+  item: WhiteboardTextElement,
+  byId: Map<string, WhiteboardElement>,
+  view: WhiteboardView,
+): WhiteboardTextEditorLayout {
+  const color = palette[item.color].stroke;
+  const textAlign = resolveWhiteboardTextAlign(item);
+
+  if (item.type === "arrow") {
+    const [a, b] = arrowPoints(item, byId);
+    const midpoint = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    const boardWidth = ARROW_LABEL_MAX_WIDTH;
+    const boardHeight = ARROW_LABEL_LINE_HEIGHT * ARROW_EDITOR_LINES;
+    const boardLeft = textAlign === "left"
+      ? midpoint.x + ARROW_LABEL_OFFSET_X
+      : textAlign === "right"
+        ? midpoint.x - ARROW_LABEL_OFFSET_X - boardWidth
+        : midpoint.x - boardWidth / 2;
+    const boardTop = midpoint.y - ARROW_LABEL_OFFSET_Y - boardHeight;
+    return {
+      left: boardLeft * view.scale + view.x,
+      top: boardTop * view.scale + view.y,
+      width: boardWidth * view.scale,
+      height: boardHeight * view.scale,
+      fontSize: 14 * view.scale,
+      lineHeight: ARROW_LABEL_LINE_HEIGHT * view.scale,
+      textAlign,
+      verticalAlign: "bottom",
+      color,
+      isArrow: true,
+    };
+  }
+
+  const insetX = item.type === "diamond" ? item.width / 4 : BOX_TEXT_INSET_X;
+  const insetY = item.type === "diamond" ? item.height / 4 : BOX_TEXT_INSET_Y;
+  const boardLeft = item.x + insetX;
+  const boardTop = item.y + insetY;
+  const boardWidth = Math.max(1, item.width - 2 * insetX);
+  const boardHeight = Math.max(1, item.height - 2 * insetY);
+  const baseFontSize = item.type === "text" ? 17 : 15;
+  return {
+    left: boardLeft * view.scale + view.x,
+    top: boardTop * view.scale + view.y,
+    width: boardWidth * view.scale,
+    height: boardHeight * view.scale,
+    fontSize: baseFontSize * view.scale,
+    lineHeight: BOX_TEXT_LINE_HEIGHT * view.scale,
+    textAlign,
+    verticalAlign: resolveWhiteboardVerticalAlign(item),
+    color,
+    isArrow: false,
+  };
+}
+
+function drawText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  lineHeight: number,
+  textAlign: WhiteboardTextAlign = DEFAULT_WHITEBOARD_TEXT_ALIGN,
+  verticalAlign: WhiteboardVerticalAlign = DEFAULT_WHITEBOARD_VERTICAL_ALIGN,
+) {
+  const layout = layoutWhiteboardText(
+    text,
+    { x, y, width, height, lineHeight, textAlign, verticalAlign },
+    (segment) => ctx.measureText(segment).width,
+  );
+  if (!layout.lines.length) return;
+  ctx.textAlign = layout.textAlign;
+  ctx.textBaseline = "middle";
+  for (const line of layout.lines) {
+    ctx.fillText(line.text, line.x, line.y, width);
+  }
 }
 
 function drawElement(
@@ -27,6 +219,7 @@ function drawElement(
   byId: Map<string, WhiteboardElement>,
   references: WhiteboardReferences,
   images: WhiteboardImages,
+  hideText = false,
 ) {
   const colors = "color" in item ? palette[item.color] : palette.gray;
   ctx.lineWidth = 2;
@@ -34,7 +227,8 @@ function drawElement(
   ctx.lineCap = "round";
   ctx.strokeStyle = colors.stroke;
   ctx.fillStyle = colors.fill;
-  ctx.textBaseline = "top";
+  ctx.textAlign = DEFAULT_WHITEBOARD_TEXT_ALIGN;
+  ctx.textBaseline = "middle";
 
   if (item.type === "arrow") {
     const [a, b] = arrowPoints(item, byId);
@@ -46,9 +240,21 @@ function drawElement(
     ctx.lineTo(b.x, b.y);
     ctx.lineTo(b.x - 12 * Math.cos(angle + 0.48), b.y - 12 * Math.sin(angle + 0.48));
     ctx.stroke();
-    ctx.font = "14px system-ui";
-    ctx.fillStyle = colors.stroke;
-    ctx.fillText(item.text, (a.x + b.x) / 2 + 5, (a.y + b.y) / 2 - 22, 200);
+    if (item.text && !hideText) {
+      ctx.font = "14px system-ui";
+      ctx.fillStyle = colors.stroke;
+      const layout = layoutArrowLabel(
+        item.text,
+        { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
+        resolveWhiteboardTextAlign(item),
+        (segment) => ctx.measureText(segment).width,
+      );
+      ctx.textAlign = layout.textAlign;
+      ctx.textBaseline = "middle";
+      for (const line of layout.lines) {
+        ctx.fillText(line.text, line.x, line.y, ARROW_LABEL_MAX_WIDTH);
+      }
+    }
     return;
   }
 
@@ -75,7 +281,19 @@ function drawElement(
       ctx.fillRect(x, y, width, height);
       ctx.fillStyle = palette.gray.stroke;
       ctx.font = "14px system-ui";
-      ctx.fillText(image?.complete ? "图片不可用" : "正在加载图片", x + 12, y + 12, Math.max(1, width - 24));
+      const padX = width > 48 ? 12 : 4;
+      const padY = height > 44 ? 12 : Math.max(0, (height - 20) / 2);
+      drawText(
+        ctx,
+        image?.complete ? "图片不可用" : "正在加载图片",
+        x + padX,
+        y + padY,
+        Math.max(1, width - 2 * padX),
+        Math.max(20, height - 2 * padY),
+        20,
+        DEFAULT_WHITEBOARD_TEXT_ALIGN,
+        DEFAULT_WHITEBOARD_VERTICAL_ALIGN,
+      );
     }
     return;
   }
@@ -90,7 +308,17 @@ function drawElement(
     ctx.stroke();
     ctx.font = "600 15px system-ui";
     ctx.fillStyle = doc ? "#1e3a8a" : "#64748b";
-    drawText(ctx, doc ? `${doc.icon || "📄"}  ${doc.title || "无标题"}` : "页面不可用", x + 12, y + 12, width - 24, height - 20, 20);
+    drawText(
+      ctx,
+      doc ? `${doc.icon || "📄"}  ${doc.title || "无标题"}` : "页面不可用",
+      x + 12,
+      y + 10,
+      width - 24,
+      height - 20,
+      20,
+      DEFAULT_WHITEBOARD_TEXT_ALIGN,
+      DEFAULT_WHITEBOARD_VERTICAL_ALIGN,
+    );
     return;
   }
 
@@ -122,11 +350,23 @@ function drawElement(
     ctx.stroke();
   }
 
-  const insetX = item.type === "diamond" ? width / 4 : 12;
-  const insetY = item.type === "diamond" ? height / 4 : 11;
+  if (hideText) return;
+
+  const insetX = item.type === "diamond" ? width / 4 : BOX_TEXT_INSET_X;
+  const insetY = item.type === "diamond" ? height / 4 : BOX_TEXT_INSET_Y;
   ctx.font = item.type === "text" ? "17px system-ui" : "15px system-ui";
   ctx.fillStyle = colors.stroke;
-  drawText(ctx, item.text, x + insetX, y + insetY, width - 2 * insetX, height - 2 * insetY, 21);
+  drawText(
+    ctx,
+    item.text,
+    x + insetX,
+    y + insetY,
+    width - 2 * insetX,
+    height - 2 * insetY,
+    BOX_TEXT_LINE_HEIGHT,
+    resolveWhiteboardTextAlign(item),
+    resolveWhiteboardVerticalAlign(item),
+  );
 }
 
 type PaintOptions = {
@@ -137,11 +377,12 @@ type PaintOptions = {
   images: WhiteboardImages;
   grid?: boolean;
   selectedId?: string | null;
+  editingId?: string | null;
   showResizeHandle?: boolean;
 };
 
 export function paintWhiteboard(ctx: CanvasRenderingContext2D, elements: WhiteboardElement[], options: PaintOptions) {
-  const { width, height, view, references, images, grid, selectedId, showResizeHandle } = options;
+  const { width, height, view, references, images, grid, selectedId, editingId, showResizeHandle } = options;
   ctx.fillStyle = grid ? "#f8fafc" : "#ffffff";
   ctx.fillRect(0, 0, width, height);
   if (grid) {
@@ -163,7 +404,7 @@ export function paintWhiteboard(ctx: CanvasRenderingContext2D, elements: Whitebo
     const left = bounds.x * view.scale + view.x;
     const top = bounds.y * view.scale + view.y;
     if (left > width + 50 || top > height + 50 || left + bounds.width * view.scale < -50 || top + bounds.height * view.scale < -50) continue;
-    drawElement(ctx, item, byId, references, images);
+    drawElement(ctx, item, byId, references, images, item.id === editingId);
   }
 
   const selected = selectedId ? byId.get(selectedId) : null;
