@@ -589,4 +589,6 @@ for (const sig of ["SIGINT", "SIGTERM"] as const) {
   process.on(sig, () => void shutdown());
 }
 
-server.listen(PORT, () => log(`实时服务已启动 ws://localhost:${PORT}（HTTP /health /publish）`));
+const onListen = () => log(`实时服务已启动 ws://localhost:${PORT}（HTTP /health /publish）`);
+if (process.env.REALTIME_HOST) server.listen(PORT, process.env.REALTIME_HOST, onListen);
+else server.listen(PORT, onListen);

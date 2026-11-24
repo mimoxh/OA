@@ -138,13 +138,40 @@ export const NAV_MODULES: NavModule[] = [
 
 export const PRODUCT_ICON = Package;
 
-/** 解析 User.railPins，丢弃未知或重复的应用 key */
-export function parseRailPins(json: string | null | undefined): string[] {
+export const RAIL_PROJECT_PREFIX = "project:";
+const PROJECT_PIN = /^project:[A-Za-z0-9_-]{1,64}$/;
+
+/** 可固定到左侧导航栏的 key：应用 key 或 project:<项目 id> */
+export function isRailPinKey(key: unknown): key is string {
+  return typeof key === "string" && (NAV_MODULES.some((m) => m.key === key) || PROJECT_PIN.test(key));
+}
+
+export function railPinProjectId(key: string) {
+  return key.startsWith(RAIL_PROJECT_PREFIX) ? key.slice(RAIL_PROJECT_PREFIX.length) : null;
+}
+
+function parseStringArray(json: string | null | undefined): unknown[] {
   try {
     const v: unknown = JSON.parse(json ?? "[]");
-    if (!Array.isArray(v)) return [];
-    return [...new Set(v.filter((x): x is string => typeof x === "string" && NAV_MODULES.some((m) => m.key === x)))];
+    return Array.isArray(v) ? v : [];
   } catch {
     return [];
   }
+}
+
+/** 解析 User.railPins，丢弃未知或重复的 key */
+export function parseRailPins(json: string | null | undefined): string[] {
+  return [...new Set(parseStringArray(json).filter(isRailPinKey))];
+}
+
+export const RAIL_ORDER_MAX = 200;
+const RAIL_ID = /^[@A-Za-z0-9:_-]{1,80}$/;
+
+export function isRailOrderId(id: unknown): id is string {
+  return typeof id === "string" && RAIL_ID.test(id);
+}
+
+/** 解析 User.railOrder：左侧导航栏图标的自定义顺序 */
+export function parseRailOrder(json: string | null | undefined): string[] {
+  return [...new Set(parseStringArray(json).filter(isRailOrderId))].slice(0, RAIL_ORDER_MAX);
 }

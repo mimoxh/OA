@@ -9,6 +9,8 @@ export type DocUser = { id: string; permissions: string[] };
 export type SpaceLike = {
   visibility: "PUBLIC" | "PRIVATE";
   createdById: string;
+  /** 个人空间的主人；非空时只有本人可以访问 */
+  ownerId: string | null;
   members: { userId: string; role: string }[];
 };
 
@@ -19,6 +21,11 @@ export function isDocsAdmin(user: DocUser) {
 }
 
 export function spaceAccess(space: SpaceLike, user: DocUser): SpaceAccess {
+  if (space.ownerId) {
+    const own = space.ownerId === user.id && hasPermission(user.permissions, "docs:view");
+    const canEdit = own && hasPermission(user.permissions, "docs:edit");
+    return { canView: own, canEdit, canManage: canEdit, role: own ? "owner" : null };
+  }
   const member = space.members.find((m) => m.userId === user.id) ?? null;
   const role = member?.role ?? null;
   if (isDocsAdmin(user)) return { canView: true, canEdit: true, canManage: true, role };
@@ -32,9 +39,10 @@ export function spaceAccess(space: SpaceLike, user: DocUser): SpaceAccess {
 
 /** 当前用户可见空间的查询条件 */
 export function visibleSpaceWhere(user: DocUser): Prisma.SpaceWhereInput {
-  if (isDocsAdmin(user)) return {};
   if (!hasPermission(user.permissions, "docs:view")) return { id: "__none__" };
-  return { OR: [{ visibility: "PUBLIC" }, { members: { some: { userId: user.id } } }] };
+  const own = { ownerId: user.id };
+  if (isDocsAdmin(user)) return { OR: [{ ownerId: null }, own] };
+  return { OR: [{ ownerId: null, visibility: "PUBLIC" }, { ownerId: null, members: { some: { userId: user.id } } }, own] };
 }
 
 export async function loadDocUser(userId: string, client: DbClient = db) {

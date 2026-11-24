@@ -17,7 +17,7 @@ export default async function MessagesPage({ searchParams }: PageProps<"/message
     }
   }
   return (
-    <div className="flex min-h-screen items-center justify-center p-6">
+    <div className="flex min-h-app items-center justify-center p-6">
       <div className="w-full max-w-md">
         <EmptyState icon={<MessageCircle />} title="选择一个会话开始聊天" description="从左侧列表选择会话，或在通讯录中向同事发起新会话。" />
       </div>

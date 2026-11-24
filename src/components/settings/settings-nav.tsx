@@ -20,7 +20,7 @@ export function SettingsNav({ isAdmin }: { isAdmin: boolean }) {
   const items = ITEMS.filter((i) => !i.admin || isAdmin);
   const groups = [...new Set(items.map((i) => i.group))];
   return (
-    <nav className="sticky top-0 hidden h-screen w-[200px] shrink-0 border-r border-line px-2 pt-4 md:block">
+    <nav className="sticky top-0 hidden h-app w-[200px] shrink-0 border-r border-line px-2 pt-4 md:block">
       <div className="mb-3 px-2 text-sm font-semibold text-ink">设置</div>
       {groups.map((g) => (
         <div key={g} className="mb-4">

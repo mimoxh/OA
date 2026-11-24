@@ -14,6 +14,7 @@ import {
   Link2,
   MoreHorizontal,
   Plus,
+  Tag,
   Timer,
   Trash2,
   UserRound,
@@ -29,7 +30,8 @@ import { useAction } from "@/components/ui/use-action";
 import { InlineDate, InlineSelect, InlineText } from "@/components/crm/inline";
 import { formatDate, formatDateTime, formatNumber, formatRelative, toDateInput } from "@/lib/format";
 import { TASK_STATUS } from "@/lib/labels";
-import { isOverdue, taskKey } from "@/lib/pms/utils";
+import { asTagColor, isOverdue } from "@/lib/pms/utils";
+import { Badge } from "@/components/ui/badge";
 import type { UserOption } from "@/lib/crm/types";
 import { cn } from "@/lib/utils";
 import {
@@ -48,8 +50,8 @@ type Person = { name: string; avatarColor: string };
 
 export type DrawerTask = {
   id: string;
-  no: number;
   title: string;
+  typeId: string | null;
   description: string | null;
   status: keyof typeof TASK_STATUS;
   priority: "LOW" | "MEDIUM" | "HIGH" | "URGENT";
@@ -59,10 +61,10 @@ export type DrawerTask = {
   dueDate: Date | null;
   estimateHours: number | null;
   milestoneId: string | null;
-  parent: { id: string; no: number; title: string } | null;
+  parent: { id: string; title: string } | null;
   createdAt: Date;
   completedAt: Date | null;
-  subtasks: { id: string; no: number; title: string; status: keyof typeof TASK_STATUS; assignee: Person | null }[];
+  subtasks: { id: string; title: string; status: keyof typeof TASK_STATUS; assignee: Person | null }[];
   timeLogs: { id: string; hours: number; date: Date; note: string | null; userId: string; user: Person }[];
   comments: { id: string; content: string; createdAt: Date; authorId: string; author: Person }[];
   activity: { id: string; detail: string | null; createdAt: Date; user: Person | null }[];
@@ -192,21 +194,21 @@ function CommentBox({ taskId, members, disabled }: { taskId: string; members: Us
 
 export function TaskDrawer({
   task,
-  code,
   projectId,
   members,
   milestones,
+  types,
   parentOptions,
   canEdit,
   canManage,
   currentUserId,
 }: {
   task: DrawerTask;
-  code: string;
   projectId: string;
   members: UserOption[];
   milestones: { id: string; name: string }[];
-  parentOptions: { id: string; no: number; title: string }[];
+  types: { id: string; name: string; color: string }[];
+  parentOptions: { id: string; title: string }[];
   canEdit: boolean;
   canManage: boolean;
   currentUserId: string;
@@ -219,7 +221,6 @@ export function TaskDrawer({
   const [log, setLog] = useState({ hours: "", date: toDateInput(new Date()), note: "" });
   const ro = !canEdit;
   const t = task;
-  const key = taskKey(code, t.no);
   const save = (patch: TaskInput) => updateTask(t.id, patch);
 
   const go = (taskId: string | null) => {
@@ -241,7 +242,7 @@ export function TaskDrawer({
         <D.Overlay className="fixed inset-0 z-40 bg-black/15 animate-fade-in" />
         <D.Content
           aria-describedby={undefined}
-          className="fixed inset-y-0 right-0 z-40 flex w-[min(640px,100vw)] flex-col bg-white shadow-pop animate-fade-in focus:outline-none"
+          className="fixed bottom-0 right-0 top-app z-40 flex w-[min(640px,100vw)] flex-col bg-white shadow-pop animate-fade-in focus:outline-none"
           onOpenAutoFocus={(e) => e.preventDefault()}
         >
           <div className="flex h-11 shrink-0 items-center justify-between gap-2 border-b border-line px-4">
@@ -250,13 +251,12 @@ export function TaskDrawer({
                 <>
                   <button onClick={() => go(t.parent!.id)} className="inline-flex min-w-0 items-center gap-1 rounded px-1 hover:bg-hover hover:text-ink">
                     <CornerLeftUp className="size-3.5 shrink-0" />
-                    <span className="font-mono text-xs">{taskKey(code, t.parent.no)}</span>
                     <span className="truncate">{t.parent.title}</span>
                   </button>
                   <span className="text-ink-3">/</span>
                 </>
               )}
-              <span className="font-mono text-xs">{key}</span>
+              <span className="text-xs">{t.parent ? "子任务" : "任务"}</span>
             </div>
             <div className="flex items-center gap-1">
               <IconButton
@@ -318,6 +318,17 @@ export function TaskDrawer({
                 <Property label="状态" icon={<CircleDot />}>
                   <InlineSelect readOnly={ro} value={t.status} options={statusOptions} onSave={(v) => save({ status: v as "TODO" })} />
                 </Property>
+                <Property label="类型" icon={<Tag />}>
+                  <InlineSelect
+                    readOnly={ro}
+                    allowEmpty
+                    emptyLabel="未分类"
+                    placeholder="未分类"
+                    value={t.typeId}
+                    options={types.map((ty) => ({ value: ty.id, label: <Badge color={asTagColor(ty.color)}>{ty.name}</Badge> }))}
+                    onSave={(v) => save({ typeId: v || null })}
+                  />
+                </Property>
                 <Property label="优先级" icon={<Flag />}>
                   <InlineSelect readOnly={ro} value={t.priority} options={priorityOptions} onSave={(v) => save({ priority: v as "LOW" })} />
                 </Property>
@@ -376,11 +387,7 @@ export function TaskDrawer({
                         .filter((p) => p.id !== t.id)
                         .map((p) => ({
                           value: p.id,
-                          label: (
-                            <span className="truncate">
-                              <span className="font-mono text-xs text-ink-3">{taskKey(code, p.no)}</span> {p.title}
-                            </span>
-                          ),
+                          label: <span className="truncate">{p.title}</span>,
                         }))}
                       onSave={(v) => save({ parentId: v || null })}
                     />
@@ -425,7 +432,6 @@ export function TaskDrawer({
                       disabled={ro || pending}
                       onChange={(e) => run(() => updateTask(s.id, { status: e.target.checked ? "DONE" : "TODO" }))}
                     />
-                    <span className="font-mono text-[11px] text-ink-3">{taskKey(code, s.no)}</span>
                     <button onClick={() => go(s.id)} className={cn("min-w-0 flex-1 truncate text-left text-sm hover:text-accent", s.status === "DONE" && "text-ink-3 line-through")}>
                       {s.title}
                     </button>
@@ -445,7 +451,7 @@ export function TaskDrawer({
                     e.preventDefault();
                     const title = subDraft.trim();
                     if (!title) return;
-                    run(() => createTask(projectId, { title, parentId: t.id, assigneeId: t.assigneeId }), { success: "子任务已添加", onSuccess: () => setSubDraft("") });
+                    run(() => createTask(projectId, { title, parentId: t.id, assigneeId: t.assigneeId, typeId: t.typeId }), { success: "子任务已添加", onSuccess: () => setSubDraft("") });
                   }}
                 >
                   <Plus className="size-3.5 text-ink-3" />

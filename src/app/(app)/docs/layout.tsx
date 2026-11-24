@@ -7,7 +7,7 @@ import { DocsTrashLink } from "@/components/docs/docs-trash-link";
 export default async function DocsLayout({ children }: LayoutProps<"/docs">) {
   const user = await requirePermission("docs:view");
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-app">
       <ContextPanel title="云文档" footer={<DocsTrashLink />}>
         <Suspense fallback={<div className="px-2 py-1 text-xs text-ink-3">加载文档…</div>}>
           <DocsSidebar userId={user.id} />

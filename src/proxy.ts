@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth/token";
 
 // /api/im/webhooks 由路由内部校验 Bearer Token
-const PUBLIC_PATHS = ["/login", "/manifest.webmanifest", "/sw.js", "/api/im/webhooks"];
+const PUBLIC_PATHS = ["/login", "/setup", "/manifest.webmanifest", "/sw.js", "/api/im/webhooks"];
 
 export async function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;

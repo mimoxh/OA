@@ -3,7 +3,7 @@ import { addDays, differenceInCalendarDays, eachWeekOfInterval, endOfWeek, forma
 import { Avatar } from "@/components/ui/avatar";
 import { TASK_STATUS } from "@/lib/labels";
 import { formatDate } from "@/lib/format";
-import { isOverdue, taskKey } from "@/lib/pms/utils";
+import { isOverdue } from "@/lib/pms/utils";
 import { cn } from "@/lib/utils";
 
 const DAY = 22;
@@ -12,7 +12,6 @@ const BAR_COLOR: Record<string, string> = { TODO: "#a5a29c", IN_PROGRESS: "#337e
 
 export type TimelineTask = {
   id: string;
-  no: number;
   title: string;
   status: keyof typeof TASK_STATUS;
   startDate: Date | null;
@@ -21,14 +20,12 @@ export type TimelineTask = {
 };
 
 export function Timeline({
-  code,
   tasks,
   milestones,
   projectStart,
   projectEnd,
   taskHref,
 }: {
-  code: string;
   tasks: TimelineTask[];
   milestones: { id: string; name: string; dueDate: Date | null; status: "OPEN" | "DONE" }[];
   projectStart: Date | null;
@@ -126,7 +123,6 @@ export function Timeline({
                   className="sticky left-0 z-10 flex shrink-0 items-center gap-2 border-r border-line bg-white px-3 text-[13px] group-hover:bg-sidebar"
                   style={{ width: LEFT }}
                 >
-                  <span className="shrink-0 font-mono text-[11px] text-ink-3">{taskKey(code, t.no)}</span>
                   <span className={cn("truncate", t.status === "DONE" && "text-ink-2 line-through")}>{t.title}</span>
                 </Link>
                 <div className="relative" style={{ width, ...grid }}>
@@ -161,7 +157,7 @@ export function Timeline({
           <div className="flex flex-wrap gap-1.5">
             {unscheduled.map((t) => (
               <Link key={t.id} href={taskHref(t.id)} scroll={false} className="rounded border border-line px-2 py-0.5 text-[13px] text-ink-2 hover:bg-hover hover:text-ink">
-                <span className="font-mono text-[11px] text-ink-3">{taskKey(code, t.no)}</span> {t.title}
+                {t.title}
               </Link>
             ))}
           </div>

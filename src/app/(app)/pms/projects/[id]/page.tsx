@@ -11,8 +11,10 @@ import { toDateInput } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { hrefWith } from "@/components/crm/view-switch";
 import { ProjectActions, ProjectProperties, type HeaderProject } from "@/components/pms/project-header";
-import { TaskBoard, type BoardTask } from "@/components/pms/task-board";
-import { TaskList } from "@/components/pms/task-list";
+import type { BoardTask } from "@/components/pms/task-board";
+import { ProjectTasks } from "@/components/pms/project-tasks";
+import { ProjectPinButton } from "@/components/pms/project-pin-button";
+import { upgradeProject } from "@/lib/pms/space";
 import { Timeline } from "@/components/pms/timeline";
 import { Milestones } from "@/components/pms/milestones";
 import { Members } from "@/components/pms/members";
@@ -40,6 +42,10 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
   const view: View = VIEWS.some((v) => v.key === sp.view) ? (sp.view as View) : "board";
   const taskId = typeof sp.task === "string" ? sp.task : null;
 
+  const found = await db.project.findUnique({ where: { id } });
+  if (!found) notFound();
+  await upgradeProject(found);
+
   const project = await db.project.findUnique({
     where: { id },
     include: {
@@ -49,6 +55,7 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
         orderBy: { id: "asc" },
       },
       milestones: { orderBy: [{ dueDate: "asc" }, { createdAt: "asc" }], include: { tasks: { select: { status: true } } } },
+      taskTypes: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }], select: { id: true, name: true, color: true } },
     },
   });
   if (!project) notFound();
@@ -57,7 +64,7 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
     db.task.findMany({
       where: { projectId: id },
       orderBy: [{ sortOrder: "asc" }, { no: "asc" }],
-      include: { assignee: { select: { name: true, avatarColor: true } }, milestone: { select: { name: true } } },
+      include: { assignee: { select: { name: true, avatarColor: true } }, milestone: { select: { name: true } }, type: { select: { id: true, name: true, color: true } } },
     }),
     db.timeLog.findMany({ where: { task: { projectId: id } }, select: { hours: true, userId: true, taskId: true } }),
     getActiveUsers(),
@@ -74,13 +81,17 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
 
   const commentMap = new Map(commentCounts.map((c) => [c.targetId, c._count._all]));
   const top = tasks.filter((t) => !t.parentId);
+  const titleOf = new Map(tasks.map((t) => [t.id, t.title]));
   const childrenOf = (pid: string) => tasks.filter((t) => t.parentId === pid);
-  const boardTasks: (BoardTask & { assigneeId: string | null })[] = top.map((t) => {
+  const boardTasks: BoardTask[] = tasks.map((t) => {
     const subs = childrenOf(t.id);
     return {
       id: t.id,
-      no: t.no,
       title: t.title,
+      parent: t.parentId ? { id: t.parentId, title: titleOf.get(t.parentId) ?? "" } : null,
+      type: t.type,
+      typeId: t.typeId,
+      milestoneId: t.milestoneId,
       status: t.status,
       priority: t.priority,
       sortOrder: t.sortOrder,
@@ -105,7 +116,7 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
       where: { id: taskId },
       include: {
         reporter: { select: { name: true, avatarColor: true } },
-        parent: { select: { id: true, no: true, title: true } },
+        parent: { select: { id: true, title: true } },
         subtasks: { orderBy: [{ sortOrder: "asc" }, { no: "asc" }], include: { assignee: { select: { name: true, avatarColor: true } } } },
         timeLogs: { orderBy: [{ date: "desc" }, { createdAt: "desc" }], include: { user: { select: { name: true, avatarColor: true } } } },
       },
@@ -126,8 +137,8 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
       ]);
       drawer = {
         id: t.id,
-        no: t.no,
         title: t.title,
+        typeId: t.typeId,
         description: t.description,
         status: t.status,
         priority: t.priority,
@@ -140,7 +151,7 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
         parent: t.parent,
         createdAt: t.createdAt,
         completedAt: t.completedAt,
-        subtasks: t.subtasks.map((s) => ({ id: s.id, no: s.no, title: s.title, status: s.status, assignee: s.assignee })),
+        subtasks: t.subtasks.map((s) => ({ id: s.id, title: s.title, status: s.status, assignee: s.assignee })),
         timeLogs: t.timeLogs.map((l) => ({ id: l.id, hours: l.hours, date: l.date, note: l.note, userId: l.userId, user: l.user })),
         comments: comments.map((c) => ({ id: c.id, content: c.content, createdAt: c.createdAt, authorId: c.authorId, author: c.author })),
         activity: activity.map((a) => ({ id: a.id, detail: a.detail, createdAt: a.createdAt, user: a.user })),
@@ -151,9 +162,10 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
   const header: HeaderProject = {
     id: project.id,
     name: project.name,
+    icon: project.icon,
     status: project.status,
     ownerId: project.ownerId,
-    documentId: project.documentId,
+    spaceId: project.spaceId,
     customer: project.customer,
     startDate: project.startDate,
     endDate: project.endDate,
@@ -182,7 +194,8 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
         actions={
           <>
             <BizGroupButton bizType="project" bizId={project.id} existingConversationId={bizGroup?.id} />
-            <ShareToChatButton refType="project" refId={project.id} title={project.name} subtitle={project.code} />
+            <ShareToChatButton refType="project" refId={project.id} title={project.name} subtitle={project.customer?.name ?? "内部项目"} />
+            <ProjectPinButton projectId={project.id} name={project.name} pinned={user.railPins.includes(`project:${project.id}`)} />
             <ProjectActions
               project={header}
               users={users}
@@ -196,6 +209,7 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
                 projectId={id}
                 members={memberUsers}
                 milestones={milestoneOptions}
+                types={project.taskTypes}
                 trigger={
                   <Button variant="primary">
                     <Plus className="size-3.5" />
@@ -215,12 +229,7 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
             </span>
           }
           title={project.name}
-          description={
-            <>
-              <span className="mr-2 rounded bg-hover px-1.5 py-0.5 font-mono text-xs text-ink-2">{project.code}</span>
-              {project.description}
-            </>
-          }
+          description={project.description}
         />
         <ProjectProperties project={header} users={users} canManage={canManage} />
 
@@ -243,12 +252,22 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
           {!canEdit && <span className="ml-auto text-xs text-ink-3">只读：你不是该项目成员</span>}
         </div>
 
-        {view === "board" && <TaskBoard projectId={id} code={project.code} tasks={boardTasks} canEdit={canEdit} />}
-        {view === "list" && <TaskList code={project.code} tasks={boardTasks} members={memberUsers} canEdit={canEdit} />}
+        {(view === "board" || view === "list") && (
+          <ProjectTasks
+            view={view}
+            projectId={id}
+            tasks={boardTasks}
+            members={memberUsers}
+            types={project.taskTypes}
+            milestones={milestoneOptions}
+            canEdit={canEdit}
+            canManage={canManage}
+            meId={user.id}
+          />
+        )}
         {view === "timeline" && (
           <Timeline
-            code={project.code}
-            tasks={top.map((t) => ({ id: t.id, no: t.no, title: t.title, status: t.status, startDate: t.startDate, dueDate: t.dueDate, assignee: t.assignee }))}
+            tasks={top.map((t) => ({ id: t.id, title: t.title, status: t.status, startDate: t.startDate, dueDate: t.dueDate, assignee: t.assignee }))}
             milestones={project.milestones.map((m) => ({ id: m.id, name: m.name, dueDate: m.dueDate, status: m.status }))}
             projectStart={project.startDate}
             projectEnd={project.endDate}
@@ -288,18 +307,18 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
               }))}
           />
         )}
-        {view === "overview" && <ProjectOverview code={project.code} tasks={tasks} logs={logs} people={users} taskHref={taskHref} />}
+        {view === "overview" && <ProjectOverview tasks={tasks} logs={logs} people={users} taskHref={taskHref} />}
       </Page>
 
       {drawer && (
         <TaskDrawer
           key={drawer.id}
           task={drawer}
-          code={project.code}
           projectId={id}
           members={memberUsers}
           milestones={milestoneOptions}
-          parentOptions={top.filter((t) => t.id !== drawer.id).map((t) => ({ id: t.id, no: t.no, title: t.title }))}
+          types={project.taskTypes}
+          parentOptions={top.filter((t) => t.id !== drawer.id).map((t) => ({ id: t.id, title: t.title }))}
           canEdit={canEdit}
           canManage={canManage}
           currentUserId={user.id}
