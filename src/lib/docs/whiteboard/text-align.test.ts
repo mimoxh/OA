@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { layoutArrowLabel, layoutWhiteboardText, paintWhiteboard, wrapWhiteboardText } from "./canvas";
+import {
+  getWhiteboardTextEditorLayout,
+  layoutArrowLabel,
+  layoutWhiteboardText,
+  paintWhiteboard,
+  wrapWhiteboardText,
+} from "./canvas";
 import {
   DEFAULT_WHITEBOARD_TEXT_ALIGN,
   DEFAULT_WHITEBOARD_VERTICAL_ALIGN,
@@ -8,6 +14,7 @@ import {
   resolveWhiteboardTextAlign,
   resolveWhiteboardVerticalAlign,
   whiteboardUpdateSchema,
+  type WhiteboardBoxTextElement,
   type WhiteboardElement,
 } from "./content";
 import { makeArrow, makeFigure, type FigureType } from "./geometry";
@@ -378,4 +385,171 @@ describe("paintWhiteboard rendering integration", () => {
     assert.equal(imageCall.x, 500);
     assert.equal(imageCall.y, 360);
   });
+
+  it("suppresses underlying canvas text for editingId while keeping other elements rendered", () => {
+    const elements: WhiteboardElement[] = [
+      { id: IDS.rect, type: "rectangle", x: 0, y: 0, width: 160, height: 96, text: "正在编辑的矩形", color: "blue" },
+      { id: IDS.note, type: "note", x: 200, y: 0, width: 176, height: 146, text: "普通便签", color: "yellow" },
+      { id: IDS.arrow, type: "arrow", from: { x: 0, y: 200 }, to: { x: 200, y: 200 }, text: "连线标签", color: "teal" },
+    ];
+
+    const rectEdit = createMockContext();
+    paintWhiteboard(rectEdit.ctx, elements, {
+      width: 800,
+      height: 600,
+      view: { x: 0, y: 0, scale: 1 },
+      references: new Map(),
+      images: new Map(),
+      selectedId: IDS.rect,
+      editingId: IDS.rect,
+    });
+    assert.deepEqual(
+      rectEdit.calls.map((c) => c.text),
+      ["普通便签", "连线标签"],
+    );
+
+    const arrowEdit = createMockContext();
+    paintWhiteboard(arrowEdit.ctx, elements, {
+      width: 800,
+      height: 600,
+      view: { x: 0, y: 0, scale: 1 },
+      references: new Map(),
+      images: new Map(),
+      selectedId: IDS.arrow,
+      editingId: IDS.arrow,
+    });
+    assert.deepEqual(
+      arrowEdit.calls.map((c) => c.text),
+      ["正在编辑的矩形", "普通便签"],
+    );
+  });
 });
+
+describe("whiteboard inline text editor layout", () => {
+  it("maps box text elements with exact insets, font sizes, alignments, and zoom/pan transform", () => {
+    const view = { x: 40, y: -20, scale: 1.5 };
+    const rect: WhiteboardBoxTextElement = {
+      id: IDS.rect,
+      type: "rectangle",
+      x: 100,
+      y: 80,
+      width: 160,
+      height: 96,
+      text: "矩形",
+      color: "blue",
+    };
+    const diamond: WhiteboardBoxTextElement = {
+      id: IDS.diamond,
+      type: "diamond",
+      x: 200,
+      y: 100,
+      width: 144,
+      height: 112,
+      text: "判断",
+      color: "teal",
+      textAlign: "left",
+      verticalAlign: "bottom",
+    };
+    const textItem: WhiteboardBoxTextElement = {
+      id: IDS.text,
+      type: "text",
+      x: 10,
+      y: 20,
+      width: 216,
+      height: 70,
+      text: "自由文字",
+      color: "gray",
+    };
+    const frame: WhiteboardBoxTextElement = {
+      id: IDS.frame,
+      type: "frame",
+      x: 0,
+      y: 0,
+      width: 380,
+      height: 250,
+      text: "框架",
+      color: "gray",
+    };
+    const byId = new Map<string, WhiteboardElement>([rect, diamond, textItem, frame].map((e) => [e.id, e]));
+
+    const rectLayout = getWhiteboardTextEditorLayout(rect, byId, view);
+    assert.equal(rectLayout.left, (100 + 12) * 1.5 + 40);
+    assert.equal(rectLayout.top, (80 + 11) * 1.5 - 20);
+    assert.equal(rectLayout.width, (160 - 24) * 1.5);
+    assert.equal(rectLayout.height, (96 - 22) * 1.5);
+    assert.equal(rectLayout.fontSize, 15 * 1.5);
+    assert.equal(rectLayout.lineHeight, 21 * 1.5);
+    assert.equal(rectLayout.textAlign, "center");
+    assert.equal(rectLayout.verticalAlign, "middle");
+    assert.equal(rectLayout.isArrow, false);
+
+    const diamondLayout = getWhiteboardTextEditorLayout(diamond, byId, view);
+    assert.equal(diamondLayout.left, (200 + 36) * 1.5 + 40);
+    assert.equal(diamondLayout.top, (100 + 28) * 1.5 - 20);
+    assert.equal(diamondLayout.width, 72 * 1.5);
+    assert.equal(diamondLayout.height, 56 * 1.5);
+    assert.equal(diamondLayout.textAlign, "left");
+    assert.equal(diamondLayout.verticalAlign, "bottom");
+
+    const textLayout = getWhiteboardTextEditorLayout(textItem, byId, view);
+    assert.equal(textLayout.fontSize, 17 * 1.5);
+    assert.equal(textLayout.textAlign, "center");
+    assert.equal(textLayout.verticalAlign, "middle");
+
+    const frameLayout = getWhiteboardTextEditorLayout(frame, byId, view);
+    assert.equal(frameLayout.textAlign, "center");
+    assert.equal(frameLayout.verticalAlign, "top");
+  });
+
+  it("positions arrow inline editor above the arrow midpoint for center, left, and right alignments", () => {
+    const view = { x: 10, y: 20, scale: 2 };
+    const a: WhiteboardBoxTextElement = {
+      id: IDS.rect,
+      type: "rectangle",
+      x: 0,
+      y: 0,
+      width: 100,
+      height: 100,
+      text: "A",
+      color: "blue",
+    };
+    const b: WhiteboardBoxTextElement = {
+      id: IDS.ellipse,
+      type: "rectangle",
+      x: 300,
+      y: 0,
+      width: 100,
+      height: 100,
+      text: "B",
+      color: "blue",
+    };
+    // Bound edges: (100, 50) -> (300, 50), midpoint = (200, 50)
+    const baseArrow: Extract<WhiteboardElement, { type: "arrow" }> = {
+      id: IDS.arrow,
+      type: "arrow",
+      from: { x: 50, y: 50, elementId: IDS.rect },
+      to: { x: 350, y: 50, elementId: IDS.ellipse },
+      text: "通过",
+      color: "purple",
+    };
+    const byId = new Map<string, WhiteboardElement>([a, b, baseArrow].map((e) => [e.id, e]));
+
+    const centered = getWhiteboardTextEditorLayout(baseArrow, byId, view);
+    assert.equal(centered.isArrow, true);
+    assert.equal(centered.textAlign, "center");
+    assert.equal(centered.verticalAlign, "bottom");
+    assert.equal(centered.left, (200 - 100) * 2 + 10);
+    assert.equal(centered.width, 200 * 2);
+    // Bottom edge of arrow editor box aligns with (midpoint.y - 6) * scale + view.y
+    assert.equal(centered.top + centered.height, (50 - 6) * 2 + 20);
+    assert.equal(centered.fontSize, 14 * 2);
+    assert.equal(centered.lineHeight, 18 * 2);
+
+    const leftAligned = getWhiteboardTextEditorLayout({ ...baseArrow, textAlign: "left" }, byId, view);
+    assert.equal(leftAligned.left, (200 + 5) * 2 + 10);
+
+    const rightAligned = getWhiteboardTextEditorLayout({ ...baseArrow, textAlign: "right" }, byId, view);
+    assert.equal(rightAligned.left + rightAligned.width, (200 - 5) * 2 + 10);
+  });
+});
+
