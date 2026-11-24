@@ -285,12 +285,17 @@ export function ChatView({
             机器人会话不支持回复
           </div>
         ) : (
-          <>
-            {runConfig && runBots.length > 0 && (
-              <WebhookRunConfigBar conversationId={convId} bots={runBots} initialOverride={runConfig.override} />
-            )}
-            <Composer conv={conv} me={me} replyTo={replyTo} onClearReply={() => setReplyTo(null)} />
-          </>
+          <Composer
+            conv={conv}
+            me={me}
+            replyTo={replyTo}
+            onClearReply={() => setReplyTo(null)}
+            toolbar={
+              runConfig && runBots.length > 0 ? (
+                <WebhookRunConfigBar key={convId} conversationId={convId} bots={runBots} initialOverride={runConfig.override} />
+              ) : undefined
+            }
+          />
         )}
       </div>
 

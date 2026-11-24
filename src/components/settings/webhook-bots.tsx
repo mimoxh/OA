@@ -17,6 +17,8 @@ import { ColorPicker } from "@/components/oa/color-picker";
 import { PALETTE } from "@/lib/oa/types";
 import { formatDateTime } from "@/lib/format";
 import { AGENT_PRESETS, EFFORT_LEVELS, MODEL_SUGGESTIONS, SELF_MANAGED_AGENT_HINT } from "@/lib/im/webhook-run-config";
+import { RUN_FIELD_META } from "@/components/im/webhook-run-config-bar";
+import { cn } from "@/lib/utils";
 import {
   createWebhookBotAction,
   deleteWebhookBotAction,
@@ -95,15 +97,15 @@ function runConfigPayload(form: FormState) {
 
 function RunConfigFields({ form, setForm }: { form: FormState; setForm: (f: FormState) => void }) {
   const agent = form.defaultAgent.trim().toLowerCase();
-  const hint = agent && !form.defaultModel.trim() ? SELF_MANAGED_AGENT_HINT[agent] : undefined;
+  const selfManagedHint = agent && !form.defaultModel.trim() ? SELF_MANAGED_AGENT_HINT[agent] : undefined;
   return (
     <div className="col-span-2 rounded-md border border-line p-3">
-      <div className="mb-2 text-xs font-medium text-ink-2">默认运行配置</div>
-      <p className="mb-2 text-xs text-ink-3">
-        随每条出站消息写入 <code>payload.metadata</code>（agent / model / effort）；聊天中可按会话临时切换，留空则跟随外部 Bot 自身默认。
+      <div className="mb-1 text-xs font-medium text-ink-2">默认运行配置</div>
+      <p className="mb-2.5 text-xs text-ink-3">
+        随每条出站消息写入 <code>payload.metadata</code>（agent / model / effort）；聊天中可按会话切换，未指定的项由外部 Bot 自行决定。
       </p>
       <div className="grid grid-cols-3 gap-3">
-        <Field label="默认基座（Agent）" hint={hint}>
+        <Field label={<RunFieldLabel field="agent" />}>
           <Select
             value={form.customAgent ? CUSTOM_AGENT : form.defaultAgent}
             onChange={(e) =>
@@ -112,7 +114,7 @@ function RunConfigFields({ form, setForm }: { form: FormState; setForm: (f: Form
                 : setForm({ ...form, customAgent: false, defaultAgent: e.target.value })
             }
           >
-            <option value="">跟随 Bot 默认</option>
+            <option value="">{UNSET}</option>
             {AGENT_PRESETS.map((a) => (
               <option key={a} value={a}>
                 {a}
@@ -130,13 +132,13 @@ function RunConfigFields({ form, setForm }: { form: FormState; setForm: (f: Form
             />
           )}
         </Field>
-        <Field label="默认模型（Model）" hint="Provider Model ID，留空使用基座默认">
+        <Field label={<RunFieldLabel field="model" />} hint={selfManagedHint ?? "留空则由基座决定"}>
           <Input
             value={form.defaultModel}
             maxLength={120}
             list="webhook-model-suggestions"
             className="font-mono"
-            placeholder="如 claude-opus-5-5 / gpt-6-astra"
+            placeholder="如 claude-opus-5-5"
             onChange={(e) => setForm({ ...form, defaultModel: e.target.value })}
           />
           <datalist id="webhook-model-suggestions">
@@ -145,9 +147,9 @@ function RunConfigFields({ form, setForm }: { form: FormState; setForm: (f: Form
             ))}
           </datalist>
         </Field>
-        <Field label="默认思考强度（Effort）">
+        <Field label={<RunFieldLabel field="effort" />}>
           <Select value={form.defaultEffort} onChange={(e) => setForm({ ...form, defaultEffort: e.target.value })}>
-            <option value="">默认</option>
+            <option value="">{UNSET}</option>
             {EFFORT_LEVELS.map((x) => (
               <option key={x} value={x}>
                 {x}
@@ -156,6 +158,41 @@ function RunConfigFields({ form, setForm }: { form: FormState; setForm: (f: Form
           </Select>
         </Field>
       </div>
+    </div>
+  );
+}
+
+const UNSET = "未指定";
+
+function RunFieldLabel({ field }: { field: keyof typeof RUN_FIELD_META }) {
+  const Icon = RUN_FIELD_META[field].icon;
+  return (
+    <span className="inline-flex items-center gap-1">
+      <Icon className="size-3.5 text-ink-3" />
+      默认{RUN_FIELD_META[field].title}
+    </span>
+  );
+}
+
+/** 列表卡片中的默认运行配置摘要，与聊天页选择器同一套图标与文案 */
+function RunConfigSummary({ bot }: { bot: WebhookBotRow }) {
+  const items = [
+    ["agent", bot.defaultAgent],
+    ["model", bot.defaultModel],
+    ["effort", bot.defaultEffort],
+  ] as const;
+  return (
+    <div className="flex flex-wrap items-center gap-1">
+      {items.map(([field, value]) => {
+        const Icon = RUN_FIELD_META[field].icon;
+        return (
+          <Badge key={field} color={value ? "blue" : "gray"} className={value ? undefined : "bg-transparent text-ink-2 ring-1 ring-inset ring-line"}>
+            <Icon className="mr-1 size-3 opacity-70" />
+            {RUN_FIELD_META[field].label}
+            <span className={cn("ml-1", value ? "font-mono" : "opacity-70")}>{value ?? UNSET}</span>
+          </Badge>
+        );
+      })}
     </div>
   );
 }
@@ -499,12 +536,13 @@ function BotCard({ bot }: { bot: WebhookBotRow }) {
             </Badge>
             {bot.enabled ? <Badge color="green">已启用</Badge> : <Badge color="red">已停用</Badge>}
             <Badge>{TRIGGER_LABEL[bot.triggerMode]}</Badge>
-            <Badge color={bot.defaultAgent ? "blue" : "gray"}>基座 {bot.defaultAgent ?? "默认"}</Badge>
-            <Badge color={bot.defaultModel ? "blue" : "gray"}>模型 {bot.defaultModel ?? "默认"}</Badge>
-            <Badge color={bot.defaultEffort ? "blue" : "gray"}>Effort {bot.defaultEffort ?? "默认"}</Badge>
           </div>
           <div className="mt-0.5 text-xs text-ink-3">{bot.description || bot.title || "—"}</div>
           <dl className="mt-3 grid grid-cols-[110px_1fr] gap-x-3 gap-y-1 text-xs">
+            <dt className="flex h-5 items-center text-ink-3">默认运行配置</dt>
+            <dd className="min-w-0">
+              <RunConfigSummary bot={bot} />
+            </dd>
             <dt className="text-ink-3">Outbound URL</dt>
             <dd className="truncate font-mono text-ink-2">{bot.outboundUrlMasked}</dd>
             <dt className="text-ink-3">签名 Secret</dt>
