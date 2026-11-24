@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { db, type DbClient } from "@/lib/db";
 import { assertResolvedPublic, decryptOptional, decryptSecret, parseHeadersJson, signPayload } from "./webhook-crypto";
+import { getConversationRunConfig, resolveRunMetadata } from "./webhook-run-config";
 
 export type TriggerMode = "mention_only" | "all";
 export const TRIGGER_MODES: TriggerMode[] = ["mention_only", "all"];
@@ -232,6 +233,8 @@ export async function dispatchMessageWebhooks(messageId: string, client: DbClien
         threadRootSenderId: senderOf(msg.threadRootId),
       }),
     );
+    if (!targets.length) return [];
+    const runOverride = await getConversationRunConfig(client, conv.id);
 
     return await Promise.all(
       targets.map(async (c) => {
@@ -240,6 +243,7 @@ export async function dispatchMessageWebhooks(messageId: string, client: DbClien
           deliveryId: randomUUID(),
           timestamp: new Date().toISOString(),
           connector: { id: c.id, botUserId: c.botUserId, botName: c.botUser.name },
+          metadata: resolveRunMetadata(c, runOverride),
           conversation: {
             id: conv.id,
             type: conv.type,
@@ -297,6 +301,7 @@ export async function pingConnector(connectorId: string, client: DbClient = db):
     deliveryId: randomUUID(),
     timestamp: new Date().toISOString(),
     connector: { id: c.id, botUserId: c.botUserId, botName: c.botUser.name },
+    metadata: resolveRunMetadata(c),
     reply: { endpoint: replyEndpoint(c.id) },
   });
   await writeDeliveryLog(client, {

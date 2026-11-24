@@ -1216,6 +1216,7 @@ model Conversation {
   messages      Message[]
   attachments   Attachment[]
   calls         CallSession[]
+  webhookRunConfig WebhookConversationConfig?
   createdAt     DateTime             @default(now())
 
   @@index([bizType, bizId])
@@ -1337,6 +1338,11 @@ model WebhookConnector {
   outboundHeaders    String?
   // mention_only | all（仅影响群聊；单聊始终触发）
   triggerMode        String               @default("mention_only")
+  // 出站 payload.metadata 的默认值；null 表示跟随外部 Bot 自身默认
+  // defaultEffort: low | medium | high | xhigh
+  defaultAgent       String?
+  defaultModel       String?
+  defaultEffort      String?
   // 入站回调 Bearer Token 只保存 SHA-256（hex）与脱敏前缀
   inboundTokenHash   String
   inboundTokenPrefix String
@@ -1345,6 +1351,18 @@ model WebhookConnector {
   logs               WebhookDeliveryLog[]
   createdAt          DateTime             @default(now())
   updatedAt          DateTime             @updatedAt
+}
+
+// 会话级 Webhook 运行配置覆盖（作用于该会话内所有 Webhook 机器人）；
+// 各字段为 null 时回退到机器人默认值，删除该行即「恢复机器人默认」
+model WebhookConversationConfig {
+  conversationId String       @id
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  agent          String?
+  model          String?
+  effort         String?
+  updatedById    String?
+  updatedAt      DateTime     @updatedAt
 }
 
 model WebhookDeliveryLog {

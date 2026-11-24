@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { z } from "zod";
 import type { DbClient } from "@/lib/db";
 import { encryptSecret, generateInboundToken, parseHeadersJson, validateOutboundUrl } from "./webhook-crypto";
+import { agentField, effortField, modelField } from "./webhook-run-config";
 
 export const BOT_ROLE_KEY = "webhook_bot";
 /** 非 bcrypt 格式，bcrypt.compare 恒为 false；登录入口另有 isBot 拦截 */
@@ -16,6 +17,10 @@ const baseSchema = z.object({
   title: optionalText(30, "副标题"),
   description: optionalText(200, "简介"),
   triggerMode: z.enum(["mention_only", "all"]).default("mention_only"),
+  /** 出站 metadata 默认值；空白归一化为 null，编辑时 undefined 表示不修改 */
+  defaultAgent: agentField,
+  defaultModel: modelField,
+  defaultEffort: effortField,
 });
 
 export const createBotSchema = baseSchema.extend({
@@ -75,6 +80,9 @@ export async function createWebhookBot(client: DbClient, actorId: string | null,
       outboundSecret: v.outboundSecret?.trim() ? encryptSecret(v.outboundSecret.trim()) : null,
       outboundHeaders: headers,
       triggerMode: v.triggerMode,
+      defaultAgent: v.defaultAgent ?? null,
+      defaultModel: v.defaultModel ?? null,
+      defaultEffort: v.defaultEffort ?? null,
       inboundTokenHash: token.hash,
       inboundTokenPrefix: token.prefix,
       createdById: actorId,
@@ -92,6 +100,9 @@ async function requireConnector(client: DbClient, id: string) {
 export async function updateWebhookBot(client: DbClient, v: UpdateBotInput) {
   const c = await requireConnector(client, v.id);
   const data: Record<string, unknown> = { description: v.description || null, triggerMode: v.triggerMode };
+  if (v.defaultAgent !== undefined) data.defaultAgent = v.defaultAgent;
+  if (v.defaultModel !== undefined) data.defaultModel = v.defaultModel;
+  if (v.defaultEffort !== undefined) data.defaultEffort = v.defaultEffort;
   if (v.outboundUrl) data.outboundUrl = encryptSecret(validateOutboundUrl(v.outboundUrl));
   if (v.clearSecret) data.outboundSecret = null;
   else if (v.outboundSecret?.trim()) data.outboundSecret = encryptSecret(v.outboundSecret.trim());

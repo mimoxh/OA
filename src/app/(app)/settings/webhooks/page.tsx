@@ -2,6 +2,7 @@ import { requirePermission } from "@/lib/auth/dal";
 import { db } from "@/lib/db";
 import { decryptOptional, decryptSecret, maskTokenPrefix, maskUrl, parseHeadersJson } from "@/lib/im/webhook-crypto";
 import { normalizeTriggerMode, publicBaseUrl, replyEndpoint } from "@/lib/im/webhook-outbound";
+import { resolveRunMetadata, type ConnectorRunDefaults } from "@/lib/im/webhook-run-config";
 import { Page, PageHeader, TopBar } from "@/components/ui/page";
 import { NewWebhookBotButton, WebhookBotList, type WebhookBotRow } from "@/components/settings/webhook-bots";
 
@@ -21,6 +22,11 @@ function headerNames(cipher: string | null): string[] {
   } catch {
     return ["（无法解密）"];
   }
+}
+
+function runDefaults(c: ConnectorRunDefaults) {
+  const m = resolveRunMetadata(c);
+  return { defaultAgent: m.agent, defaultModel: m.model, defaultEffort: m.effort };
 }
 
 export default async function WebhooksPage() {
@@ -46,6 +52,7 @@ export default async function WebhooksPage() {
     headerNames: headerNames(c.outboundHeaders),
     tokenPrefix: maskTokenPrefix(c.inboundTokenPrefix),
     replyUrl: replyEndpoint(c.id),
+    ...runDefaults(c),
     createdAt: c.createdAt.toISOString(),
     logs: c.logs.map((l) => ({
       id: l.id,

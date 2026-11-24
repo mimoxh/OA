@@ -16,6 +16,7 @@ import { useAction } from "@/components/ui/use-action";
 import { ColorPicker } from "@/components/oa/color-picker";
 import { PALETTE } from "@/lib/oa/types";
 import { formatDateTime } from "@/lib/format";
+import { AGENT_PRESETS, EFFORT_LEVELS, MODEL_SUGGESTIONS, SELF_MANAGED_AGENT_HINT } from "@/lib/im/webhook-run-config";
 import {
   createWebhookBotAction,
   deleteWebhookBotAction,
@@ -54,9 +55,15 @@ export type WebhookBotRow = {
   headerNames: string[];
   tokenPrefix: string;
   replyUrl: string;
+  defaultAgent: string | null;
+  defaultModel: string | null;
+  defaultEffort: string | null;
   createdAt: string;
   logs: WebhookLogRow[];
 };
+
+const CUSTOM_AGENT = "__custom__";
+const isPresetAgent = (a: string) => (AGENT_PRESETS as readonly string[]).includes(a);
 
 const TRIGGER_LABEL: Record<TriggerMode, string> = {
   mention_only: "群聊仅 @ 或回复时触发",
@@ -74,7 +81,84 @@ type FormState = {
   triggerMode: TriggerMode;
   clearSecret: boolean;
   clearHeaders: boolean;
+  defaultAgent: string;
+  customAgent: boolean;
+  defaultModel: string;
+  defaultEffort: string;
 };
+
+const BLANK_RUN = { defaultAgent: "", customAgent: false, defaultModel: "", defaultEffort: "" };
+
+function runConfigPayload(form: FormState) {
+  return { defaultAgent: form.defaultAgent, defaultModel: form.defaultModel, defaultEffort: form.defaultEffort };
+}
+
+function RunConfigFields({ form, setForm }: { form: FormState; setForm: (f: FormState) => void }) {
+  const agent = form.defaultAgent.trim().toLowerCase();
+  const hint = agent && !form.defaultModel.trim() ? SELF_MANAGED_AGENT_HINT[agent] : undefined;
+  return (
+    <div className="col-span-2 rounded-md border border-line p-3">
+      <div className="mb-2 text-xs font-medium text-ink-2">默认运行配置</div>
+      <p className="mb-2 text-xs text-ink-3">
+        随每条出站消息写入 <code>payload.metadata</code>（agent / model / effort）；聊天中可按会话临时切换，留空则跟随外部 Bot 自身默认。
+      </p>
+      <div className="grid grid-cols-3 gap-3">
+        <Field label="默认基座（Agent）" hint={hint}>
+          <Select
+            value={form.customAgent ? CUSTOM_AGENT : form.defaultAgent}
+            onChange={(e) =>
+              e.target.value === CUSTOM_AGENT
+                ? setForm({ ...form, customAgent: true, defaultAgent: "" })
+                : setForm({ ...form, customAgent: false, defaultAgent: e.target.value })
+            }
+          >
+            <option value="">跟随 Bot 默认</option>
+            {AGENT_PRESETS.map((a) => (
+              <option key={a} value={a}>
+                {a}
+              </option>
+            ))}
+            <option value={CUSTOM_AGENT}>自定义…</option>
+          </Select>
+          {form.customAgent && (
+            <Input
+              className="mt-1.5 font-mono"
+              value={form.defaultAgent}
+              maxLength={40}
+              placeholder="自定义基座标识，如 my-agent"
+              onChange={(e) => setForm({ ...form, defaultAgent: e.target.value })}
+            />
+          )}
+        </Field>
+        <Field label="默认模型（Model）" hint="Provider Model ID，留空使用基座默认">
+          <Input
+            value={form.defaultModel}
+            maxLength={120}
+            list="webhook-model-suggestions"
+            className="font-mono"
+            placeholder="如 claude-opus-5-5 / gpt-6-astra"
+            onChange={(e) => setForm({ ...form, defaultModel: e.target.value })}
+          />
+          <datalist id="webhook-model-suggestions">
+            {MODEL_SUGGESTIONS.map((m) => (
+              <option key={m} value={m} />
+            ))}
+          </datalist>
+        </Field>
+        <Field label="默认思考强度（Effort）">
+          <Select value={form.defaultEffort} onChange={(e) => setForm({ ...form, defaultEffort: e.target.value })}>
+            <option value="">默认</option>
+            {EFFORT_LEVELS.map((x) => (
+              <option key={x} value={x}>
+                {x}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      </div>
+    </div>
+  );
+}
 
 function copy(text: string, label = "已复制") {
   navigator.clipboard.writeText(text).then(
@@ -146,6 +230,7 @@ function BotFields({ form, setForm, editing }: { form: FormState; setForm: (f: F
           <option value="all">群内所有消息都触发</option>
         </Select>
       </Field>
+      <RunConfigFields form={form} setForm={setForm} />
       <div className="col-span-2">
         <span className="mb-1 block text-xs font-medium text-ink-2">头像颜色</span>
         <div className="flex items-center gap-3">
@@ -223,6 +308,7 @@ export function NewWebhookBotButton() {
     triggerMode: "mention_only",
     clearSecret: false,
     clearHeaders: false,
+    ...BLANK_RUN,
   };
   const [form, setForm] = useState(blank);
   return (
@@ -262,6 +348,7 @@ export function NewWebhookBotButton() {
                         outboundSecret: form.outboundSecret,
                         outboundHeaders: form.outboundHeaders,
                         triggerMode: form.triggerMode,
+                        ...runConfigPayload(form),
                       }),
                     {
                       success: `已创建机器人「${form.name}」`,
@@ -300,6 +387,10 @@ function EditBotButton({ bot }: { bot: WebhookBotRow }) {
     triggerMode: bot.triggerMode,
     clearSecret: false,
     clearHeaders: false,
+    defaultAgent: bot.defaultAgent ?? "",
+    customAgent: !!bot.defaultAgent && !isPresetAgent(bot.defaultAgent),
+    defaultModel: bot.defaultModel ?? "",
+    defaultEffort: bot.defaultEffort ?? "",
   };
   const [form, setForm] = useState(initial);
   return (
@@ -340,6 +431,7 @@ function EditBotButton({ bot }: { bot: WebhookBotRow }) {
                       outboundHeaders: form.outboundHeaders || undefined,
                       clearSecret: form.clearSecret,
                       clearHeaders: form.clearHeaders,
+                      ...runConfigPayload(form),
                     }),
                   { success: "已保存", onSuccess: () => setOpen(false) },
                 )
@@ -407,6 +499,9 @@ function BotCard({ bot }: { bot: WebhookBotRow }) {
             </Badge>
             {bot.enabled ? <Badge color="green">已启用</Badge> : <Badge color="red">已停用</Badge>}
             <Badge>{TRIGGER_LABEL[bot.triggerMode]}</Badge>
+            <Badge color={bot.defaultAgent ? "blue" : "gray"}>基座 {bot.defaultAgent ?? "默认"}</Badge>
+            <Badge color={bot.defaultModel ? "blue" : "gray"}>模型 {bot.defaultModel ?? "默认"}</Badge>
+            <Badge color={bot.defaultEffort ? "blue" : "gray"}>Effort {bot.defaultEffort ?? "默认"}</Badge>
           </div>
           <div className="mt-0.5 text-xs text-ink-3">{bot.description || bot.title || "—"}</div>
           <dl className="mt-3 grid grid-cols-[110px_1fr] gap-x-3 gap-y-1 text-xs">

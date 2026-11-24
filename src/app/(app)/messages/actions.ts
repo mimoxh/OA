@@ -28,6 +28,12 @@ import {
 import { getOrCreateBizGroup } from "@/lib/im/biz";
 import { listMessages } from "@/lib/im/queries";
 import { dispatchMessageWebhooks } from "@/lib/im/webhook-outbound";
+import {
+  listConversationWebhookBots,
+  resetConversationRunConfig,
+  runConfigPatchSchema,
+  saveConversationRunConfig,
+} from "@/lib/im/webhook-run-config";
 
 const id = z.string().min(1);
 
@@ -135,6 +141,30 @@ export async function updateConversationPrefs(input: z.input<typeof prefsSchema>
   return runAction(null, async (user) => {
     const v = parseInput(prefsSchema, input);
     await db.$transaction((tx) => setConversationPrefs(tx, user.id, v.conversationId, v));
+  });
+}
+
+const runConfigSchema = runConfigPatchSchema.extend({ conversationId: id });
+
+async function requireRunConfigTarget(conversationId: string, userId: string) {
+  await requireMember(db, conversationId, userId);
+  if (!(await listConversationWebhookBots(db, conversationId)).length) throw new Error("该会话中没有已启用的 Webhook 机器人");
+}
+
+/** 会话级 Webhook 运行配置（基座 / 模型 / 思考强度）；仅传入的字段会被修改 */
+export async function updateConversationRunConfig(input: z.input<typeof runConfigSchema>) {
+  return runAction(null, async (user) => {
+    const v = parseInput(runConfigSchema, input);
+    await requireRunConfigTarget(v.conversationId, user.id);
+    return saveConversationRunConfig(db, v.conversationId, user.id, { agent: v.agent, model: v.model, effort: v.effort });
+  });
+}
+
+export async function resetConversationRunConfigAction(conversationId: string) {
+  return runAction(null, async (user) => {
+    const cid = parseInput(id, conversationId);
+    await requireRunConfigTarget(cid, user.id);
+    return resetConversationRunConfig(db, cid);
   });
 }
 

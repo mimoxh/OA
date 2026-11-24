@@ -5,11 +5,17 @@ import type { AddressInfo } from "node:net";
 import { after, before, describe, it } from "node:test";
 import { db } from "@/lib/db";
 import { createGroup, getOrCreateDirect, sendBotReplyMessage, sendTextMessage, appendMessage } from "@/lib/im/service";
-import { createWebhookBot, setWebhookBotEnabled, updateWebhookBot } from "@/lib/im/webhook-admin";
+import { createWebhookBot, setWebhookBotEnabled, updateBotSchema, updateWebhookBot } from "@/lib/im/webhook-admin";
 import { signPayload } from "@/lib/im/webhook-crypto";
 import { handleWebhookReply, handleWebhookTyping } from "@/lib/im/webhook-inbound";
 import { dispatchMessageWebhooks, pingConnector } from "@/lib/im/webhook-outbound";
 import { startOrJoinCall } from "@/lib/im/call-service";
+import {
+  getChatRunConfigContext,
+  getConversationRunConfig,
+  resetConversationRunConfig,
+  saveConversationRunConfig,
+} from "@/lib/im/webhook-run-config";
 
 type Captured = { path: string; headers: IncomingMessage["headers"]; body: string };
 let server: Server;
@@ -372,5 +378,93 @@ describe("入站回复", () => {
     const [item] = JSON.parse(pub.body).batch;
     assert.deepEqual(item.event, { type: "typing", conversationId: directId, userId: bot.botUserId });
     assert.deepEqual(item.userIds, [alice.id]);
+  });
+});
+
+describe("出站 metadata（基座 / 模型 / 思考强度）", () => {
+  const orca = (extra: Record<string, unknown> = {}) => ({ id: bot.connectorId, name: "Orca", avatarColor: "#9065b0", triggerMode: "mention_only" as const, ...extra });
+  async function directMetadata() {
+    const msg = await send(directId, alice.id, doc(txt("metadata?")));
+    const [r] = await dispatchMessageWebhooks(msg.id);
+    assert.equal(r.result.ok, true);
+    const [hit] = take("/hook");
+    return JSON.parse(hit.body).metadata;
+  }
+
+  it("默认全空时 metadata 字段全部为 null（消息与 ping）", async () => {
+    take("/hook");
+    assert.deepEqual(await directMetadata(), { agent: null, model: null, effort: null });
+    await pingConnector(bot.connectorId);
+    assert.deepEqual(JSON.parse(take("/hook")[0].body).metadata, { agent: null, model: null, effort: null });
+  });
+
+  it("仅机器人默认：空白归一化为 null，ping 同样携带默认值", async () => {
+    await db.$transaction((tx) =>
+      updateWebhookBot(tx, updateBotSchema.parse(orca({ defaultAgent: " Droid ", defaultModel: "   ", defaultEffort: "HIGH" }))),
+    );
+    const c = await db.webhookConnector.findUniqueOrThrow({ where: { id: bot.connectorId } });
+    assert.deepEqual([c.defaultAgent, c.defaultModel, c.defaultEffort], ["droid", null, "high"]);
+    assert.deepEqual(await directMetadata(), { agent: "droid", model: null, effort: "high" });
+    await pingConnector(bot.connectorId);
+    const ping = take("/hook")[0];
+    assert.deepEqual(JSON.parse(ping.body).metadata, { agent: "droid", model: null, effort: "high" });
+    assert.equal(ping.headers["x-oa-signature"], signPayload("s3cret", ping.body));
+  });
+
+  it("不传默认字段的编辑保持原值", async () => {
+    await db.$transaction((tx) => updateWebhookBot(tx, orca()));
+    const c = await db.webhookConnector.findUniqueOrThrow({ where: { id: bot.connectorId } });
+    assert.deepEqual([c.defaultAgent, c.defaultModel, c.defaultEffort], ["droid", null, "high"]);
+  });
+
+  it("会话覆盖逐字段优先于机器人默认，并持久化", async () => {
+    await saveConversationRunConfig(db, directId, alice.id, { model: " claude-opus-5-5 " });
+    assert.deepEqual(await directMetadata(), { agent: "droid", model: "claude-opus-5-5", effort: "high" });
+    await saveConversationRunConfig(db, directId, alice.id, { agent: "codex", effort: "xhigh" });
+    assert.deepEqual(await getConversationRunConfig(db, directId), { agent: "codex", model: "claude-opus-5-5", effort: "xhigh" });
+    assert.deepEqual(await directMetadata(), { agent: "codex", model: "claude-opus-5-5", effort: "xhigh" });
+    await saveConversationRunConfig(db, directId, alice.id, { model: "" });
+    assert.deepEqual(await directMetadata(), { agent: "codex", model: null, effort: "xhigh" });
+  });
+
+  it("恢复机器人默认：删除会话配置并回退", async () => {
+    await resetConversationRunConfig(db, directId);
+    assert.equal(await db.webhookConversationConfig.count({ where: { conversationId: directId } }), 0);
+    assert.deepEqual(await directMetadata(), { agent: "droid", model: null, effort: "high" });
+    await saveConversationRunConfig(db, directId, alice.id, { effort: "low" });
+    await saveConversationRunConfig(db, directId, alice.id, { effort: null });
+    assert.equal(await db.webhookConversationConfig.count({ where: { conversationId: directId } }), 0, "全部清空等价于重置");
+  });
+
+  it("非法 effort / 基座被拒绝且不落库", async () => {
+    await assert.rejects(() => saveConversationRunConfig(db, directId, alice.id, { effort: "max" }), /low \/ medium \/ high \/ xhigh/);
+    await assert.rejects(() => saveConversationRunConfig(db, directId, alice.id, { agent: "bad agent" }), /基座标识/);
+    assert.equal(await db.webhookConversationConfig.count({ where: { conversationId: directId } }), 0);
+  });
+
+  it("群聊覆盖作用于群内所有机器人，各自与默认合并", async () => {
+    await saveConversationRunConfig(db, groupId, bob.id, { effort: "medium" });
+    const msg = await send(groupId, alice.id, doc(mention("all", "所有人")));
+    assert.equal((await dispatchMessageWebhooks(msg.id)).length, 2);
+    const byPath = Object.fromEntries(take("/hook").map((h) => [h.path, JSON.parse(h.body).metadata]));
+    assert.deepEqual(byPath["/hook/orca"], { agent: "droid", model: null, effort: "medium" });
+    assert.deepEqual(byPath["/hook/echo"], { agent: null, model: null, effort: "medium" });
+    assert.deepEqual(await getConversationRunConfig(db, directId), { agent: null, model: null, effort: null }, "单聊不受群聊覆盖影响");
+  });
+
+  it("选择器上下文：仅含已启用 Webhook 机器人的单聊 / 群聊", async () => {
+    const direct = await getChatRunConfigContext(db, directId);
+    assert.deepEqual(direct?.bots.map((b) => [b.name, b.defaults]), [["Orca", { agent: "droid", model: null, effort: "high" }]]);
+    assert.equal(await getChatRunConfigContext(db, humanDirectId), null);
+    const group = await getChatRunConfigContext(db, groupId);
+    assert.deepEqual(group?.bots.map((b) => b.name).sort(), ["Echo", "Orca"]);
+    assert.deepEqual(group?.override, { agent: null, model: null, effort: "medium" });
+    await db.$transaction((tx) => setWebhookBotEnabled(tx, bot.connectorId, false));
+    try {
+      assert.equal(await getChatRunConfigContext(db, directId), null);
+      assert.deepEqual((await getChatRunConfigContext(db, groupId))?.bots.map((b) => b.name), ["Echo"]);
+    } finally {
+      await db.$transaction((tx) => setWebhookBotEnabled(tx, bot.connectorId, true));
+    }
   });
 });
