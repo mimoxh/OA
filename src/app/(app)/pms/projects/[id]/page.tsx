@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Plus } from "lucide-react";
 import { db } from "@/lib/db";
-import { can, requireUser } from "@/lib/auth/dal";
+import { can, requirePermission } from "@/lib/auth/dal";
 import { TopBar, Page, PageHeader } from "@/components/ui/page";
 import { Button } from "@/components/ui/button";
 import { getActiveUsers } from "@/lib/crm/queries";
@@ -36,7 +36,8 @@ const VIEWS = [
 type View = (typeof VIEWS)[number]["key"];
 
 export default async function ProjectPage({ params, searchParams }: PageProps<"/pms/projects/[id]">) {
-  const user = await requireUser();
+  // 页面与布局并行渲染，下方 upgradeProject 会写库，所以权限必须在页面里先校验
+  const user = await requirePermission("pms:view");
   const { id } = await params;
   const sp = await searchParams;
   const view: View = VIEWS.some((v) => v.key === sp.view) ? (sp.view as View) : "board";
