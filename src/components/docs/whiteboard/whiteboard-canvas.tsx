@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import {
-  ArrowUpRight, Circle, Diamond, Eraser, ExternalLink, FileText, Frame, Hand, ImagePlus, Maximize2,
-  Minus, MousePointer2, Pencil, Plus, Redo2, Square, StickyNote, Trash2, Type, Undo2, ImageDown,
+  AlignCenterHorizontal, AlignEndHorizontal, AlignStartHorizontal, ArrowUpRight, Circle, Diamond, Eraser,
+  ExternalLink, FileText, Frame, Hand, ImageDown, ImagePlus, Maximize2, Minus, MousePointer2, Pencil, Plus,
+  Redo2, Square, StickyNote, TextAlignCenter, TextAlignEnd, TextAlignStart, Trash2, Type, Undo2,
   type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -12,12 +13,14 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { exportWhiteboardPng, paintWhiteboard, type WhiteboardImages } from "@/lib/docs/whiteboard/canvas";
 import {
-  WHITEBOARD_COLORS, WHITEBOARD_MAX_ELEMENTS, WHITEBOARD_MAX_POINTS, whiteboardAttachmentIds,
-  type WhiteboardColor, type WhiteboardElement, type WhiteboardPoint, type WhiteboardReference,
+  DEFAULT_WHITEBOARD_TEXT_ALIGN, DEFAULT_WHITEBOARD_VERTICAL_ALIGN, resolveWhiteboardTextAlign,
+  resolveWhiteboardVerticalAlign, WHITEBOARD_COLORS, WHITEBOARD_MAX_ELEMENTS, WHITEBOARD_MAX_POINTS,
+  whiteboardAttachmentIds, type WhiteboardColor, type WhiteboardElement, type WhiteboardPoint,
+  type WhiteboardReference, type WhiteboardTextAlign, type WhiteboardVerticalAlign,
 } from "@/lib/docs/whiteboard/content";
 import {
-  clampPoint, fitView, hitElement, makeFigure, makeStroke, offsetElement, palette, removeElement, resizeElement,
-  type WhiteboardTool, type WhiteboardView,
+  clampPoint, fitView, hitElement, makeArrow, makeFigure, makeStroke, offsetElement, palette, removeElement,
+  resizeElement, type WhiteboardTool, type WhiteboardView,
 } from "@/lib/docs/whiteboard/geometry";
 import { PagePickerDialog } from "../page-picker";
 import { uploadAttachment } from "../editor/upload";
@@ -34,6 +37,18 @@ const tools: { tool: WhiteboardTool; label: string; icon: LucideIcon; key?: stri
   { tool: "pen", label: "画笔", icon: Pencil, key: "p" },
   { tool: "arrow", label: "连线", icon: ArrowUpRight, key: "c" },
   { tool: "erase", label: "橡皮擦", icon: Eraser, key: "e" },
+];
+
+const horizontalAligns: { value: WhiteboardTextAlign; label: string; icon: LucideIcon }[] = [
+  { value: "left", label: "文字左对齐", icon: TextAlignStart },
+  { value: "center", label: "文字水平居中", icon: TextAlignCenter },
+  { value: "right", label: "文字右对齐", icon: TextAlignEnd },
+];
+
+const verticalAligns: { value: WhiteboardVerticalAlign; label: string; icon: LucideIcon }[] = [
+  { value: "top", label: "文字顶部对齐", icon: AlignStartHorizontal },
+  { value: "middle", label: "文字垂直居中", icon: AlignCenterHorizontal },
+  { value: "bottom", label: "文字底部对齐", icon: AlignEndHorizontal },
 ];
 
 type Shape = Exclude<WhiteboardElement, { type: "arrow" }>;
@@ -78,6 +93,8 @@ export function WhiteboardCanvas({
 }) {
   const [tool, setTool] = useState<WhiteboardTool>("select");
   const [color, setColor] = useState<WhiteboardColor>("blue");
+  const [textAlign, setTextAlign] = useState<WhiteboardTextAlign>(DEFAULT_WHITEBOARD_TEXT_ALIGN);
+  const [verticalAlign, setVerticalAlign] = useState<WhiteboardVerticalAlign>(DEFAULT_WHITEBOARD_VERTICAL_ALIGN);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [view, setView] = useState<WhiteboardView | null>(null);
   const [selection, setSelection] = useState<string | null>(null);
@@ -261,11 +278,13 @@ export function WhiteboardCanvas({
     if (current.kind === "resize") return resizeElement(current.item, point);
     if (current.tool === "arrow") {
       const endId = hitElement(elements, point, 5 / viewport.scale, true)?.id;
-      return {
-        id: current.id, type: "arrow", color, text: "",
-        from: { ...current.start, ...(current.fromId ? { elementId: current.fromId } : {}) },
-        to: { ...point, ...(endId && endId !== current.fromId ? { elementId: endId } : {}) },
-      } satisfies WhiteboardElement;
+      return makeArrow(
+        current.id,
+        { ...current.start, ...(current.fromId ? { elementId: current.fromId } : {}) },
+        { ...point, ...(endId && endId !== current.fromId ? { elementId: endId } : {}) },
+        color,
+        textAlign,
+      );
     }
     if (current.tool === "pen") {
       const last = current.points.at(-1)!;
@@ -274,7 +293,19 @@ export function WhiteboardCanvas({
       }
       return makeStroke(current.id, current.points, color);
     }
-    return makeFigure(current.id, current.tool, current.start, point, current.tool === "note" && color === "blue" ? "yellow" : color);
+    return makeFigure(
+      current.id,
+      current.tool,
+      current.start,
+      point,
+      current.tool === "note" && color === "blue" ? "yellow" : color,
+      {
+        textAlign,
+        verticalAlign: current.tool === "frame" && verticalAlign === DEFAULT_WHITEBOARD_VERTICAL_ALIGN
+          ? "top"
+          : verticalAlign,
+      },
+    );
   }
 
   function pointerMove(event: PointerEvent<HTMLCanvasElement>) {
@@ -475,7 +506,7 @@ export function WhiteboardCanvas({
       </div>
 
       <div className="flex min-h-10 flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-line px-2 py-1">
-        <div className="flex items-center gap-1">
+        <div className="flex flex-wrap items-center gap-1">
           {!readOnly && (!active || "color" in active) && WHITEBOARD_COLORS.map((value) => {
             const current = active && "color" in active ? active.color : color;
             return (
@@ -493,6 +524,56 @@ export function WhiteboardCanvas({
               />
             );
           })}
+          {!readOnly && (!active || "text" in active) && (
+            <>
+              <span className="mx-1 h-4 shrink-0 border-l border-line" />
+              {horizontalAligns.map(({ value, label, icon: Icon }) => {
+                const current = active && "text" in active ? resolveWhiteboardTextAlign(active) : textAlign;
+                return (
+                  <IconButton
+                    key={value}
+                    title={label}
+                    aria-label={label}
+                    aria-pressed={current === value}
+                    className={cn(current === value && "bg-accent-soft text-accent")}
+                    onClick={() => {
+                      setTextAlign(value);
+                      if (active && "text" in active && resolveWhiteboardTextAlign(active) !== value) {
+                        commit(replaceElement(elements, { ...active, textAlign: value }));
+                      }
+                    }}
+                  >
+                    <Icon className="size-3.5" />
+                  </IconButton>
+                );
+              })}
+            </>
+          )}
+          {!readOnly && (!active || ("text" in active && active.type !== "arrow")) && (
+            <>
+              <span className="mx-1 h-4 shrink-0 border-l border-line" />
+              {verticalAligns.map(({ value, label, icon: Icon }) => {
+                const current = active ? resolveWhiteboardVerticalAlign(active) : verticalAlign;
+                return (
+                  <IconButton
+                    key={value}
+                    title={label}
+                    aria-label={label}
+                    aria-pressed={current === value}
+                    className={cn(current === value && "bg-accent-soft text-accent")}
+                    onClick={() => {
+                      setVerticalAlign(value);
+                      if (active && resolveWhiteboardVerticalAlign(active) !== value) {
+                        commit(replaceElement(elements, { ...active, verticalAlign: value }));
+                      }
+                    }}
+                  >
+                    <Icon className="size-3.5" />
+                  </IconButton>
+                );
+              })}
+            </>
+          )}
           {active && "text" in active && !readOnly && (
             <IconButton title="编辑文字" aria-label="编辑文字" onClick={() => openItem(active)}><Type className="size-4" /></IconButton>
           )}
@@ -545,16 +626,27 @@ export function WhiteboardCanvas({
             setEditor(null);
           }}>应用</Button>}
         >
-          <textarea
-            aria-label="画布文字"
-            className="min-h-24 w-full rounded-md border border-line px-3 py-2 text-sm outline-none focus:border-accent"
-            maxLength={4_000}
-            value={editor?.text ?? ""}
-            onChange={(event) => {
-              const text = event.target.value;
-              setEditor((current) => current && { ...current, text });
-            }}
-          />
+          {(() => {
+            const editingItem = editor ? elements.find((entry) => entry.id === editor.id) : null;
+            const editingAlign = editingItem && "text" in editingItem
+              ? resolveWhiteboardTextAlign(editingItem)
+              : DEFAULT_WHITEBOARD_TEXT_ALIGN;
+            return (
+              <textarea
+                aria-label="画布文字"
+                className={cn(
+                  "min-h-24 w-full rounded-md border border-line px-3 py-2 text-sm outline-none focus:border-accent",
+                  editingAlign === "center" ? "text-center" : editingAlign === "right" ? "text-right" : "text-left",
+                )}
+                maxLength={4_000}
+                value={editor?.text ?? ""}
+                onChange={(event) => {
+                  const text = event.target.value;
+                  setEditor((current) => current && { ...current, text });
+                }}
+              />
+            );
+          })()}
         </DialogContent>
       </Dialog>
     </div>

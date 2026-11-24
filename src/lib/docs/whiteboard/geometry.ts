@@ -1,9 +1,13 @@
 import {
+  DEFAULT_WHITEBOARD_TEXT_ALIGN,
+  defaultWhiteboardVerticalAlign,
   WHITEBOARD_MAX_COORDINATE,
   type WhiteboardBox,
   type WhiteboardColor,
   type WhiteboardElement,
   type WhiteboardPoint,
+  type WhiteboardTextAlign,
+  type WhiteboardVerticalAlign,
 } from "./content";
 
 export type WhiteboardView = WhiteboardPoint & { scale: number };
@@ -46,13 +50,36 @@ function boxBetween(a: WhiteboardPoint, b: WhiteboardPoint): WhiteboardBox {
 }
 
 export function makeFigure(
-  id: string, type: FigureType, start: WhiteboardPoint, end: WhiteboardPoint, color: WhiteboardColor,
+  id: string,
+  type: FigureType,
+  start: WhiteboardPoint,
+  end: WhiteboardPoint,
+  color: WhiteboardColor,
+  align?: { textAlign?: WhiteboardTextAlign; verticalAlign?: WhiteboardVerticalAlign },
 ): WhiteboardElement {
   const [width, height] = defaultSizes[type];
   const box = Math.hypot(end.x - start.x, end.y - start.y) < 6
     ? { ...start, width, height }
     : boxBetween(start, end);
-  return { id, type, color, ...box, text: type === "frame" ? "框架" : "" };
+  return {
+    id,
+    type,
+    color,
+    ...box,
+    text: type === "frame" ? "框架" : "",
+    textAlign: align?.textAlign ?? DEFAULT_WHITEBOARD_TEXT_ALIGN,
+    verticalAlign: align?.verticalAlign ?? defaultWhiteboardVerticalAlign(type),
+  };
+}
+
+export function makeArrow(
+  id: string,
+  from: Arrow["from"],
+  to: Arrow["to"],
+  color: WhiteboardColor,
+  textAlign: WhiteboardTextAlign = DEFAULT_WHITEBOARD_TEXT_ALIGN,
+): Arrow {
+  return { id, type: "arrow", color, text: "", textAlign, from, to };
 }
 
 export function makeStroke(id: string, points: WhiteboardPoint[], color: WhiteboardColor): WhiteboardElement {
