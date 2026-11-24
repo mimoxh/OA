@@ -2,6 +2,7 @@ import "server-only";
 import { db } from "@/lib/db";
 import { hasPermission, parsePermissions } from "@/lib/permissions";
 import { spaceAccess, visibleSpaceWhere, type DocUser, type SpaceLike } from "./access";
+import { ensurePersonalSpace } from "./personal";
 
 export type TreeDoc = {
   id: string;
@@ -16,17 +17,25 @@ export type NavSpace = {
   name: string;
   icon: string;
   visibility: "PUBLIC" | "PRIVATE";
+  personal: boolean;
   canEdit: boolean;
   canManage: boolean;
 };
 export type MemberOption = { id: string; name: string; avatarColor: string; title: string | null };
 
-export async function getDocsNav(user: DocUser) {
+/** 当前用户可见的空间（个人空间排在最前；老用户首次进入时补建个人空间） */
+export async function listVisibleSpaces(user: DocUser) {
+  if (hasPermission(user.permissions, "docs:view")) await ensurePersonalSpace(db, user.id);
   const spaces = await db.space.findMany({
     where: visibleSpaceWhere(user),
     orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
     include: { members: { select: { userId: true, role: true } } },
   });
+  return spaces.sort((a, b) => Number(!!b.ownerId) - Number(!!a.ownerId));
+}
+
+export async function getDocsNav(user: DocUser) {
+  const spaces = await listVisibleSpaces(user);
   const spaceIds = spaces.map((s) => s.id);
   const [docs, favorites] = await Promise.all([
     db.document.findMany({
@@ -42,7 +51,15 @@ export async function getDocsNav(user: DocUser) {
   ]);
   const navSpaces: NavSpace[] = spaces.map((s) => {
     const a = spaceAccess(s, user);
-    return { id: s.id, name: s.name, icon: s.icon, visibility: s.visibility, canEdit: a.canEdit, canManage: a.canManage };
+    return {
+      id: s.id,
+      name: s.name,
+      icon: s.icon,
+      visibility: s.visibility,
+      personal: !!s.ownerId,
+      canEdit: a.canEdit,
+      canManage: a.canManage,
+    };
   });
   return { spaces: navSpaces, docs: docs as TreeDoc[], favoriteIds: favorites.map((f) => f.documentId) };
 }

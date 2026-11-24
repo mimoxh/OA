@@ -2,10 +2,11 @@
   "name": "oa-desktop",
   "version": "0.1.0",
   "private": true,
-  "description": "Tauri v2 desktop wrapper for 协作平台 OA",
+  "description": "协作平台 OA 桌面端（可内置服务端）",
   "scripts": {
     "dev": "tauri dev",
-    "build": "tauri build",
+    "bundle:server": "node ../scripts/desktop/bundle-server.mjs",
+    "build": "node ../scripts/desktop/bundle-server.mjs && tauri build",
     "check": "cargo check --manifest-path src-tauri/Cargo.toml"
   },
   "devDependencies": {

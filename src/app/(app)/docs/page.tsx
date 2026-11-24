@@ -4,7 +4,8 @@ import { db } from "@/lib/db";
 import { can, requirePermission } from "@/lib/auth/dal";
 import { EmptyState, Page, PageHeader, Section, TopBar } from "@/components/ui/page";
 import { formatRelative } from "@/lib/format";
-import { spaceAccess, visibleSpaceWhere } from "@/lib/docs/access";
+import { spaceAccess } from "@/lib/docs/access";
+import { listVisibleSpaces } from "@/lib/docs/queries";
 import { DocCard } from "@/components/docs/doc-card";
 import { NewDatabaseButton, NewPageButton, NewSpaceButton } from "@/components/docs/buttons";
 import { SpaceHome } from "./space-home";
@@ -24,13 +25,9 @@ export default async function DocsHomePage({ searchParams }: PageProps<"/docs">)
   const user = await requirePermission("docs:view");
   const sp = await searchParams;
   const spaceId = typeof sp.space === "string" ? sp.space : null;
-  if (spaceId) return <SpaceHome user={user} spaceId={spaceId} />;
+  if (spaceId) return <SpaceHome user={user} spaceId={spaceId} settings={sp.settings === "1"} />;
 
-  const spaces = await db.space.findMany({
-    where: visibleSpaceWhere(user),
-    orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
-    include: { members: { select: { userId: true, role: true } } },
-  });
+  const spaces = await listVisibleSpaces(user);
   const spaceIds = spaces.map((s) => s.id);
   const live = { deletedAt: null, isTemplate: false, kind: { not: "row" }, spaceId: { in: spaceIds } };
   const [recent, favorites, counts] = await Promise.all([
@@ -117,7 +114,7 @@ export default async function DocsHomePage({ searchParams }: PageProps<"/docs">)
                   </span>
                   <span className="mt-0.5 line-clamp-2 block text-[13px] text-ink-2">{s.description || "暂无描述"}</span>
                   <span className="mt-2 block text-xs text-ink-3">
-                    {countBy.get(s.id) ?? 0} 个页面 · {s.members.length} 位成员
+                    {countBy.get(s.id) ?? 0} 个页面 · {s.ownerId ? "仅自己可见" : `${s.members.length} 位成员`}
                   </span>
                 </span>
               </Link>

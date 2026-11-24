@@ -8,7 +8,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button, IconButton } from "@/components/ui/button";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { exportWhiteboardPng, paintWhiteboard, type WhiteboardImages } from "@/lib/docs/whiteboard/canvas";
 import {
@@ -16,7 +15,7 @@ import {
   type WhiteboardColor, type WhiteboardElement, type WhiteboardPoint, type WhiteboardReference,
 } from "@/lib/docs/whiteboard/content";
 import {
-  clampPoint, fitView, hitElement, makeFigure, makeStroke, offsetElement, palette, removeElement, resizeElement,
+  arrowPoints, clampPoint, fitView, hitElement, makeFigure, makeStroke, offsetElement, palette, removeElement, resizeElement,
   type WhiteboardTool, type WhiteboardView,
 } from "@/lib/docs/whiteboard/geometry";
 import { PagePickerDialog } from "../page-picker";
@@ -66,6 +65,25 @@ function replaceElement(items: WhiteboardElement[], item: WhiteboardElement) {
   return items.map((current) => current.id === item.id ? item : current);
 }
 
+/** 文字在画布上的绘制区域（画布坐标），与 paintWhiteboard 中 drawText 的位置保持一致 */
+function textBox(item: WhiteboardElement, items: WhiteboardElement[]) {
+  if (item.type === "arrow") {
+    const [a, b] = arrowPoints(item, new Map(items.map((entry) => [entry.id, entry])));
+    return { x: (a.x + b.x) / 2 + 5, y: (a.y + b.y) / 2 - 22, width: 200, height: 42, font: 14, lineHeight: 20 };
+  }
+  if (!("width" in item)) return null;
+  const insetX = item.type === "diamond" ? item.width / 4 : 12;
+  const insetY = item.type === "diamond" ? item.height / 4 : 11;
+  return {
+    x: item.x + insetX,
+    y: item.y + insetY,
+    width: Math.max(40, item.width - 2 * insetX),
+    height: Math.max(21, item.height - 2 * insetY),
+    font: item.type === "text" ? 17 : 15,
+    lineHeight: 21,
+  };
+}
+
 export function WhiteboardCanvas({
   boardId, title, elements, references, onChange, compact = false,
 }: {
@@ -91,6 +109,8 @@ export function WhiteboardCanvas({
   const canvas = useRef<HTMLCanvasElement>(null);
   const container = useRef<HTMLDivElement>(null);
   const imageInput = useRef<HTMLInputElement>(null);
+  const textInput = useRef<HTMLTextAreaElement>(null);
+  const editing = useRef<{ id: string; text: string } | null>(null);
   const images = useRef<WhiteboardImages>(new Map());
   const gesture = useRef<Gesture | null>(null);
   const latestElements = useRef(elements);
@@ -154,6 +174,9 @@ export function WhiteboardCanvas({
       if (!ctx) return;
       ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
       let visibleItems = elements;
+      if (editor) {
+        visibleItems = visibleItems.map((item) => item.id === editor.id && "text" in item ? { ...item, text: "" } : item);
+      }
       if (preview) {
         visibleItems = elements.some((item) => item.id === preview.id)
           ? replaceElement(elements, preview)
@@ -165,7 +188,19 @@ export function WhiteboardCanvas({
       });
     });
     return () => cancelAnimationFrame(frame);
-  }, [size, viewport, elements, selection, preview, refById, imageVersion, readOnly]);
+  }, [size, viewport, elements, selection, preview, refById, imageVersion, readOnly, editor]);
+
+  useEffect(() => {
+    editing.current = editor;
+  }, [editor]);
+
+  const editorId = editor?.id;
+  useEffect(() => {
+    const el = textInput.current;
+    if (!editorId || !el) return;
+    el.focus();
+    el.setSelectionRange(el.value.length, el.value.length);
+  }, [editorId]);
 
   useEffect(() => {
     const el = canvas.current;
@@ -214,6 +249,25 @@ export function WhiteboardCanvas({
     onChange(next);
   };
 
+  function startEdit(item: WhiteboardElement) {
+    if (!("text" in item) || readOnly) return;
+    const next = { id: item.id, text: item.text };
+    editing.current = next;
+    setEditor(next);
+  }
+
+  /** 结束原位文字编辑；save=false 时丢弃修改 */
+  function finishEdit(save: boolean) {
+    const current = editing.current;
+    if (!current) return;
+    editing.current = null;
+    setEditor(null);
+    if (!save) return;
+    const items = latestElements.current;
+    const item = items.find((entry) => entry.id === current.id);
+    if (item && "text" in item && item.text !== current.text) commit(replaceElement(items, { ...item, text: current.text }));
+  }
+
   function screenPoint(event: PointerEvent<HTMLCanvasElement>) {
     const rect = event.currentTarget.getBoundingClientRect();
     return { x: event.clientX - rect.left, y: event.clientY - rect.top };
@@ -222,6 +276,12 @@ export function WhiteboardCanvas({
   function pointerDown(event: PointerEvent<HTMLCanvasElement>) {
     if (!event.isPrimary || (event.button !== 0 && event.button !== 1)) return;
     event.preventDefault();
+    if (editing.current) {
+      // 点击画布其他位置只用于结束文字编辑，避免拿着编辑前的元素开始拖动
+      finishEdit(true);
+      event.currentTarget.focus();
+      return;
+    }
     event.currentTarget.focus();
     const screen = screenPoint(event);
     const point = pointOnBoard(screen, viewport);
@@ -309,7 +369,7 @@ export function WhiteboardCanvas({
     setSelection(next.id);
     if (current.kind === "draw") {
       setTool("select");
-      if (next.type === "text" || next.type === "note") setEditor({ id: next.id, text: next.text });
+      if (next.type === "text" || next.type === "note") startEdit(next);
     }
   }
 
@@ -317,8 +377,8 @@ export function WhiteboardCanvas({
     if (!item) return;
     if (item.type === "page" && refById.has(item.documentId)) {
       window.open(`/docs/${item.documentId}`, "_blank", "noopener,noreferrer");
-    } else if ("text" in item && !readOnly) {
-      setEditor({ id: item.id, text: item.text });
+    } else {
+      startEdit(item);
     }
   }
 
@@ -402,6 +462,8 @@ export function WhiteboardCanvas({
   };
 
   const visibleTools = readOnly ? tools.slice(0, 2) : tools;
+  const editingItem = editor ? elements.find((item) => item.id === editor.id) : undefined;
+  const editingBox = editingItem ? textBox(editingItem, elements) : null;
   return (
     <div className="overflow-hidden rounded-xl border border-line bg-white">
       <div className="flex items-center gap-1 overflow-x-auto border-b border-line px-2 py-1.5">
@@ -467,6 +529,46 @@ export function WhiteboardCanvas({
             void uploadImage(file);
           }}
         />
+        {editor && editingItem && editingBox && (
+          <textarea
+            ref={textInput}
+            aria-label="画布文字"
+            maxLength={4_000}
+            value={editor.text}
+            placeholder="输入文字"
+            spellCheck={false}
+            className="absolute resize-none overflow-hidden rounded-sm border-0 bg-transparent p-0 outline-1 outline-offset-2 outline-accent/60 placeholder:text-slate-400"
+            style={{
+              left: editingBox.x * viewport.scale + viewport.x,
+              // 画布按 textBaseline=top 绘制，CSS 行高会在字形上方多出半个行距，这里上移抵消
+              top: (editingBox.y - (editingBox.lineHeight - editingBox.font) / 2) * viewport.scale + viewport.y,
+              width: editingBox.width * viewport.scale,
+              height: (editingBox.height + editingBox.lineHeight - editingBox.font) * viewport.scale,
+              fontSize: editingBox.font * viewport.scale,
+              lineHeight: `${editingBox.lineHeight * viewport.scale}px`,
+              fontFamily: "system-ui",
+              color: "color" in editingItem ? palette[editingItem.color].stroke : palette.gray.stroke,
+            }}
+            onChange={(event) => {
+              const next = { id: editor.id, text: event.target.value };
+              editing.current = next;
+              setEditor(next);
+            }}
+            onBlur={() => finishEdit(true)}
+            onKeyDown={(event) => {
+              if (event.nativeEvent.isComposing) return;
+              if (event.key === "Escape") {
+                event.preventDefault();
+                finishEdit(false);
+                canvas.current?.focus();
+              } else if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+                event.preventDefault();
+                finishEdit(true);
+                canvas.current?.focus();
+              }
+            }}
+          />
+        )}
         {!elements.length && !preview && (
           <span className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-md bg-white px-3 py-1.5 text-sm text-ink-3 shadow-xs">
             {readOnly ? "白板暂无内容" : "选择画笔、便签或图形开始绘制"}
@@ -536,27 +638,6 @@ export function WhiteboardCanvas({
           setPicker(false);
         }}
       />
-      <Dialog open={!!editor} onOpenChange={(open) => !open && setEditor(null)}>
-        <DialogContent
-          title="编辑画布文字"
-          footer={<Button variant="primary" onClick={() => {
-            const item = elements.find((entry) => entry.id === editor?.id);
-            if (editor && item && "text" in item && item.text !== editor.text) commit(replaceElement(elements, { ...item, text: editor.text }));
-            setEditor(null);
-          }}>应用</Button>}
-        >
-          <textarea
-            aria-label="画布文字"
-            className="min-h-24 w-full rounded-md border border-line px-3 py-2 text-sm outline-none focus:border-accent"
-            maxLength={4_000}
-            value={editor?.text ?? ""}
-            onChange={(event) => {
-              const text = event.target.value;
-              setEditor((current) => current && { ...current, text });
-            }}
-          />
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

@@ -17,6 +17,7 @@
     "db:reset": "prisma db push --force-reset && tsx prisma/seed/index.ts",
     "desktop:dev": "pnpm --dir desktop dev",
     "desktop:build": "pnpm --dir desktop build",
+    "desktop:bundle-server": "node scripts/desktop/bundle-server.mjs",
     "desktop:check": "cargo check --manifest-path desktop/src-tauri/Cargo.toml",
     "postinstall": "prisma generate"
   },
@@ -73,6 +74,7 @@
     "@types/react-dom": "^19",
     "@types/ws": "^8.18.2",
     "concurrently": "^10.0.7",
+    "esbuild": "0.28.2",
     "eslint": "^9",
     "eslint-config-next": "16.4.6",
     "prisma": "7.10.1",

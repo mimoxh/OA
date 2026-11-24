@@ -10,6 +10,7 @@ import { ALL_PERMISSIONS, MODULES, parsePermissions, type ModuleKey } from "@/li
 import { appDependents, appName, missingRequirements } from "@/lib/apps";
 import { getDisabledApps } from "@/lib/apps-store";
 import { parseInput } from "@/lib/oa/validate";
+import { createPersonalSpace } from "@/lib/docs/personal";
 
 const id = z.string().min(1);
 const optionalText = (max: number, label: string) => z.string().trim().max(max, `${label}不能超过 ${max} 字`).optional();
@@ -49,17 +50,22 @@ export async function createMember(input: z.input<typeof memberSchema> & { passw
     const v = parseInput(memberSchema.extend({ password }), input);
     await checkRefs(v);
     if (await db.user.findUnique({ where: { email: v.email } })) throw new Error("该邮箱已被使用");
-    const created = await db.user.create({
-      data: {
-        name: v.name,
-        email: v.email,
-        passwordHash: await bcrypt.hash(v.password, 10),
-        departmentId: v.departmentId || null,
-        roleId: v.roleId,
-        title: v.title || null,
-        phone: v.phone || null,
-        avatarColor: v.avatarColor,
-      },
+    const passwordHash = await bcrypt.hash(v.password, 10);
+    const created = await db.$transaction(async (tx) => {
+      const u = await tx.user.create({
+        data: {
+          name: v.name,
+          email: v.email,
+          passwordHash,
+          departmentId: v.departmentId || null,
+          roleId: v.roleId,
+          title: v.title || null,
+          phone: v.phone || null,
+          avatarColor: v.avatarColor,
+        },
+      });
+      await createPersonalSpace(tx, u.id);
+      return u;
     });
     await audit(db, { entityType: "user", entityId: created.id, action: "create", userId: user.id });
     revalidateOrg();

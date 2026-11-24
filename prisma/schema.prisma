@@ -49,6 +49,8 @@ model User {
   department   Department? @relation("DeptMembers", fields: [departmentId], references: [id])
   // 固定到左侧导航栏的应用 key，JSON 字符串数组（按固定顺序），例如 ["crm","erp"]
   railPins     String      @default("[]")
+  // 左侧导航栏图标的自定义顺序（JSON 字符串数组，元素为入口 id，如 "@messages"、"crm"、"project:<id>"）
+  railOrder    String      @default("[]")
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
 
@@ -58,11 +60,13 @@ model User {
   comments           Comment[]
   auditLogs          AuditLog[]
 
-  spacesCreated   Space[]
+  spacesCreated   Space[]            @relation("SpaceCreator")
+  personalSpace   Space?             @relation("PersonalSpace")
   spaceMembers    SpaceMember[]
   docsCreated     Document[]         @relation("DocCreator")
   docsUpdated     Document[]         @relation("DocUpdater")
   docFavorites           DocumentFavorite[]
+  docRecents             DocumentRecent[]
   docVersions            DocumentVersion[]
   docAttachments         DocumentAttachment[]    @relation("AttachmentCreator")
   databaseSchemaVersions DatabaseSchemaVersion[]
@@ -183,7 +187,12 @@ model Space {
   visibility  SpaceVisibility @default(PUBLIC)
   sortOrder   Int             @default(0)
   createdById String
-  createdBy   User            @relation(fields: [createdById], references: [id])
+  createdBy   User            @relation("SpaceCreator", fields: [createdById], references: [id])
+  // 个人空间（「我的文档空间」）的主人：每人一个，仅本人可见，管理员也不可访问
+  ownerId     String?         @unique
+  owner       User?           @relation("PersonalSpace", fields: [ownerId], references: [id], onDelete: Cascade)
+  // 项目文档空间对应的项目（成员与项目成员同步）
+  project     Project?        @relation("ProjectSpace")
   members     SpaceMember[]
   documents   Document[]
   attachments DocumentAttachment[]
@@ -234,6 +243,7 @@ model Document {
   updatedAt   DateTime   @updatedAt
 
   favorites              DocumentFavorite[]
+  recents                DocumentRecent[]
   versions               DocumentVersion[]
   attachments            DocumentAttachment[]
   linksOut               DocumentLink[]          @relation("DocLinksOut")
@@ -303,6 +313,19 @@ model DocumentFavorite {
   createdAt  DateTime @default(now())
 
   @@unique([userId, documentId])
+}
+
+// 左侧导航栏「最近打开的文档」：像标签页一样保留，只有用户手动关闭才移除
+model DocumentRecent {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  documentId String
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  openedAt   DateTime @default(now())
+
+  @@unique([userId, documentId])
+  @@index([userId, openedAt])
 }
 
 model DocumentVersion {
@@ -1077,8 +1100,14 @@ model Project {
   owner       User            @relation(fields: [ownerId], references: [id])
   customerId  String?
   customer    Customer?       @relation(fields: [customerId], references: [id])
-  // 关联的项目文档
+  // 旧版关联的单篇项目文档（打开项目时会迁移进项目文档空间）
   documentId  String?
+  // 项目文档空间（私有，成员与项目成员同步）
+  spaceId     String?         @unique
+  space       Space?          @relation("ProjectSpace", fields: [spaceId], references: [id], onDelete: SetNull)
+  // 是否已初始化默认任务类型（老项目首次打开时补建）
+  taskTypesReady Boolean      @default(false)
+  taskTypes   TaskType[]
   startDate   DateTime?
   endDate     DateTime?
   budget      Float           @default(0)
@@ -1132,11 +1161,28 @@ enum TaskPriority {
   URGENT
 }
 
+// 任务类型：每个项目自定义（新项目带默认预设）
+model TaskType {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name      String
+  // 标签颜色：gray | brown | orange | yellow | green | blue | purple | pink | red
+  color     String   @default("gray")
+  sortOrder Int      @default(0)
+  tasks     Task[]
+  createdAt DateTime @default(now())
+
+  @@unique([projectId, name])
+}
+
 model Task {
   id            String       @id @default(cuid())
   no            Int
   projectId     String
   project       Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  typeId        String?
+  type          TaskType?    @relation(fields: [typeId], references: [id], onDelete: SetNull)
   milestoneId   String?
   milestone     Milestone?   @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
   parentId      String?

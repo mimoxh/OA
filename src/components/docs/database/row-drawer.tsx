@@ -39,7 +39,7 @@ export function RowDrawer({
   const fields = activeProperties(properties).filter((p) => p.type !== "title");
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end">
+    <div className="fixed inset-x-0 bottom-0 top-app z-50 flex justify-end">
       <div className="fixed inset-0 bg-black/20" onClick={onClose} />
       <aside className="relative z-10 flex h-full w-full max-w-lg flex-col border-l border-line bg-white shadow-2xl">
         <div className="flex h-12 shrink-0 items-center justify-between border-b border-line px-4">

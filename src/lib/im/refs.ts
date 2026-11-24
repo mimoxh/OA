@@ -171,7 +171,7 @@ async function resolveOne(user: UserLike, ref: { type: RefType; id: string }, cl
           id: ref.id,
           ok: true,
           title: p.name,
-          subtitle: p.code,
+          subtitle: "项目",
           icon: p.icon,
           href: `/pms/projects/${p.id}`,
           status: statusOf(PROJECT_STATUS, p.status),

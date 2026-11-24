@@ -4,7 +4,7 @@ import Link from "next/link";
 import { InlineSelect } from "@/components/crm/inline";
 import { TASK_STATUS, type TASK_PRIORITY } from "@/lib/labels";
 import { formatDate } from "@/lib/format";
-import { isOverdue, taskKey } from "@/lib/pms/utils";
+import { isOverdue } from "@/lib/pms/utils";
 import { cn } from "@/lib/utils";
 import { updateTask } from "@/app/(app)/pms/actions";
 import { statusOptions } from "@/components/pms/task-list";
@@ -12,14 +12,13 @@ import { PriorityTag } from "@/components/pms/task-board";
 
 export type MyTask = {
   id: string;
-  no: number;
   title: string;
   status: keyof typeof TASK_STATUS;
   priority: keyof typeof TASK_PRIORITY;
   dueDate: Date | null;
   completedAt: Date | null;
   parentTitle: string | null;
-  project: { id: string; name: string; code: string; icon: string };
+  project: { id: string; name: string; icon: string };
 };
 
 export function MyTaskList({ tasks }: { tasks: MyTask[] }) {
@@ -40,8 +39,6 @@ export function MyTaskList({ tasks }: { tasks: MyTask[] }) {
                 {t.title}
               </Link>
               <div className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-ink-3">
-                <span className="font-mono">{taskKey(t.project.code, t.no)}</span>
-                <span>·</span>
                 <span className="truncate">
                   {t.project.icon} {t.project.name}
                 </span>

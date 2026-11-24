@@ -100,7 +100,6 @@ export function ProjectDialog({
       <DialogContent
         size="lg"
         title={projectId ? "编辑项目" : "新建项目"}
-        description={projectId ? undefined : "项目编码将自动生成"}
         footer={
           <>
             <Button onClick={() => setOpen(false)}>取消</Button>
@@ -211,7 +210,7 @@ export function ProjectDialog({
                 className="col-span-2"
                 checked={createDoc}
                 onChange={(e) => setCreateDoc(e.target.checked)}
-                label="同时创建项目文档（在你可见的第一个文档空间中）"
+                label="同时创建项目文档空间（私有空间，成员与项目成员同步）"
               />
             </>
           )}

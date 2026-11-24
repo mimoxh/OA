@@ -8,6 +8,7 @@ import { getAncestors, getMentionableUsers } from "@/lib/docs/queries";
 import { DocView } from "@/components/docs/doc-view";
 import { DatabasePageView } from "@/components/docs/database/database-page-view";
 import { WhiteboardPageView } from "@/components/docs/whiteboard/whiteboard-page-view";
+import { RecentDocTracker } from "@/components/docs/recent-doc-tracker";
 import type { CommentThread } from "@/components/docs/types";
 
 export default async function DocPage({ params, searchParams }: PageProps<"/docs/[id]">) {
@@ -18,6 +19,7 @@ export default async function DocPage({ params, searchParams }: PageProps<"/docs
   const r = await getDocAccess(user, id);
   if (!r || !r.access.canView || r.doc.deletedAt) notFound();
   const { doc, access } = r;
+  const tracker = <RecentDocTracker doc={{ id: doc.id, title: doc.title, icon: doc.icon, kind: doc.kind }} />;
 
   if (doc.kind === "whiteboard") {
     const [ancestors, favorite, backlinks] = await Promise.all([
@@ -25,14 +27,14 @@ export default async function DocPage({ params, searchParams }: PageProps<"/docs
       db.documentFavorite.findUnique({ where: { userId_documentId: { userId: user.id, documentId: id } } }),
       queryBacklinks(user, id),
     ]);
-    return <WhiteboardPageView
+    return <>{tracker}<WhiteboardPageView
       key={id}
       board={{ id, title: doc.title, icon: doc.icon, spaceId: doc.spaceId, spaceName: doc.space.name, spaceIcon: doc.space.icon }}
       ancestors={ancestors}
       backlinks={backlinks}
       favorite={!!favorite}
       canWrite={r.canWrite}
-    />;
+    /></>;
   }
 
   if (doc.kind === "database") {
@@ -43,6 +45,8 @@ export default async function DocPage({ params, searchParams }: PageProps<"/docs
       queryBacklinks(user, id),
     ]);
     return (
+      <>
+      {tracker}
       <DatabasePageView
         initialData={payload}
         ancestors={ancestors}
@@ -50,6 +54,7 @@ export default async function DocPage({ params, searchParams }: PageProps<"/docs
         backlinks={backlinksData.links}
         backlinksTruncated={backlinksData.truncated}
       />
+      </>
     );
   }
 
@@ -87,6 +92,8 @@ export default async function DocPage({ params, searchParams }: PageProps<"/docs
     }));
 
   return (
+    <>
+    {tracker}
     <DocView
       doc={{
         id: doc.id,
@@ -116,5 +123,6 @@ export default async function DocPage({ params, searchParams }: PageProps<"/docs
       favorite={!!favorite}
       focusComment={typeof sp.comment === "string" ? sp.comment : null}
     />
+    </>
   );
 }

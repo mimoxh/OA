@@ -16,8 +16,6 @@ import { SpaceFormDialog, type SpaceFormValue } from "./space-dialog";
 import type { Member } from "./types";
 
 export function SpaceActions({ space, pageCount }: { space: SpaceFormValue & { id: string }; pageCount: number }) {
-  const router = useRouter();
-  const { run } = useAction();
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -25,19 +23,35 @@ export function SpaceActions({ space, pageCount }: { space: SpaceFormValue & { i
         <Settings2 className="size-3.5" />
         空间设置
       </Button>
-      <ConfirmButton
-        variant="ghost"
-        danger
-        title={`删除空间「${space.name}」？`}
-        description={`空间内的 ${pageCount} 个页面（含回收站中的页面）将被永久删除，且无法恢复。`}
-        confirmText="永久删除"
-        onConfirm={() => run(() => deleteSpace(space.id), { success: "空间已删除", onSuccess: () => router.push("/docs") })}
-      >
-        <Trash2 className="size-3.5" />
-        删除空间
-      </ConfirmButton>
+      {!space.personal && <SpaceDeleteButton space={space} pageCount={pageCount} variant="ghost" />}
       <SpaceFormDialog open={open} onOpenChange={setOpen} space={space} />
     </>
+  );
+}
+
+export function SpaceDeleteButton({
+  space,
+  pageCount,
+  variant,
+}: {
+  space: { id: string; name: string };
+  pageCount: number;
+  variant?: "ghost";
+}) {
+  const router = useRouter();
+  const { run } = useAction();
+  return (
+    <ConfirmButton
+      variant={variant}
+      danger
+      title={`删除空间「${space.name}」？`}
+      description={`空间内的 ${pageCount} 个页面（含回收站中的页面）将被永久删除，且无法恢复。`}
+      confirmText="永久删除"
+      onConfirm={() => run(() => deleteSpace(space.id), { success: "空间已删除", onSuccess: () => router.push("/docs") })}
+    >
+      <Trash2 className="size-3.5" />
+      删除空间
+    </ConfirmButton>
   );
 }
 

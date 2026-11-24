@@ -83,7 +83,7 @@ export default async function ContactsPage({ searchParams }: PageProps<"/contact
   const selectedName = deptId ? flat.find((d) => d.id === deptId)?.name ?? "部门" : "全部成员";
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-app">
       <ContextPanel title="通讯录">
         <nav className="space-y-px pt-1">
           <DeptLink href={hrefFor(null)} label="全部成员" count={total} active={!deptId} />

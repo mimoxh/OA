@@ -6,13 +6,12 @@ import { UserChip } from "@/components/ui/avatar";
 import { StatusBadge } from "@/components/ui/badge";
 import { TASK_PRIORITY, TASK_STATUS } from "@/lib/labels";
 import { formatDate, formatNumber } from "@/lib/format";
-import { isOverdue, taskKey, TASK_STATUS_ORDER } from "@/lib/pms/utils";
+import { isOverdue, TASK_STATUS_ORDER } from "@/lib/pms/utils";
 
 const STATUS_COLOR: Record<string, string> = { TODO: "#a5a29c", IN_PROGRESS: "#337ea9", REVIEW: "#9065b0", DONE: "#448361" };
 
 type OTask = {
   id: string;
-  no: number;
   title: string;
   status: keyof typeof TASK_STATUS;
   priority: keyof typeof TASK_PRIORITY;
@@ -23,13 +22,11 @@ type OTask = {
 };
 
 export function ProjectOverview({
-  code,
   tasks,
   logs,
   people,
   taskHref,
 }: {
-  code: string;
   tasks: OTask[];
   logs: { hours: number; userId: string }[];
   people: { id: string; name: string; avatarColor: string }[];
@@ -137,7 +134,6 @@ export function ProjectOverview({
               <TR key={t.id}>
                 <TD>
                   <Link href={taskHref(t.id)} scroll={false} className="hover:text-accent hover:underline">
-                    <span className="mr-1.5 font-mono text-xs text-ink-3">{taskKey(code, t.no)}</span>
                     {t.title}
                   </Link>
                 </TD>

@@ -146,7 +146,7 @@ export function ChatView({
   const inThisCall = myActiveCall?.call.conversationId === convId;
 
   return (
-    <div className="flex h-screen">
+    <div className="flex h-app">
       <div className="flex min-w-0 flex-1 flex-col">
         {/* 会话头 */}
         <div className="flex h-14 shrink-0 items-center gap-3 border-b border-line px-4">

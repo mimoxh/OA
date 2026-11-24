@@ -1,47 +1,51 @@
-# 协作平台 OA 桌面客户端（Tauri v2）
+# 协作平台 OA 桌面端（Tauri v2）
 
-基于 **Tauri v2 + Rust + 系统 WebView（Windows WebView2 / macOS WKWebView）** 构建的轻量化桌面客户端壳，复用主仓库的 Web 应用与实时信令能力，并补充系统级桌面体验。
+一个 Windows 安装包同时包含客户端与完整服务端。首次启动时选择使用方式，之后可在「服务器与工作空间设置」中随时切换：
 
-## 已实现能力
+- **在本机创建工作空间**：内置 Node 运行时启动服务端（网关 + Next + 协同 + 实时，对外只占一个端口，默认 17300），数据保存在本机，同事在局域网内用客户端或浏览器访问。
+- **连接已有服务器**：输入服务器地址（如 `192.168.1.20:17300` 或 `https://oa.example.com`）。
 
-- **系统托盘与常驻后台**：点击窗口关闭按钮默认隐藏至系统托盘，左键托盘图标唤醒主窗口，托盘右键菜单支持「打开主窗口」「退出协作平台」。
-- **单实例防多开**：重复启动客户端时自动唤醒并聚焦已有主窗口。
-- **未读计数联动**：Web 端 `src/lib/desktop-bridge.ts` 自动将 IM 未读数同步到窗口标题与托盘悬浮提示（`set_unread_badge`）。
-- **原生系统通知**：收到新消息或音视频来电时优先调用系统原生通知（`show_native_notification`），来电自动拉起主窗口（`focus_main_window`）。
-- **自定义服务器地址**：生产构建内置连接引导页（`dist/index.html`），也支持通过环境变量 `OA_SERVER_URL="https://oa.example.com"` 启动直连。
+## 能力
 
-## 前置依赖
+- 自绘窗口：无系统边框，左侧导航栏延伸到顶部；顶栏可拖动，含前进 / 后退 / 刷新、全局搜索、服务器状态与窗口按钮。
+- 关闭窗口即隐藏到托盘，本机服务器继续为同事提供访问；托盘菜单「退出协作平台」才会停止服务（先保存协同文档再退出）。壳进程异常退出时，作业对象会一并结束服务进程。
+- 局域网走 HTTP：桌面端对连接过的 HTTP 地址启用安全上下文（摄像头、麦克风、剪贴板可用），首次连接新地址会自动重启一次客户端。浏览器访问时这些能力受限。
+- 首次使用本机服务器时进入 `/setup` 创建管理员，并写入内置角色、会计科目和常用审批流程。
+- 数据库升级：安装新版本后启动时自动执行 `migrations/*.sql`，执行前先备份到数据目录的 `backups/`。
+- 单实例、未读数同步到标题与托盘、系统原生通知。
 
-- Rust 工具链（`cargo` / `rustc`）
-- Windows：Microsoft Edge WebView2 Runtime（Windows 10/11 默认已安装）与 Visual Studio C++ Build Tools
-- 在仓库根目录安装依赖，工作区会一并安装桌面 CLI：
+## 目录与数据
+
+| 内容 | 位置 |
+| --- | --- |
+| 客户端配置 | `%APPDATA%\com.oa.suite.desktop\desktop.json` |
+| 本机服务器数据（数据库、附件、密钥、备份、日志） | 默认 `%LOCALAPPDATA%\com.oa.suite.desktop\workspace\`，可更改 |
+| 服务日志 | 数据目录下 `logs\server.log`（上一次为 `server.prev.log`） |
+
+数据目录可在「本机服务器」页的「数据目录 → 更改…」中修改，配置保存在 `desktop.json` 的 `dataDir`（`null` 表示默认位置）；「恢复默认位置」可改回默认目录。
+
+- 选择空文件夹或已有工作空间数据（含 `oa.db`）的文件夹时直接使用它；选择其他非空文件夹时，会在其中新建 `OA-Workspace` 子文件夹。
+- 不允许使用磁盘根目录、程序安装目录内部、与当前目录互相包含的位置，以及没有写权限的位置。
+- 新位置为空且当前目录有数据时，可选择「迁移现有数据」（复制数据库、附件、密钥和备份，不含日志）或「使用空的新工作空间」。新位置已有数据时直接切换过去，不做迁移。
+- 更换过程中会先停止服务，完成后按原来的状态重新启动。原目录不会被删除，确认无误后可手动清理。
+
+## 构建
+
+前置：Rust 工具链、Visual Studio C++ Build Tools、Node（构建机的 Node 会被打进安装包，`better-sqlite3` 按它的 ABI 加载）。
 
 ```powershell
 pnpm install
+pnpm desktop:build          # 打包服务端（next build + esbuild）后执行 tauri build，输出 NSIS 安装包
+pnpm desktop:bundle-server  # 只重新打包服务端到 desktop/src-tauri/resources/server
+pnpm desktop:check          # 仅校验 Rust 代码（需要先打包过一次服务端）
 ```
 
-## 常用命令
+安装包位于 `desktop/src-tauri/target/release/bundle/nsis/`。
 
-1. 先在仓库根目录启动 Web + Collab + Realtime 服务：
+## 数据库迁移
 
-```powershell
-pnpm dev
-```
+修改 `prisma/schema.prisma` 后执行 `node scripts/desktop/migration.mjs`，会与 `desktop/migrations/schema.prisma` 快照对比，生成下一个 `NNNN_*.sql` 并更新快照；`--check` 只检查是否有未生成的迁移。`bundle-server` 会自动执行这一步。迁移文件需要提交到仓库。
 
-2. 启动桌面客户端开发模式（自动加载 `http://localhost:3000`）：
+## 开发调试
 
-```powershell
-pnpm desktop:dev
-```
-
-3. 仅校验 Rust 代码编译：
-
-```powershell
-pnpm desktop:check
-```
-
-4. 打包发行版安装包（Windows MSI / NSIS 等）：
-
-```powershell
-pnpm desktop:build
-```
+`pnpm desktop:dev` 打开启动页；选择「连接已有服务器」并输入 `http://localhost:3000` 可连到 `pnpm dev`。也可以用环境变量 `OA_SERVER_URL` 直连。

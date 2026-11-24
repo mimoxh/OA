@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Building2, CalendarDays, FileText, FilePlus2, Pencil, Trash2, Users, UserRound, Wallet, CircleDot, BarChart3 } from "lucide-react";
+import { Building2, CalendarDays, FolderOpen, FolderPlus, Pencil, Trash2, Users, UserRound, Wallet, CircleDot, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/badge";
 import { AvatarStack, UserChip } from "@/components/ui/avatar";
@@ -13,15 +13,16 @@ import { InlineSelect } from "@/components/crm/inline";
 import { PROJECT_STATUS } from "@/lib/labels";
 import { formatDate, formatMoney } from "@/lib/format";
 import type { UserOption } from "@/lib/crm/types";
-import { createProjectDocument, deleteProject, updateProject } from "@/app/(app)/pms/actions";
+import { createProjectDocSpace, deleteProject, updateProject } from "@/app/(app)/pms/actions";
 import { ProjectDialog, type ProjectFormValue } from "@/components/pms/project-dialog";
 
 export type HeaderProject = {
   id: string;
   name: string;
+  icon: string;
   status: keyof typeof PROJECT_STATUS;
   ownerId: string;
-  documentId: string | null;
+  spaceId: string | null;
   customer: { id: string; name: string } | null;
   startDate: Date | null;
   endDate: Date | null;
@@ -94,15 +95,15 @@ export function ProjectProperties({
       <Property label="预算" icon={<Wallet />}>
         <span className="tabular-nums">{p.budget ? formatMoney(p.budget) : <span className="text-ink-3">未设置</span>}</span>
       </Property>
-      <Property label="项目文档" icon={<FileText />}>
-        {p.documentId ? (
-          <Link href={`/docs/${p.documentId}`} className="inline-flex items-center gap-1 hover:text-accent hover:underline">
-            📄 {p.name} 项目文档
+      <Property label="项目文档" icon={<FolderOpen />}>
+        {p.spaceId ? (
+          <Link href={`/docs?space=${p.spaceId}`} className="inline-flex items-center gap-1 hover:text-accent hover:underline">
+            {p.icon} {p.name} 文档空间
           </Link>
         ) : canManage ? (
-          <Button size="xs" variant="ghost" loading={pending} onClick={() => run(() => createProjectDocument(p.id), { success: "项目文档已创建" })}>
-            <FilePlus2 className="size-3.5" />
-            创建项目文档
+          <Button size="xs" variant="ghost" loading={pending} onClick={() => run(() => createProjectDocSpace(p.id), { success: "项目文档空间已创建" })}>
+            <FolderPlus className="size-3.5" />
+            创建项目文档空间
           </Button>
         ) : (
           <span className="text-ink-3">无</span>

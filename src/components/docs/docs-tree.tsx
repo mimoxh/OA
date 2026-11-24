@@ -353,7 +353,7 @@ export function DocsTree({
                 </Link>
                 <div className="flex shrink-0 items-center opacity-0 transition-opacity group-hover/row:opacity-100">
                   <Link
-                    href={`/docs?space=${s.id}`}
+                    href={`/docs?space=${s.id}&settings=1`}
                     title="空间设置与成员"
                     className="flex size-5 items-center justify-center rounded text-ink-3 hover:bg-active hover:text-ink"
                   >

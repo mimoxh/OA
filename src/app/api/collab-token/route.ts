@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth/dal";
 import { signScopedToken } from "@/lib/auth/token";
 import { getDocAccess } from "@/lib/docs/access";
+import { publicWsUrl } from "@/lib/ws-url";
 
 const TOKEN_TTL_SECONDS = 60 * 60;
 
@@ -17,7 +18,8 @@ export async function GET(req: NextRequest) {
     {
       token,
       readOnly: !res.canWrite,
-      url: process.env.NEXT_PUBLIC_COLLAB_URL ?? `ws://localhost:${process.env.COLLAB_PORT ?? 1234}`,
+      // NEXT_PUBLIC_* 会在构建时内联进产物，COLLAB_PUBLIC_URL 才是运行时读取
+      url: publicWsUrl(req, process.env.COLLAB_PUBLIC_URL ?? process.env.NEXT_PUBLIC_COLLAB_URL, `ws://localhost:${process.env.COLLAB_PORT ?? 1234}`),
       user: { id: user.id, name: user.name, color: user.avatarColor },
     },
     { headers: { "Cache-Control": "no-store" } },
