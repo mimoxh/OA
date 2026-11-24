@@ -7,7 +7,7 @@ export default async function MessagesLayout({ children }: LayoutProps<"/message
   const user = await requireUser();
   const members = await getMemberOptions({ includeBots: true });
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-app">
       <ContextPanel title="消息" actions={<NewChatMenu members={members} meId={user.id} />}>
         <ConversationList />
       </ContextPanel>

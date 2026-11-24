@@ -20,25 +20,28 @@ type Form = {
   dueDate: string;
   estimateHours: string;
   milestoneId: string;
+  typeId: string;
 };
 
 export function TaskDialog({
   projectId,
   members,
   milestones,
+  types,
   defaultStatus = "TODO",
   trigger,
 }: {
   projectId: string;
   members: UserOption[];
   milestones: { id: string; name: string }[];
+  types: { id: string; name: string }[];
   defaultStatus?: string;
   trigger: ReactNode;
 }) {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
-  const blank: Form = { title: "", description: "", status: defaultStatus, priority: "MEDIUM", assigneeId: "", startDate: "", dueDate: "", estimateHours: "", milestoneId: "" };
+  const blank: Form = { title: "", description: "", status: defaultStatus, priority: "MEDIUM", assigneeId: "", startDate: "", dueDate: "", estimateHours: "", milestoneId: "", typeId: types[0]?.id ?? "" };
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<Form>(blank);
   const { run, pending } = useAction();
@@ -54,6 +57,7 @@ export function TaskDialog({
       dueDate: form.dueDate || null,
       estimateHours: form.estimateHours || null,
       milestoneId: form.milestoneId || null,
+      typeId: form.typeId || null,
     };
     run(() => createTask(projectId, payload), {
       success: "任务已创建",
@@ -136,7 +140,17 @@ export function TaskDialog({
           <Field label="预估工时（小时）">
             <Input type="number" min={0} step="0.5" value={form.estimateHours} onChange={set("estimateHours")} />
           </Field>
-          <Field label="里程碑" className="col-span-3">
+          <Field label="任务类型">
+            <Select value={form.typeId} onChange={set("typeId")}>
+              <option value="">未分类</option>
+              {types.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="里程碑" className="col-span-2">
             <Select value={form.milestoneId} onChange={set("milestoneId")}>
               <option value="">无</option>
               {milestones.map((m) => (

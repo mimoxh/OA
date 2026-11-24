@@ -3,6 +3,8 @@ import type { Product, User } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { DEFAULT_ACCOUNTS, ACCOUNT, postJournal } from "@/lib/services/ledger";
 import { moveStock } from "@/lib/services/inventory";
+import { APPROVAL_FLOW_TEMPLATES, ROLE_TEMPLATES } from "@/lib/setup/defaults";
+import { createPersonalSpace } from "@/lib/docs/personal";
 
 export type SeedContext = Awaited<ReturnType<typeof seedBase>>;
 
@@ -32,22 +34,7 @@ function plain(json: string): string {
 
 export async function seedBase() {
   // ── 角色 ──
-  const roleDefs = [
-    { key: "admin", name: "系统管理员", permissions: ["admin"], system: true },
-    {
-      key: "manager",
-      name: "总经理",
-      permissions: ["docs:edit", "oa:edit", "crm:view", "erp:view", "finance:view", "wms:view", "tms:view", "pms:edit"],
-    },
-    { key: "sales", name: "销售", permissions: ["docs:edit", "oa:view", "crm:edit", "erp:edit", "wms:view", "tms:view", "pms:view"] },
-    { key: "buyer", name: "采购", permissions: ["docs:edit", "oa:view", "erp:edit", "wms:view"] },
-    { key: "warehouse", name: "仓库管理员", permissions: ["docs:edit", "oa:view", "erp:view", "wms:edit", "tms:view"] },
-    { key: "dispatcher", name: "运输调度", permissions: ["docs:edit", "oa:view", "wms:view", "tms:edit"] },
-    { key: "driver", name: "司机", permissions: ["docs:view", "oa:view", "tms:view"] },
-    { key: "pm", name: "项目经理", permissions: ["docs:edit", "oa:view", "crm:view", "pms:edit"] },
-    { key: "finance", name: "财务", permissions: ["docs:edit", "oa:view", "erp:view", "finance:edit"] },
-    { key: "member", name: "普通员工", permissions: ["docs:edit", "oa:view", "pms:view"], system: true },
-  ];
+  const roleDefs = ROLE_TEMPLATES;
   const roles: Record<string, { id: string }> = {};
   for (const r of roleDefs) {
     roles[r.key] = await db.role.create({
@@ -75,6 +62,7 @@ export async function seedBase() {
     users[u.key] = await db.user.create({
       data: { email: u.email, name: u.name, title: u.title, roleId: roles[u.role].id, avatarColor: u.color, passwordHash, phone: "138" + String(Math.floor(Math.random() * 1e8)).padStart(8, "0") },
     });
+    await createPersonalSpace(db, users[u.key].id);
   }
 
   // ── 部门 ──
@@ -99,83 +87,7 @@ export async function seedBase() {
   for (const a of DEFAULT_ACCOUNTS) await db.account.create({ data: { code: a.code, name: a.name, type: a.type } });
 
   // ── 审批流程 ──
-  const flows = [
-    {
-      key: "leave",
-      name: "请假",
-      category: "人事",
-      icon: "🌴",
-      description: "年假、事假、病假、调休",
-      formSchema: [
-        { name: "leaveType", label: "请假类型", type: "select", required: true, options: ["年假", "事假", "病假", "调休", "婚假", "产假"] },
-        { name: "startDate", label: "开始日期", type: "date", required: true },
-        { name: "endDate", label: "结束日期", type: "date", required: true },
-        { name: "days", label: "请假天数", type: "number", required: true },
-        { name: "reason", label: "请假事由", type: "textarea", required: true },
-      ],
-      steps: [{ name: "直属主管审批", approverType: "manager" }],
-    },
-    {
-      key: "expense",
-      name: "费用报销",
-      category: "财务",
-      icon: "💰",
-      description: "差旅、招待、办公等费用报销，通过后自动生成记账凭证",
-      formSchema: [
-        { name: "category", label: "费用类型", type: "select", required: true, options: ["差旅费", "业务招待费", "办公用品", "交通费", "其他"] },
-        { name: "amount", label: "报销金额（元）", type: "number", required: true },
-        { name: "date", label: "发生日期", type: "date", required: true },
-        { name: "reason", label: "报销说明", type: "textarea", required: true },
-      ],
-      steps: [
-        { name: "直属主管审批", approverType: "manager" },
-        { name: "财务审核", approverType: "role", roleKey: "finance" },
-      ],
-    },
-    {
-      key: "trip",
-      name: "出差",
-      category: "人事",
-      icon: "✈️",
-      description: "出差申请",
-      formSchema: [
-        { name: "destination", label: "出差地点", type: "text", required: true },
-        { name: "startDate", label: "出发日期", type: "date", required: true },
-        { name: "endDate", label: "返回日期", type: "date", required: true },
-        { name: "budget", label: "预算（元）", type: "number" },
-        { name: "reason", label: "出差事由", type: "textarea", required: true },
-      ],
-      steps: [
-        { name: "直属主管审批", approverType: "manager" },
-        { name: "总经理审批", approverType: "role", roleKey: "manager" },
-      ],
-    },
-    {
-      key: "general",
-      name: "通用审批",
-      category: "通用",
-      icon: "📝",
-      description: "其他事项审批",
-      formSchema: [
-        { name: "content", label: "审批内容", type: "textarea", required: true },
-        { name: "cc", label: "知会人", type: "user" },
-      ],
-      steps: [{ name: "直属主管审批", approverType: "manager" }],
-    },
-    {
-      key: "purchase_order",
-      name: "采购订单审批",
-      category: "业务单据",
-      icon: "🛒",
-      description: "ERP 采购订单提交后自动发起，通过后生成入库单",
-      system: true,
-      formSchema: [],
-      steps: [
-        { name: "部门主管审批", approverType: "manager" },
-        { name: "财务审核", approverType: "role", roleKey: "finance" },
-      ],
-    },
-  ];
+  const flows = APPROVAL_FLOW_TEMPLATES;
   for (const f of flows) {
     await db.approvalFlow.create({
       data: {

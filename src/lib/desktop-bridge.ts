@@ -1,5 +1,7 @@
 "use client";
 
+import { useSyncExternalStore } from "react";
+
 type TauriGlobal = {
   __TAURI__?: {
     core?: {
@@ -48,4 +50,47 @@ export async function showDesktopAppNotification(title: string, body: string): P
 export function focusDesktopWindow() {
   if (!isDesktopApp()) return;
   void invokeDesktop("focus_main_window");
+}
+
+export type DesktopServerInfo = {
+  status: "stopped" | "starting" | "running" | "error";
+  port: number;
+  lan: boolean;
+  addresses: { name: string; url: string }[];
+  error: string | null;
+};
+
+export type DesktopContext = {
+  mode: "server" | "client" | null;
+  serverUrl: string | null;
+  server: DesktopServerInfo | null;
+  version: string;
+};
+
+const noopSubscribe = () => () => {};
+
+/** 是否运行在桌面客户端内（服务端渲染与首帧为 false，避免水合不一致） */
+export function useIsDesktop(): boolean {
+  return useSyncExternalStore(noopSubscribe, isDesktopApp, () => false);
+}
+
+export function getDesktopContext() {
+  return invokeDesktop<DesktopContext>("desktop_context");
+}
+
+export function windowAction(action: "minimize" | "toggle_maximize" | "close") {
+  void invokeDesktop("window_action", { action });
+}
+
+export async function isWindowMaximized(): Promise<boolean> {
+  return (await invokeDesktop<boolean>("window_is_maximized")) ?? false;
+}
+
+/** 回到桌面端内置的启动页：home 选择工作空间，settings 本机服务器设置 */
+export function openLauncher(view: "home" | "settings") {
+  void invokeDesktop("open_launcher", { view });
+}
+
+export function openDataDir() {
+  void invokeDesktop("open_data_dir");
 }

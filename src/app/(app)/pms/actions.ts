@@ -12,7 +12,8 @@ import { MILESTONE_STATUS, PROJECT_STATUS, TASK_PRIORITY, TASK_STATUS } from "@/
 import { formatDate, parseDateInput } from "@/lib/format";
 import { parseInput, pickProvided } from "@/lib/crm/validate";
 import { assertEditTasks, assertManageProject } from "@/lib/pms/access";
-import { PROJECT_MEMBER_ROLE, taskKey } from "@/lib/pms/utils";
+import { DEFAULT_TASK_TYPES, PROJECT_MEMBER_ROLE, TASK_TYPE_COLORS } from "@/lib/pms/utils";
+import { createProjectSpace, syncProjectSpaceMember } from "@/lib/pms/space";
 
 const optStr = (max = 500) =>
   z
@@ -39,18 +40,9 @@ function taskLink(projectId: string, taskId: string) {
   return `/pms/projects/${projectId}?task=${taskId}`;
 }
 
-function docJson(title: string, description: string | null) {
-  const p = (text: string) => ({ type: "paragraph", content: text ? [{ type: "text", text }] : [] });
-  const h = (text: string) => ({ type: "heading", attrs: { level: 2 }, content: [{ type: "text", text }] });
-  const blocks = [h("项目背景"), p(description ?? ""), h("目标与范围"), p(""), h("会议纪要"), p("")];
-  const text = [title, "项目背景", description ?? "", "目标与范围", "会议纪要"].filter(Boolean).join(" ");
-  return { content: JSON.stringify({ type: "doc", content: blocks }), text };
-}
-
 // ───────────── 项目 ─────────────
 
-const projectSchema = z
-  .object({
+const projectFields = z.object({
     name: z.string().trim().min(1, "请填写项目名称").max(100, "项目名称过长"),
     description: optStr(2000),
     icon: z.string().trim().min(1).max(8).default("🚀"),
@@ -61,8 +53,9 @@ const projectSchema = z
     startDate: optDate,
     endDate: optDate,
     budget: z.coerce.number({ error: "预算必须是数字" }).min(0, "预算不能为负数").default(0),
-  })
-  .refine((v) => !v.startDate || !v.endDate || v.startDate <= v.endDate, "结束日期不能早于开始日期");
+});
+// 带 refine 的 schema 不能再 .partial()，因此更新时用 projectFields.partial() 并手动校验日期
+const projectSchema = projectFields.refine((v) => !v.startDate || !v.endDate || v.startDate <= v.endDate, "结束日期不能早于开始日期");
 
 export type ProjectInput = z.input<typeof projectSchema> & { memberIds?: string[]; createDoc?: boolean };
 
@@ -71,31 +64,19 @@ export async function createProject(input: ProjectInput) {
     const data = parseInput(projectSchema, input);
     const memberIds = [...new Set((input.memberIds ?? []).filter((id) => id && id !== data.ownerId))];
     const project = await db.$transaction(async (tx) => {
-      let documentId: string | null = null;
-      if (input.createDoc) {
-        const space = await tx.space.findFirst({
-          where: { OR: [{ visibility: "PUBLIC" }, { members: { some: { userId: user.id } } }] },
-          orderBy: { sortOrder: "asc" },
-        });
-        if (!space) throw new Error("没有可用的文档空间，无法创建项目文档");
-        const title = `${data.name} 项目文档`;
-        const { content, text } = docJson(title, data.description);
-        const doc = await tx.document.create({
-          data: { spaceId: space.id, title, icon: data.icon, content, text, createdById: user.id, updatedById: user.id },
-        });
-        documentId = doc.id;
-      }
       const code = await nextCode(tx, "PRJ", 3);
       const p = await tx.project.create({
         data: {
           ...data,
           code,
-          documentId,
+          taskTypesReady: true,
+          taskTypes: { create: DEFAULT_TASK_TYPES.map((t, i) => ({ name: t.name, color: t.color, sortOrder: i })) },
           members: {
             create: [{ userId: data.ownerId, role: "owner" }, ...memberIds.map((userId) => ({ userId, role: "member" }))],
           },
         },
       });
+      if (input.createDoc) await createProjectSpace(tx, p, { actorId: user.id, createOverview: true });
       await audit(tx, { entityType: "project", entityId: p.id, action: "created", detail: p.name, userId: user.id });
       await notify(tx, {
         userIds: [data.ownerId, ...memberIds],
@@ -111,10 +92,10 @@ export async function createProject(input: ProjectInput) {
   });
 }
 
-export async function updateProject(id: string, input: Partial<z.input<typeof projectSchema>>) {
+export async function updateProject(id: string, input: Partial<z.input<typeof projectFields>>) {
   return runAction("pms:view", async (user) => {
     await assertManageProject(user, id);
-    const data = parseInput(projectSchema.partial(), input);
+    const data = parseInput(projectFields.partial(), input);
     const patch = pickProvided(data, input);
     const before = await db.project.findUnique({ where: { id } });
     if (!before) throw new Error("项目不存在");
@@ -123,6 +104,10 @@ export async function updateProject(id: string, input: Partial<z.input<typeof pr
     if (start && end && start > end) throw new Error("结束日期不能早于开始日期");
     await db.$transaction(async (tx) => {
       await tx.project.update({ where: { id }, data: patch });
+      // 项目文档空间的名称和图标跟随项目
+      if (before.spaceId && ((patch.name && patch.name !== before.name) || (patch.icon && patch.icon !== before.icon))) {
+        await tx.space.update({ where: { id: before.spaceId }, data: { name: patch.name ?? before.name, icon: patch.icon ?? before.icon } });
+      }
       if (patch.ownerId && patch.ownerId !== before.ownerId) {
         await tx.projectMember.upsert({
           where: { projectId_userId: { projectId: id, userId: patch.ownerId } },
@@ -130,6 +115,8 @@ export async function updateProject(id: string, input: Partial<z.input<typeof pr
           update: { role: "owner" },
         });
         await tx.projectMember.updateMany({ where: { projectId: id, userId: before.ownerId }, data: { role: "member" } });
+        await syncProjectSpaceMember(tx, id, patch.ownerId, "owner");
+        await syncProjectSpaceMember(tx, id, before.ownerId, "member");
         await notify(tx, {
           userIds: [patch.ownerId],
           actorId: user.id,
@@ -159,26 +146,18 @@ export async function deleteProject(id: string) {
   });
 }
 
-export async function createProjectDocument(projectId: string) {
+/** 为还没有文档空间的项目创建项目文档空间 */
+export async function createProjectDocSpace(projectId: string) {
   return runAction("pms:view", async (user) => {
     await assertManageProject(user, projectId);
-    const p = await db.project.findUnique({ where: { id: projectId } });
-    if (!p) throw new Error("项目不存在");
-    if (p.documentId) throw new Error("项目已有关联文档");
-    const docId = await db.$transaction(async (tx) => {
-      const space = await tx.space.findFirst({
-        where: { OR: [{ visibility: "PUBLIC" }, { members: { some: { userId: user.id } } }] },
-        orderBy: { sortOrder: "asc" },
-      });
-      if (!space) throw new Error("没有可用的文档空间");
-      const title = `${p.name} 项目文档`;
-      const { content, text } = docJson(title, p.description);
-      const doc = await tx.document.create({ data: { spaceId: space.id, title, icon: p.icon, content, text, createdById: user.id, updatedById: user.id } });
-      await tx.project.update({ where: { id: p.id }, data: { documentId: doc.id } });
-      return doc.id;
+    const spaceId = await db.$transaction(async (tx) => {
+      const p = await tx.project.findUnique({ where: { id: projectId } });
+      if (!p) throw new Error("项目不存在");
+      if (p.spaceId) throw new Error("项目已有文档空间");
+      return createProjectSpace(tx, p, { actorId: user.id, legacyDocId: p.documentId, createOverview: true });
     });
     revalidatePms();
-    return { documentId: docId };
+    return { spaceId };
   });
 }
 
@@ -197,6 +176,7 @@ export async function addProjectMember(projectId: string, userId: string, role: 
         create: { projectId, userId, role: r },
         update: { role: r },
       });
+      await syncProjectSpaceMember(tx, projectId, userId, r);
       await notify(tx, { userIds: [userId], actorId: user.id, type: "task", title: `${user.name} 邀请你加入项目「${project.name}」`, link: `/pms/projects/${projectId}` });
       await audit(tx, { entityType: "project", entityId: projectId, action: "member_added", detail: `${target.name}（${PROJECT_MEMBER_ROLE[r]}）`, userId: user.id });
     });
@@ -211,7 +191,10 @@ export async function updateProjectMember(memberId: string, role: string) {
     await assertManageProject(user, m.projectId);
     const r = parseInput(z.enum(ROLES), role);
     if (m.userId === m.project.ownerId && r !== "owner") throw new Error("项目负责人的角色不能修改，请先更换负责人");
-    await db.projectMember.update({ where: { id: memberId }, data: { role: r } });
+    await db.$transaction(async (tx) => {
+      await tx.projectMember.update({ where: { id: memberId }, data: { role: r } });
+      await syncProjectSpaceMember(tx, m.projectId, m.userId, r);
+    });
     revalidatePms();
   });
 }
@@ -224,6 +207,7 @@ export async function removeProjectMember(memberId: string) {
     if (m.userId === m.project.ownerId) throw new Error("不能移除项目负责人");
     await db.$transaction(async (tx) => {
       await tx.projectMember.delete({ where: { id: memberId } });
+      await syncProjectSpaceMember(tx, m.projectId, m.userId, null);
       await audit(tx, { entityType: "project", entityId: m.projectId, action: "member_removed", detail: m.user.name, userId: user.id });
     });
     revalidatePms();
@@ -306,6 +290,7 @@ const taskSchema = z.object({
     }),
   milestoneId: optStr(50),
   parentId: optStr(50),
+  typeId: optStr(50),
 });
 export type TaskInput = Partial<z.input<typeof taskSchema>>;
 
@@ -318,6 +303,10 @@ async function checkTaskRefs(tx: Tx, projectId: string, data: Partial<z.output<t
     const m = await tx.milestone.findUnique({ where: { id: data.milestoneId } });
     if (!m || m.projectId !== projectId) throw new Error("里程碑不属于该项目");
   }
+  if (data.typeId) {
+    const t = await tx.taskType.findUnique({ where: { id: data.typeId } });
+    if (!t || t.projectId !== projectId) throw new Error("任务类型不属于该项目");
+  }
   if (data.parentId) {
     if (data.parentId === taskId) throw new Error("不能把任务设为自己的父任务");
     const p = await tx.task.findUnique({ where: { id: data.parentId } });
@@ -327,13 +316,13 @@ async function checkTaskRefs(tx: Tx, projectId: string, data: Partial<z.output<t
   }
 }
 
-async function notifyAssignee(tx: Tx, user: CurrentUser, task: { id: string; projectId: string; title: string; no: number }, code: string, assigneeId: string | null) {
+async function notifyAssignee(tx: Tx, user: CurrentUser, task: { id: string; projectId: string; title: string }, assigneeId: string | null) {
   if (!assigneeId) return;
   await notify(tx, {
     userIds: [assigneeId],
     actorId: user.id,
     type: "task",
-    title: `${user.name} 将任务「${taskKey(code, task.no)} ${task.title}」指派给你`,
+    title: `${user.name} 将任务「${task.title}」指派给你`,
     link: taskLink(task.projectId, task.id),
   });
 }
@@ -363,7 +352,7 @@ export async function createTask(projectId: string, input: TaskInput) {
       if (data.parentId) {
         await audit(tx, { entityType: "task", entityId: data.parentId, action: "subtask", detail: `添加了子任务「${t.title}」`, userId: user.id });
       }
-      await notifyAssignee(tx, user, t, project.code, t.assigneeId);
+      await notifyAssignee(tx, user, t, t.assigneeId);
       return t;
     });
     revalidatePms();
@@ -373,7 +362,7 @@ export async function createTask(projectId: string, input: TaskInput) {
 
 export async function updateTask(id: string, input: TaskInput) {
   return runAction("pms:view", async (user) => {
-    const before = await db.task.findUnique({ where: { id }, include: { project: true, assignee: true, milestone: true } });
+    const before = await db.task.findUnique({ where: { id }, include: { project: true, assignee: true, milestone: true, type: true } });
     if (!before) throw new Error("任务不存在");
     await assertEditTasks(user, before.projectId);
     const data = parseInput(taskSchema.partial(), input);
@@ -403,7 +392,7 @@ export async function updateTask(id: string, input: TaskInput) {
       if (patch.assigneeId !== undefined && patch.assigneeId !== before.assigneeId) {
         const u = patch.assigneeId ? await tx.user.findUnique({ where: { id: patch.assigneeId } }) : null;
         changes.push(u ? `将任务指派给 ${u.name}` : "取消了指派");
-        if (u && u.id !== user.id) await notifyAssignee(tx, user, before, before.project.code, u.id);
+        if (u && u.id !== user.id) await notifyAssignee(tx, user, before, u.id);
       }
       if (patch.startDate !== undefined && +(patch.startDate ?? 0) !== +(before.startDate ?? 0))
         changes.push(patch.startDate ? `将开始日期设为 ${formatDate(patch.startDate)}` : "清除了开始日期");
@@ -416,6 +405,10 @@ export async function updateTask(id: string, input: TaskInput) {
         changes.push(m ? `关联到里程碑「${m.name}」` : "移出了里程碑");
       }
       if (patch.parentId !== undefined && patch.parentId !== before.parentId) changes.push(patch.parentId ? "设置了父任务" : "移除了父任务");
+      if (patch.typeId !== undefined && patch.typeId !== before.typeId) {
+        const tt = patch.typeId ? await tx.taskType.findUnique({ where: { id: patch.typeId } }) : null;
+        changes.push(tt ? `将类型设为「${tt.name}」` : "清除了任务类型");
+      }
       for (const detail of changes) await audit(tx, { entityType: "task", entityId: id, action: "updated", detail, userId: user.id });
 
       if (patch.status === "DONE" && before.status !== "DONE" && before.reporterId !== user.id) {
@@ -423,7 +416,7 @@ export async function updateTask(id: string, input: TaskInput) {
           userIds: [before.reporterId],
           actorId: user.id,
           type: "task",
-          title: `${user.name} 完成了任务「${taskKey(before.project.code, before.no)} ${before.title}」`,
+          title: `${user.name} 完成了任务「${before.title}」`,
           link: taskLink(before.projectId, id),
         });
       }
@@ -461,7 +454,7 @@ export async function moveTask(id: string, status: (typeof TASK_STATUSES)[number
             userIds: [t.reporterId],
             actorId: user.id,
             type: "task",
-            title: `${user.name} 完成了任务「${taskKey(t.project.code, t.no)} ${t.title}」`,
+            title: `${user.name} 完成了任务「${t.title}」`,
             link: taskLink(t.projectId, id),
           });
         }
@@ -485,6 +478,54 @@ export async function deleteTask(id: string) {
     });
     revalidatePms();
     return { projectId: t.projectId, parentId: t.parentId };
+  });
+}
+
+// ───────────── 任务类型 ─────────────
+
+const taskTypeSchema = z.object({
+  name: z.string().trim().min(1, "请填写类型名称").max(20, "类型名称不能超过 20 个字"),
+  color: z.enum(TASK_TYPE_COLORS.map((c) => c.value) as [string, ...string[]], { error: "颜色不正确" }),
+});
+
+async function assertTypeNameFree(projectId: string, name: string, exceptId?: string) {
+  const dup = await db.taskType.findUnique({ where: { projectId_name: { projectId, name } } });
+  if (dup && dup.id !== exceptId) throw new Error(`已存在名为「${name}」的任务类型`);
+}
+
+export async function createTaskType(projectId: string, input: z.input<typeof taskTypeSchema>) {
+  return runAction("pms:view", async (user) => {
+    await assertManageProject(user, projectId);
+    const data = parseInput(taskTypeSchema, input);
+    await assertTypeNameFree(projectId, data.name);
+    const last = await db.taskType.aggregate({ where: { projectId }, _max: { sortOrder: true } });
+    const t = await db.taskType.create({ data: { ...data, projectId, sortOrder: (last._max.sortOrder ?? -1) + 1 } });
+    revalidatePms();
+    return { id: t.id };
+  });
+}
+
+export async function updateTaskType(id: string, input: Partial<z.input<typeof taskTypeSchema>>) {
+  return runAction("pms:view", async (user) => {
+    const t = await db.taskType.findUnique({ where: { id } });
+    if (!t) throw new Error("任务类型不存在");
+    await assertManageProject(user, t.projectId);
+    const data = parseInput(taskTypeSchema.partial(), input);
+    const patch = pickProvided(data, input);
+    if (patch.name && patch.name !== t.name) await assertTypeNameFree(t.projectId, patch.name, id);
+    await db.taskType.update({ where: { id }, data: patch });
+    revalidatePms();
+  });
+}
+
+/** 删除类型：使用该类型的任务变为「未分类」 */
+export async function deleteTaskType(id: string) {
+  return runAction("pms:view", async (user) => {
+    const t = await db.taskType.findUnique({ where: { id } });
+    if (!t) throw new Error("任务类型不存在");
+    await assertManageProject(user, t.projectId);
+    await db.taskType.delete({ where: { id } });
+    revalidatePms();
   });
 }
 
@@ -533,7 +574,6 @@ export async function addTaskComment(taskId: string, content: string) {
     await assertEditTasks(user, t.projectId);
     const candidates = await db.user.findMany({ where: { active: true, isBot: false }, select: { id: true, name: true } });
     const mentioned = candidates.filter((u) => text.includes(`@${u.name}`)).map((u) => u.id);
-    const key = taskKey(t.project.code, t.no);
     await db.$transaction(async (tx) => {
       await tx.comment.create({ data: { targetType: "task", targetId: taskId, authorId: user.id, content: text } });
       const link = taskLink(t.projectId, t.id);
@@ -541,7 +581,7 @@ export async function addTaskComment(taskId: string, content: string) {
         userIds: mentioned,
         actorId: user.id,
         type: "mention",
-        title: `${user.name} 在任务「${key} ${t.title}」中提到了你`,
+        title: `${user.name} 在任务「${t.title}」中提到了你`,
         body: text.slice(0, 200),
         link,
       });
@@ -549,7 +589,7 @@ export async function addTaskComment(taskId: string, content: string) {
         userIds: [t.assigneeId, t.reporterId].filter((id) => id && !mentioned.includes(id)),
         actorId: user.id,
         type: "comment",
-        title: `${user.name} 评论了任务「${key} ${t.title}」`,
+        title: `${user.name} 评论了任务「${t.title}」`,
         body: text.slice(0, 200),
         link,
       });

@@ -17,7 +17,7 @@ export async function ModuleShell({
   const mod = NAV_MODULES.find((m) => m.key === moduleKey);
   if (!mod) throw new Error(`未知模块：${moduleKey}`);
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-app">
       <ModuleNav moduleKey={mod.key} permissions={user.permissions} hideOn={hideOn} />
       <div className="min-w-0 flex-1">{children}</div>
     </div>

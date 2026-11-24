@@ -149,8 +149,7 @@ export default async function ProjectsPage({ searchParams }: PageProps<"/pms">) 
                         <div className="min-w-0 flex-1">
                           <div className="truncate font-medium text-ink group-hover:text-accent">{p.name}</div>
                           <div className="mt-0.5 flex items-center gap-2 text-xs text-ink-3">
-                            <span className="font-mono">{p.code}</span>
-                            {p.customer && <span className="truncate">· {p.customer.name}</span>}
+                            <span className="truncate">{p.customer ? p.customer.name : "内部项目"}</span>
                           </div>
                         </div>
                         <StatusBadge map={PROJECT_STATUS} value={p.status} />
@@ -172,7 +171,6 @@ export default async function ProjectsPage({ searchParams }: PageProps<"/pms">) 
           <Table>
             <THead>
               <TR>
-                <TH>编码</TH>
                 <TH>项目</TH>
                 <TH>状态</TH>
                 <TH>负责人</TH>
@@ -183,12 +181,11 @@ export default async function ProjectsPage({ searchParams }: PageProps<"/pms">) 
               </TR>
             </THead>
             <TBody>
-              {projects.length === 0 && <TEmpty colSpan={8}>没有符合条件的项目</TEmpty>}
+              {projects.length === 0 && <TEmpty colSpan={7}>没有符合条件的项目</TEmpty>}
               {projects.map((p) => {
                 const pr = progress(p.id);
                 return (
                   <TR key={p.id}>
-                    <TD className="font-mono text-xs text-ink-2">{p.code}</TD>
                     <TD>
                       <Link href={`/pms/projects/${p.id}`} className="font-medium hover:text-accent hover:underline">
                         <span className="mr-1.5">{p.icon}</span>

@@ -61,7 +61,6 @@ async function loadBizDescriptor(client: DbClient, actor: Actor, bizType: BizTyp
           ref: { type: "project", id: p.id },
           status: st ? { label: st.label, color: st.color === "green" || st.color === "red" || st.color === "blue" ? st.color : st.color === "orange" || st.color === "yellow" ? "orange" : "gray" } : null,
           fields: [
-            { label: "编号", value: p.code },
             { label: "负责人", value: p.owner.name },
             ...(p.customer ? [{ label: "关联客户", value: p.customer.name }] : []),
           ],

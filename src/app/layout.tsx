@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Toaster } from "sonner";
+import { WindowControls } from "@/components/desktop/window-controls";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -19,6 +20,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="min-h-full">
         {children}
         <Toaster position="bottom-right" toastOptions={{ className: "!text-sm" }} />
+        <WindowControls />
       </body>
     </html>
   );

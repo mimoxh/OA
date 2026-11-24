@@ -17,6 +17,7 @@ export type SpaceFormValue = {
   icon: string;
   description: string | null;
   visibility: "PUBLIC" | "PRIVATE";
+  personal?: boolean;
 };
 
 export function SpaceFormDialog({
@@ -32,6 +33,34 @@ export function SpaceFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       {open && <SpaceForm space={space} onDone={() => onOpenChange(false)} />}
     </Dialog>
+  );
+}
+
+/** 空间设置页内嵌的表单（不在弹窗里） */
+export function SpaceSettingsForm({ space }: { space: SpaceFormValue & { id: string } }) {
+  const { run, pending } = useAction();
+  const [v, setV] = useState<SpaceFormValue>(space);
+  const dirty = v.name !== space.name || v.icon !== space.icon || (v.description ?? "") !== (space.description ?? "") || v.visibility !== space.visibility;
+  const submit = () =>
+    run(() => updateSpace({ id: space.id, name: v.name, icon: v.icon, description: v.description, visibility: v.visibility }), { success: "空间已更新" });
+  return (
+    <form
+      className="space-y-4"
+      onSubmit={(e) => {
+        e.preventDefault();
+        submit();
+      }}
+    >
+      <SpaceFields v={v} setV={setV} autoFocus={false} />
+      <div className="flex justify-end gap-2">
+        <Button type="button" disabled={!dirty || pending} onClick={() => setV(space)}>
+          还原
+        </Button>
+        <Button type="submit" variant="primary" loading={pending} disabled={!dirty || !v.name.trim()}>
+          保存
+        </Button>
+      </div>
+    </form>
   );
 }
 
@@ -73,6 +102,15 @@ function SpaceForm({ space, onDone }: { space?: SpaceFormValue; onDone: () => vo
           submit();
         }}
       >
+        <SpaceFields v={v} setV={setV} autoFocus />
+      </form>
+    </DialogContent>
+  );
+}
+
+function SpaceFields({ v, setV, autoFocus }: { v: SpaceFormValue; setV: (v: SpaceFormValue) => void; autoFocus: boolean }) {
+  return (
+    <>
         <div className="flex items-end gap-2">
           <div>
             <span className="mb-1 block text-xs font-medium text-ink-2">图标</span>
@@ -83,12 +121,18 @@ function SpaceForm({ space, onDone }: { space?: SpaceFormValue; onDone: () => vo
             </EmojiPicker>
           </div>
           <Field label="名称" required className="flex-1">
-            <Input autoFocus value={v.name} onChange={(e) => setV({ ...v, name: e.target.value })} placeholder="例如：市场部" />
+            <Input autoFocus={autoFocus} value={v.name} onChange={(e) => setV({ ...v, name: e.target.value })} placeholder="例如：市场部" />
           </Field>
         </div>
         <Field label="描述">
           <Textarea value={v.description ?? ""} onChange={(e) => setV({ ...v, description: e.target.value })} rows={2} placeholder="这个空间用来做什么？" />
         </Field>
+        {v.personal ? (
+          <p className="flex items-center gap-1.5 text-xs text-ink-2">
+            <Lock className="size-3.5" />
+            个人空间仅自己可见，不能公开或添加成员
+          </p>
+        ) : (
         <div>
           <span className="mb-1 block text-xs font-medium text-ink-2">可见范围</span>
           <div className="grid grid-cols-2 gap-2">
@@ -116,7 +160,7 @@ function SpaceForm({ space, onDone }: { space?: SpaceFormValue; onDone: () => vo
             ))}
           </div>
         </div>
-      </form>
-    </DialogContent>
+        )}
+    </>
   );
 }

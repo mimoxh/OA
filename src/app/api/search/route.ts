@@ -125,11 +125,11 @@ export async function GET(req: NextRequest) {
     tasks.push(
       db.project
         .findMany({ where: { OR: [{ name: { contains: q } }, { code: { contains: q } }] }, select: { id: true, name: true, code: true, icon: true }, take: LIMIT })
-        .then((rows) => rows.map((r) => ({ type: "project", group: "项目", id: r.id, title: r.name, subtitle: r.code, href: `/pms/projects/${r.id}`, icon: r.icon }))),
+        .then((rows) => rows.map((r) => ({ type: "project", group: "项目", id: r.id, title: r.name, subtitle: "项目", href: `/pms/projects/${r.id}`, icon: r.icon }))),
       db.task
         .findMany({
           where: { title: { contains: q } },
-          select: { id: true, title: true, no: true, projectId: true, project: { select: { code: true, name: true } } },
+          select: { id: true, title: true, projectId: true, project: { select: { name: true } } },
           take: LIMIT,
         })
         .then((rows) =>
@@ -138,7 +138,7 @@ export async function GET(req: NextRequest) {
             group: "任务",
             id: r.id,
             title: r.title,
-            subtitle: `${r.project.code}-${r.no} · ${r.project.name}`,
+            subtitle: r.project.name,
             href: `/pms/projects/${r.projectId}?task=${r.id}`,
             icon: "✅",
           })),

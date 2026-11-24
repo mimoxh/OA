@@ -50,8 +50,12 @@ function Empty({ children }: { children: ReactNode }) {
 }
 
 function SectionTitle({ children }: { children: ReactNode }) {
-  return <h2 className="mb-3 mt-10 text-xs font-medium text-ink-3">{children}</h2>;
+  return <h2 className="mb-3 mt-10 text-center text-xs font-medium text-ink-3">{children}</h2>;
 }
+
+/** 等宽换行网格：不满一行时居中（CSS grid 做不到最后一行居中） */
+const CENTER_ROW = "flex flex-wrap justify-center gap-3 *:min-w-0 *:shrink-0 *:grow-0";
+const COLS_2_4 = "*:basis-[calc((100%_-_12px)/2)] sm:*:basis-[calc((100%_-_36px)/4)]";
 
 function AppTile({
   href,
@@ -120,7 +124,7 @@ export default async function WorkPage() {
     perm.pms
       ? db.task.findMany({
           where: { assigneeId: user.id, status: { not: "DONE" } },
-          include: { project: { select: { name: true, icon: true, code: true } } },
+          include: { project: { select: { name: true, icon: true } } },
           orderBy: [{ dueDate: { sort: "asc", nulls: "last" } }, { createdAt: "desc" }],
           take: 5,
         })
@@ -218,7 +222,12 @@ export default async function WorkPage() {
         </header>
 
         <SectionTitle>应用</SectionTitle>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
+        <div
+          className={cn(
+            CENTER_ROW,
+            "*:basis-[calc((100%_-_12px)/2)] sm:*:basis-[calc((100%_-_24px)/3)] lg:*:basis-[calc((100%_-_36px)/4)] xl:*:basis-[calc((100%_-_60px)/6)]",
+          )}
+        >
           {perm.docs && (
             <AppTile href="/docs" color="#2383e2" icon={<FileText className="size-5" />} label="云文档" description={MODULES.find((m) => m.key === "docs")!.description} />
           )}
@@ -239,7 +248,7 @@ export default async function WorkPage() {
         </div>
 
         <SectionTitle>待办</SectionTitle>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+        <div className={cn(CENTER_ROW, "*:basis-full md:*:basis-[calc((100%_-_24px)/3)]")}>
           {perm.oa && (
             <Block title="待我审批" href="/oa/approvals" count={approvalCount}>
               {approvals.length === 0 ? (
@@ -277,9 +286,7 @@ export default async function WorkPage() {
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-[13px] text-ink">{t.title}</span>
                         <span className="flex items-center gap-1.5 text-[11px] text-ink-3">
-                          <span className="font-mono">
-                            {t.project.code}-{t.no}
-                          </span>
+                          <span className="truncate">{t.project.name}</span>
                           {t.dueDate && <span className={cn(overdue && "text-danger")}>{overdue ? "已逾期 · " : ""}{format(t.dueDate, "M月d日")}截止</span>}
                         </span>
                       </span>
@@ -322,7 +329,7 @@ export default async function WorkPage() {
             {docs.length === 0 ? (
               <div className="rounded-xl border border-dashed border-line-strong py-8 text-center text-[13px] text-ink-3">还没有文档</div>
             ) : (
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <div className={cn(CENTER_ROW, COLS_2_4)}>
                 {docs.map((d) => (
                   <Link key={d.id} href={`/docs/${d.id}`} className="group overflow-hidden rounded-xl border border-line bg-white transition-shadow hover:shadow-pop">
                     <div className="relative h-12 bg-sidebar">
@@ -346,7 +353,7 @@ export default async function WorkPage() {
         )}
 
         <SectionTitle>应用概览</SectionTitle>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className={cn(CENTER_ROW, COLS_2_4)}>
           {perm.docs && (
             <Link href="/docs" className="rounded-xl border border-line bg-white p-4 transition-colors hover:bg-sidebar">
               <div className="flex items-center gap-2 text-sm font-medium text-ink">

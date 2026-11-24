@@ -314,14 +314,13 @@ export default async function CustomerDetailPage({ params, searchParams }: PageP
               <THead>
                 <TR>
                   <TH>项目</TH>
-                  <TH>编码</TH>
                   <TH>状态</TH>
                   <TH>负责人</TH>
                   <TH>周期</TH>
                 </TR>
               </THead>
               <TBody>
-                {c.projects.length === 0 && <TEmpty colSpan={5}>暂无关联项目</TEmpty>}
+                {c.projects.length === 0 && <TEmpty colSpan={4}>暂无关联项目</TEmpty>}
                 {c.projects.map((p) => (
                   <TR key={p.id}>
                     <TD>
@@ -329,7 +328,6 @@ export default async function CustomerDetailPage({ params, searchParams }: PageP
                         {p.icon} {p.name}
                       </Link>
                     </TD>
-                    <TD className="font-mono text-xs text-ink-2">{p.code}</TD>
                     <TD>
                       <StatusBadge map={PROJECT_STATUS} value={p.status} />
                     </TD>

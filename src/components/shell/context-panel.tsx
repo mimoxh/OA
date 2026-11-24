@@ -35,7 +35,7 @@ export function ContextPanel({
   // 收起后保留一条窄栏占位，避免展开按钮浮在页面内容（面包屑、标题）上
   if (collapsed) {
     return (
-      <aside className="sticky top-0 flex h-screen w-10 shrink-0 flex-col items-center border-r border-line bg-sidebar pt-2">
+      <aside className="sticky top-0 flex h-app w-10 shrink-0 flex-col items-center border-r border-line bg-sidebar pt-2">
         <button
           onClick={() => toggle(false)}
           className="rounded-md p-1.5 text-ink-2 hover:bg-active/70 hover:text-ink"
@@ -49,7 +49,7 @@ export function ContextPanel({
   }
 
   return (
-    <aside className={cn("group/panel sticky top-0 flex h-screen w-[248px] shrink-0 flex-col border-r border-line bg-sidebar", className)}>
+    <aside className={cn("group/panel sticky top-0 flex h-app w-[248px] shrink-0 flex-col border-r border-line bg-sidebar", className)}>
       <div className="flex items-center gap-1 px-3 pb-1 pt-3">
         <div className="min-w-0 flex-1 truncate text-sm font-semibold text-ink [&_a]:flex [&_a]:items-center [&_a]:gap-1.5">{title}</div>
         {actions}

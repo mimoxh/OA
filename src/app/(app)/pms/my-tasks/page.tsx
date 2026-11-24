@@ -16,13 +16,12 @@ export default async function MyTasksPage({ searchParams }: PageProps<"/pms/my-t
     orderBy: showDone ? [{ completedAt: "desc" }] : [{ dueDate: "asc" }, { priority: "desc" }],
     take: showDone ? 50 : undefined,
     include: {
-      project: { select: { id: true, name: true, code: true, icon: true } },
-      parent: { select: { no: true, title: true } },
+      project: { select: { id: true, name: true, icon: true } },
+      parent: { select: { title: true } },
     },
   });
   const rows: MyTask[] = tasks.map((t) => ({
     id: t.id,
-    no: t.no,
     title: t.title,
     status: t.status,
     priority: t.priority,

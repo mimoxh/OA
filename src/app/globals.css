@@ -55,6 +55,18 @@
   }
 }
 
+/* 桌面客户端标题栏高度：(app) 布局在桌面端设为 40px，浏览器中为 0。
+   桌面端内容区是独立滚动容器（起点在标题栏下方），因此内容里的 sticky 元素用 top-0，top-app 只给 fixed 元素用。 */
+@utility h-app {
+  height: calc(100vh - var(--titlebar-h, 0px));
+}
+@utility min-h-app {
+  min-height: calc(100vh - var(--titlebar-h, 0px));
+}
+@utility top-app {
+  top: var(--titlebar-h, 0px);
+}
+
 @layer base {
   html,
   body {

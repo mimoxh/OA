@@ -192,7 +192,7 @@ export function CallOverlay({ me }: { me: UserLite }) {
     const isGroup = incoming.conversationType === "GROUP";
     const kindLabel = incoming.kind === "audio" ? "语音" : "视频";
     return (
-      <div className="fixed right-5 top-5 z-50 w-[330px] overflow-hidden rounded-2xl border border-white/10 bg-[#1c2028] p-4 text-white shadow-2xl animate-pop-in">
+      <div className="fixed right-5 top-[calc(var(--titlebar-h,0px)+1.25rem)] z-50 w-[330px] overflow-hidden rounded-2xl border border-white/10 bg-[#1c2028] p-4 text-white shadow-2xl animate-pop-in">
         <div className="flex items-center gap-3">
           <div className="relative">
             <Avatar name={incoming.initiator.name} color={incoming.initiator.avatarColor} size={44} />
@@ -342,7 +342,7 @@ export function CallOverlay({ me }: { me: UserLite }) {
           : "grid-cols-2 lg:grid-cols-3";
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-[#14171f] text-white">
+    <div className="fixed inset-x-0 bottom-0 top-app z-50 flex flex-col bg-[#14171f] text-white">
       {/* 顶栏 */}
       <header className="flex h-14 shrink-0 items-center justify-between border-b border-white/10 px-5">
         <div className="flex min-w-0 items-center gap-3">

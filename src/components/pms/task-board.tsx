@@ -2,22 +2,28 @@
 
 import { useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { CalendarDays, CheckSquare, MessageSquare, Plus } from "lucide-react";
+import { CalendarDays, CheckSquare, CornerDownRight, MessageSquare, Plus } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge, Dot } from "@/components/ui/badge";
 import { useAction } from "@/components/ui/use-action";
 import { TASK_PRIORITY, TASK_STATUS } from "@/lib/labels";
 import { formatDate } from "@/lib/format";
-import { between, isOverdue, taskKey, TASK_STATUS_ORDER } from "@/lib/pms/utils";
+import { asTagColor, between, isOverdue, TASK_STATUS_ORDER } from "@/lib/pms/utils";
 import { cn } from "@/lib/utils";
 import { createTask, moveTask } from "@/app/(app)/pms/actions";
 
 type Status = (typeof TASK_STATUS_ORDER)[number];
 
+export type TaskTypeOption = { id: string; name: string; color: string };
+
 export type BoardTask = {
   id: string;
-  no: number;
   title: string;
+  parent: { id: string; title: string } | null;
+  type: TaskTypeOption | null;
+  typeId: string | null;
+  assigneeId: string | null;
+  milestoneId: string | null;
   status: Status;
   priority: keyof typeof TASK_PRIORITY;
   sortOrder: number;
@@ -45,7 +51,12 @@ export function PriorityTag({ priority }: { priority: keyof typeof TASK_PRIORITY
   return <Badge color={TASK_PRIORITY[priority].color}>{TASK_PRIORITY[priority].label}</Badge>;
 }
 
-export function TaskBoard({ projectId, code, tasks, canEdit }: { projectId: string; code: string; tasks: BoardTask[]; canEdit: boolean }) {
+export function TaskTypeTag({ type }: { type: TaskTypeOption | null }) {
+  if (!type) return null;
+  return <Badge color={asTagColor(type.color)}>{type.name}</Badge>;
+}
+
+export function TaskBoard({ projectId, tasks, canEdit }: { projectId: string; tasks: BoardTask[]; canEdit: boolean }) {
   const openTask = useOpenTask();
   const { run } = useAction();
   const [overrides, setOverrides] = useState<Record<string, { status: Status; sortOrder: number }>>({});
@@ -150,11 +161,19 @@ export function TaskBoard({ projectId, code, tasks, canEdit }: { projectId: stri
                         dragId === t.id && "opacity-40",
                       )}
                     >
-                      <div className="flex items-start justify-between gap-2">
-                        <span className="font-mono text-[11px] text-ink-3">{taskKey(code, t.no)}</span>
-                        <PriorityTag priority={t.priority} />
-                      </div>
-                      <div className={cn("mt-0.5 text-sm leading-snug text-ink", t.status === "DONE" && "text-ink-2 line-through decoration-ink-3")}>{t.title}</div>
+                      {t.parent && (
+                        <div className="mb-1 flex items-center gap-1 text-[11px] text-ink-3" title={`父任务：${t.parent.title}`}>
+                          <CornerDownRight className="size-3 shrink-0" />
+                          <span className="truncate">{t.parent.title}</span>
+                        </div>
+                      )}
+                      {(t.type || t.priority === "HIGH" || t.priority === "URGENT") && (
+                        <div className="mb-1 flex items-center gap-1">
+                          <TaskTypeTag type={t.type} />
+                          <PriorityTag priority={t.priority} />
+                        </div>
+                      )}
+                      <div className={cn("text-sm leading-snug text-ink", t.status === "DONE" && "text-ink-2 line-through decoration-ink-3")}>{t.title}</div>
                       {t.milestone && <div className="mt-1 truncate text-[11px] text-ink-3">◆ {t.milestone}</div>}
                       <div className="mt-2 flex items-center gap-2.5 text-xs text-ink-2">
                         {t.dueDate && (

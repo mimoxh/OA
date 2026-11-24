@@ -436,7 +436,8 @@ export async function createSpace(input: z.input<typeof spaceSchema>) {
 export async function updateSpace(input: z.input<typeof spaceSchema> & { id: string }) {
   return runAction("docs:edit", async (user) => {
     const v = spaceSchema.parse(input);
-    await requireSpaceManage(user, input.id);
+    const { space } = await requireSpaceManage(user, input.id);
+    if (space.ownerId && v.visibility !== "PRIVATE") throw new Error("个人空间仅自己可见，不能设为公开");
     await db.space.update({
       where: { id: input.id },
       data: { name: v.name, icon: v.icon, description: v.description || null, visibility: v.visibility },
@@ -448,7 +449,8 @@ export async function updateSpace(input: z.input<typeof spaceSchema> & { id: str
 
 export async function deleteSpace(id: string) {
   return runAction("docs:edit", async (user) => {
-    await requireSpaceManage(user, id);
+    const { space } = await requireSpaceManage(user, id);
+    if (space.ownerId) throw new Error("个人空间不能删除");
     const [docs, atts] = await Promise.all([
       db.document.findMany({ where: { spaceId: id }, select: { id: true } }),
       db.documentAttachment.findMany({ where: { spaceId: id }, select: { id: true } }),
@@ -467,6 +469,11 @@ export async function deleteSpace(id: string) {
   });
 }
 
+async function assertNotProjectSpace(spaceId: string) {
+  const p = await db.project.findUnique({ where: { spaceId }, select: { name: true } });
+  if (p) throw new Error(`这是项目「${p.name}」的文档空间，成员与项目成员同步，请在项目的成员页调整`);
+}
+
 const memberSchema = z.object({
   spaceId: z.string().min(1),
   userId: z.string().min(1),
@@ -477,6 +484,8 @@ export async function upsertSpaceMember(input: z.input<typeof memberSchema>) {
   return runAction("docs:edit", async (user) => {
     const v = memberSchema.parse(input);
     const { space } = await requireSpaceManage(user, v.spaceId);
+    if (space.ownerId) throw new Error("个人空间仅自己可见，不能添加成员");
+    await assertNotProjectSpace(space.id);
     const current = space.members.find((m) => m.userId === v.userId);
     if (current?.role === "owner" && v.role !== "owner" && space.members.filter((m) => m.role === "owner").length <= 1) {
       throw new Error("空间至少需要保留一位所有者");
@@ -503,6 +512,8 @@ export async function upsertSpaceMember(input: z.input<typeof memberSchema>) {
 export async function removeSpaceMember(input: { spaceId: string; userId: string }) {
   return runAction("docs:edit", async (user) => {
     const { space } = await requireSpaceManage(user, input.spaceId);
+    if (space.ownerId) throw new Error("个人空间的成员不能调整");
+    await assertNotProjectSpace(space.id);
     const current = space.members.find((m) => m.userId === input.userId);
     if (!current) return null;
     if (current.role === "owner" && space.members.filter((m) => m.role === "owner").length <= 1) {
