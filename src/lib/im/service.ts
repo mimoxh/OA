@@ -4,11 +4,11 @@ import type { DbClient } from "@/lib/db";
 import { queueEvent } from "@/lib/realtime/buffer";
 import { SAFE_INLINE_IMAGES } from "@/lib/storage";
 import { REF_LABEL } from "./biz-meta";
-import { parseMessageContent } from "./content";
+import { extractLinks, parseMessageContent } from "./content";
 import { conversationUserIds, toMessageDTO, userLiteSelect } from "./queries";
 import { resolveRefs } from "./refs";
 import type { BotKey } from "./bots";
-import type { FileContent, ImageContent, MessageDTO, MessageKind, RefType } from "./types";
+import type { Card, FileContent, ImageContent, MessageDTO, MessageKind, RefType } from "./types";
 
 const RECALL_WINDOW_MS = 2 * 60 * 1000;
 const EDIT_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -421,7 +421,7 @@ export async function sendAttachmentMessage(
   });
 }
 
-function buildPlainTiptapDoc(text: string) {
+export function buildPlainTiptapDoc(text: string) {
   const lines = text.split("\n");
   return {
     type: "doc",
@@ -430,6 +430,57 @@ function buildPlainTiptapDoc(text: string) {
       ...(line ? { content: [{ type: "text", text: line }] } : {}),
     })),
   };
+}
+
+/**
+ * Webhook 机器人回复：以机器人影子账号身份向其所在会话发消息（纯文本或通用卡片）。
+ * 必须在事务内调用；clientMsgId 用于外部重试幂等。
+ */
+export async function sendBotReplyMessage(
+  client: DbClient,
+  input: {
+    conversationId: string;
+    botUserId: string;
+    text?: string | null;
+    card?: Card | null;
+    clientMsgId?: string | null;
+    replyToId?: string | null;
+    threadRootId?: string | null;
+  },
+): Promise<{ message: Message; dto: MessageDTO; created: boolean }> {
+  const conv = await client.conversation.findUnique({ where: { id: input.conversationId }, select: { type: true } });
+  if (!conv) throw new Error("会话不存在");
+  await requireMember(client, input.conversationId, input.botUserId);
+  if (conv.type === "BOT") throw new Error("机器人会话不能回复");
+  if (input.replyToId) {
+    const target = await client.message.findUnique({ where: { id: input.replyToId }, select: { conversationId: true } });
+    if (!target || target.conversationId !== input.conversationId) throw new Error("回复的消息不存在");
+  }
+  if (input.threadRootId) {
+    await validateThreadRoot(client, input.conversationId, input.threadRootId);
+  }
+  const base = {
+    conversationId: input.conversationId,
+    senderId: input.botUserId,
+    clientMsgId: input.clientMsgId ?? null,
+    replyToId: input.replyToId ?? null,
+    threadRootId: input.threadRootId ?? null,
+  };
+  if (input.card) {
+    const card: Card = { ...input.card, template: "generic", actions: [] };
+    const text = [card.title, card.body].filter(Boolean).join("\n").slice(0, 5000);
+    return appendMessage(client, { ...base, type: "CARD", content: card, text, links: card.ref ? [card.ref] : [] });
+  }
+  const text = (input.text ?? "").replace(/\r\n?/g, "\n");
+  if (!text.trim()) throw new Error("消息不能为空");
+  if (text.length > 5000) throw new Error("消息不能超过 5000 字");
+  return appendMessage(client, {
+    ...base,
+    type: "TEXT",
+    content: buildPlainTiptapDoc(text),
+    text,
+    links: extractLinks(text),
+  });
 }
 
 /**

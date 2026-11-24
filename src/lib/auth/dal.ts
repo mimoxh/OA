@@ -31,7 +31,7 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
     where: { id: session.userId },
     include: { role: true, department: true },
   });
-  if (!user || !user.active) return null;
+  if (!user || !user.active || user.isBot) return null;
   return {
     id: user.id,
     name: user.name,

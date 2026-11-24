@@ -135,7 +135,9 @@ export function ChatView({
 
   const subtitle =
     conv.type === "DIRECT"
-      ? [online ? "在线" : "离线", peerTitle].filter(Boolean).join(" · ")
+      ? conv.peerIsBot
+        ? ["Webhook 机器人", peerTitle && peerTitle !== "Webhook 机器人" ? peerTitle : null].filter(Boolean).join(" · ")
+        : [online ? "在线" : "离线", peerTitle].filter(Boolean).join(" · ")
       : conv.type === "GROUP"
         ? [conv.bizType ? BIZ_META[conv.bizType].groupLabel : null, `${conv.memberCount} 人`].filter(Boolean).join(" · ")
         : "机器人";
@@ -150,10 +152,13 @@ export function ChatView({
       <div className="flex min-w-0 flex-1 flex-col">
         {/* 会话头 */}
         <div className="flex h-14 shrink-0 items-center gap-3 border-b border-line px-4">
-          <ConvAvatar conv={conv} size={36} showPresence />
+          <ConvAvatar conv={conv} size={36} showPresence={!conv.peerIsBot} />
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5">
               <div className="truncate text-[15px] font-semibold text-ink">{conv.name}</div>
+              {conv.peerIsBot && (
+                <span className="shrink-0 rounded bg-tag-purple px-1.5 py-0.5 text-[10px] font-medium text-tag-purple-ink">机器人</span>
+              )}
               {conv.bizType && (
                 <span className="shrink-0 rounded bg-tag-blue px-1.5 py-0.5 text-[10px] font-medium text-tag-blue-ink">
                   {BIZ_META[conv.bizType].tag}
@@ -171,7 +176,7 @@ export function ChatView({
               <ArrowUpRight className="size-3.5" />
             </Link>
           )}
-          {conv.type !== "BOT" && (
+          {conv.type !== "BOT" && !conv.peerIsBot && (
             <>
               <button
                 type="button"

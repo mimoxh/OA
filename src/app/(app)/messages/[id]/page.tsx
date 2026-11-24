@@ -13,7 +13,7 @@ export default async function ChatPage({ params, searchParams }: PageProps<"/mes
   const user = await requireUser();
   const res = await getConversation(user.id, id);
   if (!res) notFound();
-  const memberOptions = await getMemberOptions();
+  const memberOptions = await getMemberOptions({ includeBots: true });
   const peer = res.conversation.peerId ? memberOptions.find((m) => m.id === res.conversation.peerId) : null;
   return (
     <ChatView

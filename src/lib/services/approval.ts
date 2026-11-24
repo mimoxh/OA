@@ -52,7 +52,7 @@ async function resolveApprovers(tx: Tx, step: ApprovalStep, applicantId: string)
   if (step.approverType === "user" && step.approverId) {
     ids = [step.approverId];
   } else if (step.approverType === "role" && step.roleKey) {
-    const users = await tx.user.findMany({ where: { active: true, role: { key: step.roleKey } }, select: { id: true } });
+    const users = await tx.user.findMany({ where: { active: true, isBot: false, role: { key: step.roleKey } }, select: { id: true } });
     ids = users.map((u) => u.id);
   } else if (step.approverType === "manager") {
     const applicant = await tx.user.findUnique({
@@ -69,7 +69,7 @@ async function resolveApprovers(tx: Tx, step: ApprovalStep, applicantId: string)
     if (dept?.managerId) ids = [dept.managerId];
   }
   if (!ids.length) {
-    const admins = await tx.user.findMany({ where: { active: true, role: { key: "admin" } }, select: { id: true } });
+    const admins = await tx.user.findMany({ where: { active: true, isBot: false, role: { key: "admin" } }, select: { id: true } });
     ids = admins.map((u) => u.id);
   }
   return ids;

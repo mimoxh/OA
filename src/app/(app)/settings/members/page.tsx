@@ -39,6 +39,7 @@ export default async function MembersPage({ searchParams }: PageProps<"/settings
   const selectedId = str(sp.user);
 
   const where: Prisma.UserWhereInput = {
+    isBot: false,
     AND: [
       q ? { OR: [{ name: { contains: q } }, { email: { contains: q } }, { title: { contains: q } }, { phone: { contains: q } }] } : {},
       status === "active" ? { active: true } : status === "inactive" ? { active: false } : {},
@@ -51,8 +52,8 @@ export default async function MembersPage({ searchParams }: PageProps<"/settings
     db.user.findMany({ where, include, orderBy: [{ active: "desc" }, { createdAt: "asc" }] }),
     db.department.findMany({ select: { id: true, name: true, parentId: true, sortOrder: true } }),
     db.role.findMany({ orderBy: { createdAt: "asc" }, select: { id: true, name: true, key: true } }),
-    db.user.groupBy({ by: ["active"], _count: { _all: true } }),
-    selectedId ? db.user.findUnique({ where: { id: selectedId }, include }) : Promise.resolve(null),
+    db.user.groupBy({ by: ["active"], where: { isBot: false }, _count: { _all: true } }),
+    selectedId ? db.user.findFirst({ where: { id: selectedId, isBot: false }, include }) : Promise.resolve(null),
   ]);
   const deptOptions = flattenDepartments(departments).map((d) => ({ id: d.id, name: d.name, depth: d.depth }));
   const roleOptions = roles.map((r) => ({ id: r.id, name: r.name }));

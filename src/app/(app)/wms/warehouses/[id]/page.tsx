@@ -34,7 +34,7 @@ export default async function WarehouseDetailPage({ params }: PageProps<"/wms/wa
   });
   if (!wh) notFound();
   const [users, recent] = await Promise.all([
-    canEdit ? db.user.findMany({ where: { active: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }) : Promise.resolve([]),
+    canEdit ? db.user.findMany({ where: { active: true, isBot: false }, orderBy: { name: "asc" }, select: { id: true, name: true } }) : Promise.resolve([]),
     db.stockMovement.findMany({ where: { warehouseId: wh.id }, orderBy: { createdAt: "desc" }, take: 8, include: movementInclude }),
   ]);
   const qty = wh.inventories.reduce((s, i) => s + i.quantity, 0);

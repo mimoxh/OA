@@ -67,7 +67,7 @@ export async function getAncestors(parentId: string | null) {
 /** 可以在该空间文档中 @ 的成员：私有空间为空间成员与管理员，公开空间为所有有文档权限的成员 */
 export async function getMentionableUsers(space: SpaceLike): Promise<MemberOption[]> {
   const users = await db.user.findMany({
-    where: { active: true },
+    where: { active: true, isBot: false },
     select: { id: true, name: true, avatarColor: true, title: true, role: { select: { permissions: true } } },
     orderBy: { createdAt: "asc" },
   });
@@ -78,7 +78,7 @@ export async function getMentionableUsers(space: SpaceLike): Promise<MemberOptio
 
 export async function getAllActiveUsers(): Promise<(MemberOption & { canDocs: boolean })[]> {
   const users = await db.user.findMany({
-    where: { active: true },
+    where: { active: true, isBot: false },
     select: { id: true, name: true, avatarColor: true, title: true, role: { select: { permissions: true } } },
     orderBy: { createdAt: "asc" },
   });

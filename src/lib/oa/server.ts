@@ -6,13 +6,21 @@ import { APPROVER_TYPE_LABELS, parseFormSchema, type ApprovalStep } from "@/lib/
 import { parseFormData } from "@/lib/oa/form";
 import type { MemberOption } from "@/lib/oa/types";
 
-export async function getMemberOptions(opts: { includeInactive?: boolean } = {}): Promise<MemberOption[]> {
+/** 业务选人默认不含 Webhook 机器人；IM 选人/建群传 includeBots: true */
+export async function getMemberOptions(opts: { includeInactive?: boolean; includeBots?: boolean } = {}): Promise<MemberOption[]> {
   const users = await db.user.findMany({
-    where: opts.includeInactive ? {} : { active: true },
-    select: { id: true, name: true, avatarColor: true, title: true, department: { select: { name: true } } },
+    where: { ...(opts.includeInactive ? {} : { active: true }), ...(opts.includeBots ? {} : { isBot: false }) },
+    select: { id: true, name: true, avatarColor: true, title: true, isBot: true, department: { select: { name: true } } },
     orderBy: { createdAt: "asc" },
   });
-  return users.map((u) => ({ id: u.id, name: u.name, avatarColor: u.avatarColor, title: u.title, department: u.department?.name ?? null }));
+  return users.map((u) => ({
+    id: u.id,
+    name: u.name,
+    avatarColor: u.avatarColor,
+    title: u.isBot ? (u.title ?? "Webhook 机器人") : u.title,
+    department: u.department?.name ?? null,
+    ...(u.isBot ? { isBot: true } : {}),
+  }));
 }
 
 export type ApprovalTab = "todo" | "done" | "mine" | "all";
@@ -72,7 +80,7 @@ export async function previewSteps(steps: ApprovalStep[], applicantId: string): 
       detail = `指定成员：${u?.name ?? "（成员不存在）"}`;
     } else if (step.approverType === "role" && step.roleKey) {
       const role = await db.role.findUnique({ where: { key: step.roleKey } });
-      approvers = await db.user.findMany({ where: { active: true, role: { key: step.roleKey } }, select: userSelect });
+      approvers = await db.user.findMany({ where: { active: true, isBot: false, role: { key: step.roleKey } }, select: userSelect });
       detail = `角色「${role?.name ?? step.roleKey}」${approvers.length > 1 ? "（或签，任一人处理即可）" : ""}`;
     } else if (step.approverType === "manager") {
       const dept = applicant?.department;
@@ -91,7 +99,7 @@ export async function previewSteps(steps: ApprovalStep[], applicantId: string): 
     let fallback = false;
     if (!approvers.length) {
       fallback = true;
-      approvers = await db.user.findMany({ where: { active: true, role: { key: "admin" } }, select: userSelect });
+      approvers = await db.user.findMany({ where: { active: true, isBot: false, role: { key: "admin" } }, select: userSelect });
     }
     out.push({ name: step.name, typeLabel: APPROVER_TYPE_LABELS[step.approverType], detail, approvers, fallback });
   }

@@ -43,6 +43,8 @@ model User {
   title        String?
   phone        String?
   active       Boolean     @default(true)
+  // Webhook 机器人影子账号：不可登录，不出现在业务选人中
+  isBot        Boolean     @default(false)
   roleId       String
   role         Role        @relation(fields: [roleId], references: [id])
   departmentId String?
@@ -102,6 +104,9 @@ model User {
   attachments     Attachment[]
   messageReactions MessageReaction[]
   callSessions     CallSession[]
+
+  webhookConnector         WebhookConnector?  @relation("WebhookBot")
+  webhookConnectorsCreated WebhookConnector[] @relation("WebhookCreator")
 }
 
 model Notification {
@@ -1315,4 +1320,49 @@ model CallSession {
 
   @@index([conversationId, status])
   @@index([status])
+}
+
+// ───────────────────────────── IM：Webhook 机器人连接器 ─────────────────────────────
+
+model WebhookConnector {
+  id                 String               @id @default(cuid())
+  botUserId          String               @unique
+  botUser            User                 @relation("WebhookBot", fields: [botUserId], references: [id], onDelete: Cascade)
+  enabled            Boolean              @default(true)
+  description        String?
+  // 以下三项均为 AES-256-GCM 密文（src/lib/im/webhook-crypto.ts）
+  outboundUrl        String
+  outboundSecret     String?
+  // 密文内容为 JSON 对象 { "Header-Name": "value" }
+  outboundHeaders    String?
+  // mention_only | all（仅影响群聊；单聊始终触发）
+  triggerMode        String               @default("mention_only")
+  // 入站回调 Bearer Token 只保存 SHA-256（hex）与脱敏前缀
+  inboundTokenHash   String
+  inboundTokenPrefix String
+  createdById        String?
+  createdBy          User?                @relation("WebhookCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  logs               WebhookDeliveryLog[]
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+}
+
+model WebhookDeliveryLog {
+  id             String           @id @default(cuid())
+  connectorId    String
+  connector      WebhookConnector @relation(fields: [connectorId], references: [id], onDelete: Cascade)
+  // OUTBOUND | INBOUND
+  direction      String
+  // 出站：im.message.created | webhook.ping；入站：reply | typing
+  event          String?
+  conversationId String?
+  messageId      String?
+  // SUCCESS | FAILED
+  status         String
+  httpStatus     Int?
+  latencyMs      Int?
+  error          String?
+  createdAt      DateTime         @default(now())
+
+  @@index([connectorId, createdAt])
 }

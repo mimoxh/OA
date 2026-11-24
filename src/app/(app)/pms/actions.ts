@@ -531,7 +531,7 @@ export async function addTaskComment(taskId: string, content: string) {
     const t = await db.task.findUnique({ where: { id: taskId }, include: { project: { include: { members: { include: { user: true } } } } } });
     if (!t) throw new Error("任务不存在");
     await assertEditTasks(user, t.projectId);
-    const candidates = await db.user.findMany({ where: { active: true }, select: { id: true, name: true } });
+    const candidates = await db.user.findMany({ where: { active: true, isBot: false }, select: { id: true, name: true } });
     const mentioned = candidates.filter((u) => text.includes(`@${u.name}`)).map((u) => u.id);
     const key = taskKey(t.project.code, t.no);
     await db.$transaction(async (tx) => {
