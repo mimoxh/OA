@@ -23,7 +23,7 @@ export default async function WarehousesPage() {
         outboundOrders: { where: { status: { in: ["PENDING", "PICKING"] } }, select: { id: true } },
       },
     }),
-    canEdit ? db.user.findMany({ where: { active: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }) : Promise.resolve([]),
+    canEdit ? db.user.findMany({ where: { active: true, isBot: false }, orderBy: { name: "asc" }, select: { id: true, name: true } }) : Promise.resolve([]),
   ]);
 
   return (

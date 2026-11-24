@@ -27,6 +27,7 @@ import { MemberMultiSelect } from "@/components/oa/member-picker";
 import type { MemberOption } from "@/lib/oa/types";
 import { BIZ_META } from "@/lib/im/biz-meta";
 import type { ConversationDTO, MessageDTO, MessageSearchHit, UserLite } from "@/lib/im/types";
+import type { ChatRunConfigContext } from "@/lib/im/webhook-run-config";
 import { cn } from "@/lib/utils";
 import { useAction } from "@/components/ui/use-action";
 import {
@@ -58,6 +59,7 @@ import { MessageList } from "./message-list";
 import { Composer } from "./composer";
 import { ThreadDrawer } from "./thread-drawer";
 import { SearchDrawer } from "./search-drawer";
+import { WebhookRunConfigBar } from "./webhook-run-config-bar";
 
 type Me = UserLite;
 type RightPanel = null | { kind: "settings" } | { kind: "search" } | { kind: "thread"; rootId: string };
@@ -70,6 +72,7 @@ export function ChatView({
   memberOptions,
   initialFocusSeq = null,
   initialThreadRootId = null,
+  runConfig = null,
 }: {
   initialConversation: ConversationDTO;
   initialMembers: GroupMember[] | null;
@@ -78,6 +81,8 @@ export function ChatView({
   memberOptions: MemberOption[];
   initialFocusSeq?: number | null;
   initialThreadRootId?: string | null;
+  /** 会话内有已启用的 Webhook 机器人时由服务端提供，否则为 null（不显示选择器） */
+  runConfig?: ChatRunConfigContext | null;
 }) {
   const router = useRouter();
   const convId = initialConversation.id;
@@ -103,6 +108,13 @@ export function ChatView({
   }, [convId, router]);
 
   const conv = useConversation(convId) ?? initialConversation;
+  const liveMembers = useGroupMembers(convId);
+  const runBots = useMemo(() => {
+    if (!runConfig) return [];
+    // 群成员实时变化（机器人被移出）时同步隐藏
+    if (conv.type === "GROUP" && liveMembers) return runConfig.bots.filter((b) => liveMembers.some((m) => m.id === b.botUserId));
+    return runConfig.bots;
+  }, [runConfig, conv.type, liveMembers]);
   const online = useOnline(conv.peerId);
   const activeCallEntry = useConversationActiveCall(convId);
   const { active: myActiveCall } = useCallStore();
@@ -135,7 +147,9 @@ export function ChatView({
 
   const subtitle =
     conv.type === "DIRECT"
-      ? [online ? "在线" : "离线", peerTitle].filter(Boolean).join(" · ")
+      ? conv.peerIsBot
+        ? ["Webhook 机器人", peerTitle && peerTitle !== "Webhook 机器人" ? peerTitle : null].filter(Boolean).join(" · ")
+        : [online ? "在线" : "离线", peerTitle].filter(Boolean).join(" · ")
       : conv.type === "GROUP"
         ? [conv.bizType ? BIZ_META[conv.bizType].groupLabel : null, `${conv.memberCount} 人`].filter(Boolean).join(" · ")
         : "机器人";
@@ -150,10 +164,13 @@ export function ChatView({
       <div className="flex min-w-0 flex-1 flex-col">
         {/* 会话头 */}
         <div className="flex h-14 shrink-0 items-center gap-3 border-b border-line px-4">
-          <ConvAvatar conv={conv} size={36} showPresence />
+          <ConvAvatar conv={conv} size={36} showPresence={!conv.peerIsBot} />
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5">
               <div className="truncate text-[15px] font-semibold text-ink">{conv.name}</div>
+              {conv.peerIsBot && (
+                <span className="shrink-0 rounded bg-tag-purple px-1.5 py-0.5 text-[10px] font-medium text-tag-purple-ink">机器人</span>
+              )}
               {conv.bizType && (
                 <span className="shrink-0 rounded bg-tag-blue px-1.5 py-0.5 text-[10px] font-medium text-tag-blue-ink">
                   {BIZ_META[conv.bizType].tag}
@@ -171,7 +188,7 @@ export function ChatView({
               <ArrowUpRight className="size-3.5" />
             </Link>
           )}
-          {conv.type !== "BOT" && (
+          {conv.type !== "BOT" && !conv.peerIsBot && (
             <>
               <button
                 type="button"
@@ -268,7 +285,17 @@ export function ChatView({
             机器人会话不支持回复
           </div>
         ) : (
-          <Composer conv={conv} me={me} replyTo={replyTo} onClearReply={() => setReplyTo(null)} />
+          <Composer
+            conv={conv}
+            me={me}
+            replyTo={replyTo}
+            onClearReply={() => setReplyTo(null)}
+            toolbar={
+              runConfig && runBots.length > 0 ? (
+                <WebhookRunConfigBar key={convId} conversationId={convId} bots={runBots} initialOverride={runConfig.override} />
+              ) : undefined
+            }
+          />
         )}
       </div>
 

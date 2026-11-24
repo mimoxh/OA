@@ -4,6 +4,7 @@ export type MemberOption = {
   avatarColor: string;
   title: string | null;
   department: string | null;
+  isBot?: boolean;
 };
 
 export const PALETTE = [

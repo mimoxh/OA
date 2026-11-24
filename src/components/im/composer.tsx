@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type ReactNode } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
 import { Extension } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
@@ -80,6 +80,7 @@ export function Composer({
   onClearReply,
   threadRootId = null,
   compact = false,
+  toolbar,
 }: {
   conv: ConversationDTO;
   me: UserLite;
@@ -87,6 +88,8 @@ export function Composer({
   onClearReply?: () => void;
   threadRootId?: string | null;
   compact?: boolean;
+  /** 附加在输入框工具栏（表情 / 图片 / 文件之后）的会话级控件 */
+  toolbar?: ReactNode;
 }) {
   const convId = conv.id;
   const composerKey = threadRootId ? `${convId}:thread:${threadRootId}` : convId;
@@ -306,7 +309,7 @@ export function Composer({
         <div className="max-h-36 overflow-y-auto">
           <EditorContent editor={editor} />
         </div>
-        <div className="flex items-center justify-between px-2 pb-1.5">
+        <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 px-2 pb-1.5">
           <div className="flex items-center gap-0.5">
             <EmojiPicker onSelect={(e) => editor?.chain().focus().insertContent(e).run()}>
               <button type="button" className="rounded-md p-1.5 text-ink-2 hover:bg-hover" title="表情" aria-label="表情">
@@ -332,18 +335,21 @@ export function Composer({
               <Paperclip className="size-4" />
             </button>
           </div>
-          <button
-            type="button"
-            onClick={() => send()}
-            disabled={empty}
-            className={cn(
-              "flex h-7 items-center gap-1 rounded-md px-2.5 text-[13px] font-medium",
-              empty ? "text-ink-3" : "bg-accent text-white hover:bg-accent-hover",
-            )}
-          >
-            <SendHorizontal className="size-3.5" />
-            发送
-          </button>
+          <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1">
+            {toolbar}
+            <button
+              type="button"
+              onClick={() => send()}
+              disabled={empty}
+              className={cn(
+                "flex h-7 shrink-0 items-center gap-1 rounded-md px-2.5 text-[13px] font-medium",
+                empty ? "text-ink-3" : "bg-accent text-white hover:bg-accent-hover",
+              )}
+            >
+              <SendHorizontal className="size-3.5" />
+              发送
+            </button>
+          </div>
         </div>
       </div>
       {!compact && (

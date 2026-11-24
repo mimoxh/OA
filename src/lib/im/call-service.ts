@@ -97,6 +97,10 @@ export async function startOrJoinCall(
   });
   if (!conv) throw new Error("会话不存在");
   if (conv.type === "BOT") throw new Error("机器人会话不支持音视频通话");
+  if (conv.type === "DIRECT") {
+    const botPeer = await client.conversationMember.count({ where: { conversationId: conv.id, user: { isBot: true } } });
+    if (botPeer) throw new Error("Webhook 机器人不支持音视频通话");
+  }
 
   await lockCallConversation(client, conv.id);
   await expireStaleCalls(client, input.userId, conv.id);

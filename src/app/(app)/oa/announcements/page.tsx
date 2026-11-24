@@ -43,7 +43,7 @@ export default async function AnnouncementsPage({ searchParams }: PageProps<"/oa
       },
       take: 200,
     }),
-    db.user.count({ where: { active: true } }),
+    db.user.count({ where: { active: true, isBot: false } }),
     db.announcement.count({ where: { reads: { none: { userId: user.id } } } }),
     db.announcement.groupBy({ by: ["category"], _count: { _all: true } }),
   ]);

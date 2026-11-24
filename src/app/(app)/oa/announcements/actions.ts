@@ -28,7 +28,7 @@ export async function saveAnnouncement(input: AnnouncementInput) {
         ? await tx.announcement.update({ where: { id: v.id }, data })
         : await tx.announcement.create({ data: { ...data, authorId: user.id, reads: { create: { userId: user.id } } } });
       if (v.notifyAll) {
-        const users = await tx.user.findMany({ where: { active: true }, select: { id: true } });
+        const users = await tx.user.findMany({ where: { active: true, isBot: false }, select: { id: true } });
         await notify(tx, {
           userIds: users.map((u) => u.id),
           actorId: user.id,

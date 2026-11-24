@@ -44,6 +44,8 @@ export type ConversationDTO = {
   peerId: string | null;
   /** 单聊对端已读位置（用于已读回执） */
   peerLastReadSeq: number | null;
+  /** 单聊对端为 Webhook 机器人 */
+  peerIsBot: boolean;
   memberCount: number;
   role: "OWNER" | "ADMIN" | "MEMBER";
   lastSeq: number;

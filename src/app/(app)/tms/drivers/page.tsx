@@ -36,7 +36,7 @@ export default async function DriversPage({ searchParams }: PageProps<"/tms/driv
       },
     }),
     db.driver.groupBy({ by: ["status"], _count: true }),
-    canEdit ? db.user.findMany({ where: { active: true }, orderBy: { name: "asc" }, select: { id: true, name: true, email: true } }) : Promise.resolve([]),
+    canEdit ? db.user.findMany({ where: { active: true, isBot: false }, orderBy: { name: "asc" }, select: { id: true, name: true, email: true } }) : Promise.resolve([]),
   ]);
   const countOf = (s: string) => counts.find((c) => c.status === s)?._count ?? 0;
 

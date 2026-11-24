@@ -6,7 +6,7 @@ export type { UserOption };
 
 export function getActiveUsers(): Promise<UserOption[]> {
   return db.user.findMany({
-    where: { active: true },
+    where: { active: true, isBot: false },
     select: { id: true, name: true, avatarColor: true },
     orderBy: { createdAt: "asc" },
   });

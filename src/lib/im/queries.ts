@@ -8,6 +8,7 @@ const GROUP_COLORS = ["#e16b16", "#d44c8a", "#2383e2", "#448361", "#9065b0", "#c
 
 const liteUser = { id: true, name: true, avatarColor: true } as const;
 export const userLiteSelect = liteUser;
+const peerSelect = { ...liteUser, isBot: true } as const;
 
 export type MemberRow = ConversationMember & { user?: Pick<User, "id" | "name" | "avatarColor"> };
 export type MessageRow = Message & { sender?: Pick<User, "id" | "name" | "avatarColor"> | null };
@@ -21,7 +22,11 @@ function groupColor(id: string) {
 export function toConversationDTO(
   member: ConversationMember,
   conv: Conversation,
-  info: { memberCount: number; peer?: Pick<User, "id" | "name" | "avatarColor"> | null; peerLastReadSeq?: number | null },
+  info: {
+    memberCount: number;
+    peer?: (Pick<User, "id" | "name" | "avatarColor"> & { isBot?: boolean }) | null;
+    peerLastReadSeq?: number | null;
+  },
   lastMessage: (Message & { sender?: Pick<User, "name"> | null }) | null,
 ): ConversationDTO {
   const me = member;
@@ -29,8 +34,10 @@ export function toConversationDTO(
   let avatarColor = groupColor(conv.id);
   let peerId: string | null = null;
   let peerLastReadSeq: number | null = null;
+  let peerIsBot = false;
   if (conv.type === "DIRECT") {
     peerId = info.peer?.id ?? null;
+    peerIsBot = !!info.peer?.isBot;
     peerLastReadSeq = info.peerLastReadSeq ?? 0;
     name = info.peer?.name ?? "已注销用户";
     avatarColor = info.peer?.avatarColor ?? "#787774";
@@ -55,6 +62,7 @@ export function toConversationDTO(
     bizLabel: bizMeta ? bizMeta.detailLabel : null,
     peerId,
     peerLastReadSeq,
+    peerIsBot,
     memberCount: info.memberCount,
     role: member.role,
     lastSeq: conv.lastSeq,
@@ -214,7 +222,7 @@ export async function listConversations(userId: string, client: DbClient = db): 
         include: {
           _count: { select: { members: true } },
           // 单聊只需对端 1 行（群聊该行结果不使用）
-          members: { where: { userId: { not: userId } }, take: 1, include: { user: { select: liteUser } } },
+          members: { where: { userId: { not: userId } }, take: 1, include: { user: { select: peerSelect } } },
           messages: { orderBy: { seq: "desc" }, take: 1, include: { sender: { select: { name: true } } } },
         },
       },
@@ -258,7 +266,7 @@ export async function getConversation(
     include: {
       conversation: {
         include: {
-          members: { include: { user: { select: liteUser } } },
+          members: { include: { user: { select: peerSelect } } },
           messages: { orderBy: { seq: "desc" }, take: 1, include: { sender: { select: { name: true } } } },
         },
       },

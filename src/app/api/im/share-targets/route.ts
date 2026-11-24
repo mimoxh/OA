@@ -11,7 +11,7 @@ export async function GET() {
   const [convs, users] = await Promise.all([
     listConversations(user.id),
     db.user.findMany({
-      where: { active: true, id: { not: user.id } },
+      where: { active: true, isBot: false, id: { not: user.id } },
       orderBy: { name: "asc" },
       select: { id: true, name: true, avatarColor: true, title: true, department: { select: { name: true } } },
     }),

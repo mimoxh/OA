@@ -32,7 +32,7 @@ export default async function AnnouncementPage({ params }: PageProps<"/oa/announ
   const [reads, users] = await Promise.all([
     db.announcementRead.findMany({ where: { announcementId: a.id }, orderBy: { readAt: "asc" } }),
     db.user.findMany({
-      where: { active: true },
+      where: { active: true, isBot: false },
       select: { id: true, name: true, avatarColor: true, department: { select: { name: true } } },
       orderBy: { createdAt: "asc" },
     }),

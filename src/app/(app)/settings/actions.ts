@@ -21,6 +21,13 @@ const email = z
   .regex(/^[^\s@]+@[^\s@]+\.[^\s@]+$/, "邮箱格式不正确");
 const password = z.string().min(6, "密码至少 6 位").max(64, "密码不能超过 64 位");
 
+const BOT_MANAGED = "机器人账号请在「设置 · Webhook 机器人」中管理";
+
+async function assertNotBot(userId: string) {
+  const u = await db.user.findUnique({ where: { id: userId }, select: { isBot: true } });
+  if (u?.isBot) throw new Error(BOT_MANAGED);
+}
+
 function revalidateOrg() {
   revalidatePath("/settings", "layout");
 }
@@ -73,6 +80,7 @@ export async function updateMember(input: z.input<typeof memberSchema> & { id: s
     const role = await checkRefs(v);
     const target = await db.user.findUnique({ where: { id: v.id } });
     if (!target) throw new Error("成员不存在");
+    if (target.isBot) throw new Error(BOT_MANAGED);
     const dup = await db.user.findUnique({ where: { email: v.email } });
     if (dup && dup.id !== v.id) throw new Error("该邮箱已被使用");
     if (v.id === user.id && !parsePermissions(role.permissions).includes("admin")) {
@@ -98,6 +106,7 @@ export async function updateMember(input: z.input<typeof memberSchema> & { id: s
 export async function resetMemberPassword(input: { id: string; password: string }) {
   return runAction("admin", async (user) => {
     const v = parseInput(z.object({ id, password }), input);
+    await assertNotBot(v.id);
     await db.user.update({ where: { id: v.id }, data: { passwordHash: await bcrypt.hash(v.password, 10) } });
     await audit(db, { entityType: "user", entityId: v.id, action: "reset_password", userId: user.id });
   });
@@ -107,6 +116,7 @@ export async function setMemberActive(memberId: string, active: boolean) {
   return runAction("admin", async (user) => {
     const uid = parseInput(id, memberId);
     if (uid === user.id && !active) throw new Error("不能停用自己的账号");
+    await assertNotBot(uid);
     await db.user.update({ where: { id: uid }, data: { active: !!active } });
     await audit(db, { entityType: "user", entityId: uid, action: active ? "activate" : "deactivate", userId: user.id });
     revalidateOrg();

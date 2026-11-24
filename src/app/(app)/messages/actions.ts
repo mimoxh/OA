@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { runAction } from "@/lib/action";
@@ -26,8 +27,21 @@ import {
 } from "@/lib/im/service";
 import { getOrCreateBizGroup } from "@/lib/im/biz";
 import { listMessages } from "@/lib/im/queries";
+import { dispatchMessageWebhooks } from "@/lib/im/webhook-outbound";
+import {
+  listConversationWebhookBots,
+  resetConversationRunConfig,
+  runConfigPatchSchema,
+  saveConversationRunConfig,
+} from "@/lib/im/webhook-run-config";
 
 const id = z.string().min(1);
+
+/** 事务提交后在响应结束后投递 Webhook，不阻塞也不影响发送结果 */
+function scheduleWebhooks(messageId: string, created: boolean) {
+  if (!created) return;
+  after(() => dispatchMessageWebhooks(messageId).then(() => undefined));
+}
 
 export async function openDirect(userId: string) {
   return runAction(null, async (user) => {
@@ -61,7 +75,7 @@ const sendSchema = z.object({
 export async function sendMessage(input: z.input<typeof sendSchema>) {
   return runAction(null, async (user) => {
     const v = parseInput(sendSchema, input);
-    const { dto } = await db.$transaction((tx) =>
+    const { dto, created } = await db.$transaction((tx) =>
       sendTextMessage(tx, {
         conversationId: v.conversationId,
         senderId: user.id,
@@ -71,6 +85,7 @@ export async function sendMessage(input: z.input<typeof sendSchema>) {
         threadRootId: v.threadRootId ?? null,
       }),
     );
+    scheduleWebhooks(dto.id, created);
     return dto;
   });
 }
@@ -126,6 +141,30 @@ export async function updateConversationPrefs(input: z.input<typeof prefsSchema>
   return runAction(null, async (user) => {
     const v = parseInput(prefsSchema, input);
     await db.$transaction((tx) => setConversationPrefs(tx, user.id, v.conversationId, v));
+  });
+}
+
+const runConfigSchema = runConfigPatchSchema.extend({ conversationId: id });
+
+async function requireRunConfigTarget(conversationId: string, userId: string) {
+  await requireMember(db, conversationId, userId);
+  if (!(await listConversationWebhookBots(db, conversationId)).length) throw new Error("该会话中没有已启用的 Webhook 机器人");
+}
+
+/** 会话级 Webhook 运行配置（基座 / 模型 / 思考强度）；仅传入的字段会被修改 */
+export async function updateConversationRunConfig(input: z.input<typeof runConfigSchema>) {
+  return runAction(null, async (user) => {
+    const v = parseInput(runConfigSchema, input);
+    await requireRunConfigTarget(v.conversationId, user.id);
+    return saveConversationRunConfig(db, v.conversationId, user.id, { agent: v.agent, model: v.model, effort: v.effort });
+  });
+}
+
+export async function resetConversationRunConfigAction(conversationId: string) {
+  return runAction(null, async (user) => {
+    const cid = parseInput(id, conversationId);
+    await requireRunConfigTarget(cid, user.id);
+    return resetConversationRunConfig(db, cid);
   });
 }
 
@@ -225,7 +264,7 @@ const sendFileSchema = z.object({
 export async function sendFileMessage(input: z.input<typeof sendFileSchema>) {
   return runAction(null, async (user) => {
     const v = parseInput(sendFileSchema, input);
-    const { dto } = await db.$transaction((tx) =>
+    const { dto, created } = await db.$transaction((tx) =>
       sendAttachmentMessage(tx, {
         conversationId: v.conversationId,
         senderId: user.id,
@@ -235,6 +274,7 @@ export async function sendFileMessage(input: z.input<typeof sendFileSchema>) {
         threadRootId: v.threadRootId ?? null,
       }),
     );
+    scheduleWebhooks(dto.id, created);
     return dto;
   });
 }
@@ -272,7 +312,7 @@ export async function shareRefToChat(input: z.input<typeof shareRefSchema>) {
   return runAction(null, async (user) => {
     const v = parseInput(shareRefSchema, input);
     if (!v.conversationId && !v.targetUserId) throw new Error("请选择要分享的会话或成员");
-    return db.$transaction((tx) =>
+    const res = await db.$transaction((tx) =>
       shareRefMessage(
         tx,
         { id: user.id, permissions: user.permissions },
@@ -285,5 +325,7 @@ export async function shareRefToChat(input: z.input<typeof shareRefSchema>) {
         },
       ),
     );
+    scheduleWebhooks(res.dto.id, true);
+    return res;
   });
 }

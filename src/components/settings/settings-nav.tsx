@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Building, KeyRound, LayoutGrid, UserRound, Users } from "lucide-react";
+import { Bot, Building, KeyRound, LayoutGrid, UserRound, Users } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
@@ -12,6 +12,7 @@ const ITEMS: { href: string; label: string; icon: ReactNode; admin?: boolean; gr
   { href: "/settings/departments", label: "部门", icon: <Building />, admin: true, group: "组织管理" },
   { href: "/settings/roles", label: "角色权限", icon: <KeyRound />, admin: true, group: "组织管理" },
   { href: "/settings/apps", label: "应用管理", icon: <LayoutGrid />, admin: true, group: "系统" },
+  { href: "/settings/webhooks", label: "Webhook 机器人", icon: <Bot />, admin: true, group: "系统" },
 ];
 
 export function SettingsNav({ isAdmin }: { isAdmin: boolean }) {

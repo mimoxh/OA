@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth/dal";
+import { db } from "@/lib/db";
 import { getConversation } from "@/lib/im/queries";
+import { getChatRunConfigContext } from "@/lib/im/webhook-run-config";
 import { getMemberOptions } from "@/lib/oa/server";
 import { ChatView } from "@/components/im/chat-view";
 
@@ -13,7 +15,10 @@ export default async function ChatPage({ params, searchParams }: PageProps<"/mes
   const user = await requireUser();
   const res = await getConversation(user.id, id);
   if (!res) notFound();
-  const memberOptions = await getMemberOptions();
+  const [memberOptions, runConfig] = await Promise.all([
+    getMemberOptions({ includeBots: true }),
+    getChatRunConfigContext(db, res.conversation.id),
+  ]);
   const peer = res.conversation.peerId ? memberOptions.find((m) => m.id === res.conversation.peerId) : null;
   return (
     <ChatView
@@ -25,6 +30,7 @@ export default async function ChatPage({ params, searchParams }: PageProps<"/mes
       me={{ id: user.id, name: user.name, avatarColor: user.avatarColor }}
       peerTitle={peer?.title ?? null}
       memberOptions={memberOptions}
+      runConfig={runConfig}
     />
   );
 }

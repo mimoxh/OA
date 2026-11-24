@@ -5,7 +5,7 @@ import { ConversationList, NewChatMenu } from "@/components/im/conversation-list
 
 export default async function MessagesLayout({ children }: LayoutProps<"/messages">) {
   const user = await requireUser();
-  const members = await getMemberOptions();
+  const members = await getMemberOptions({ includeBots: true });
   return (
     <div className="flex min-h-screen">
       <ContextPanel title="消息" actions={<NewChatMenu members={members} meId={user.id} />}>
