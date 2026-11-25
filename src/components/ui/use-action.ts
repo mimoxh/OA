@@ -4,6 +4,7 @@ import { useCallback, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { ActionResult } from "@/lib/action";
+import { handleStaleAction, isStaleActionError } from "@/lib/stale-action";
 
 type RunOptions<T> = {
   /** 成功提示文案 */
@@ -30,6 +31,11 @@ export function useAction() {
           try {
             r = await fn();
           } catch (e) {
+            if (isStaleActionError(e)) {
+              handleStaleAction();
+              resolve({ ok: false, error: "服务已更新" });
+              return;
+            }
             r = { ok: false, error: e instanceof Error ? e.message : "网络错误" };
           }
           if (r.ok) {

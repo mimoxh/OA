@@ -34,6 +34,8 @@ import { useAction } from "@/components/ui/use-action";
 import { createGroupChat, openDirect, updateConversationPrefs } from "@/app/(app)/messages/actions";
 import { useConversations, useOnline } from "./store";
 import { convTime } from "./time";
+import { ActionSheet } from "@/components/mobile/action-sheet";
+import { useLongPress } from "@/components/mobile/use-long-press";
 
 const BOT_ICONS: Record<BotKey, ReactNode> = {
   approval: <ClipboardCheck className="size-4 text-white" />,
@@ -86,10 +88,32 @@ function previewText(conv: ConversationDTO): string {
   return body;
 }
 
-function RowMenu({ conv }: { conv: ConversationDTO }) {
+function useConvPrefs(conv: ConversationDTO) {
   const { run } = useAction();
-  const set = (patch: { pinned?: boolean; muted?: boolean; hidden?: boolean }) =>
+  return (patch: { pinned?: boolean; muted?: boolean; hidden?: boolean }) =>
     run(() => updateConversationPrefs({ conversationId: conv.id, ...patch }), { refresh: false });
+}
+
+/** 手机上长按会话：与桌面端悬浮菜单相同的三个操作 */
+function RowSheet({ conv, open, onOpenChange }: { conv: ConversationDTO; open: boolean; onOpenChange: (o: boolean) => void }) {
+  const set = useConvPrefs(conv);
+  return (
+    <ActionSheet
+      open={open}
+      onOpenChange={onOpenChange}
+      title={`会话操作：${conv.name}`}
+      header={<div className="truncate text-center text-[13px] text-ink-3">{conv.name}</div>}
+      actions={[
+        { key: "pin", label: conv.pinned ? "取消置顶" : "置顶", icon: conv.pinned ? <PinOff /> : <Pin />, onSelect: () => set({ pinned: !conv.pinned }) },
+        { key: "mute", label: conv.muted ? "取消免打扰" : "免打扰", icon: <BellOff />, onSelect: () => set({ muted: !conv.muted }) },
+        { key: "hide", label: "从列表移除", icon: <Trash2 />, danger: true, onSelect: () => set({ hidden: true }) },
+      ]}
+    />
+  );
+}
+
+function RowMenu({ conv }: { conv: ConversationDTO }) {
+  const set = useConvPrefs(conv);
   return (
     <Menu>
       <MenuTrigger asChild>
@@ -134,56 +158,63 @@ export function ConversationList() {
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="搜索会话"
-          className="h-8 w-full rounded-md border border-line-strong bg-white pl-8 pr-2 text-[13px] text-ink placeholder:text-ink-3 focus:border-accent focus:outline-none"
+          className="h-8 w-full rounded-md border border-line-strong bg-white pl-8 pr-2 text-[13px] text-ink placeholder:text-ink-3 focus:border-accent focus:outline-none max-md:h-9 max-md:border-transparent max-md:bg-sidebar max-md:text-[15px]"
         />
       </div>
       {loaded && !list.length && <div className="px-2 py-10 text-center text-[13px] text-ink-3">暂无会话</div>}
-      {filtered.map((conv) => {
-        const active = pathname === `/messages/${conv.id}`;
-        return (
-          <div key={conv.id} className="group/row relative">
-            <Link
-              href={`/messages/${conv.id}`}
-              className={cn(
-                "flex items-start gap-2.5 rounded-lg px-2 py-2 transition-colors",
-                active ? "bg-active" : "hover:bg-hover",
-                conv.pinned && !active && "bg-hover/60",
-              )}
-            >
-              <ConvAvatar conv={conv} showPresence />
-              <span className="min-w-0 flex-1">
-                <span className="flex items-baseline justify-between gap-2">
-                  <span className="flex min-w-0 items-center gap-1">
-                    <span className="truncate text-[13.5px] font-medium text-ink">{conv.name}</span>
-                    {conv.bizType && (
-                      <span className="shrink-0 rounded bg-tag-blue px-1 py-px text-[10px] font-medium text-tag-blue-ink">
-                        {BIZ_META[conv.bizType].tag}
-                      </span>
-                    )}
-                  </span>
-                  <span className="shrink-0 text-[11px] text-ink-3">{convTime(conv.lastMessageAt)}</span>
-                </span>
-                <span className="mt-0.5 flex items-center gap-1">
-                  <span className="min-w-0 flex-1 truncate text-xs text-ink-2">{previewText(conv)}</span>
-                  {conv.muted && <BellOff className="size-3 shrink-0 text-ink-3" />}
-                  {conv.unread > 0 && (
-                    <span
-                      className={cn(
-                        "flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full px-1 text-[10px] font-medium leading-none text-white",
-                        conv.muted ? "bg-ink-3" : "bg-danger",
-                      )}
-                    >
-                      {conv.unread > 99 ? "99+" : conv.unread}
-                    </span>
-                  )}
-                </span>
-              </span>
-            </Link>
-            <RowMenu conv={conv} />
-          </div>
-        );
-      })}
+      {filtered.map((conv) => (
+        <ConvRow key={conv.id} conv={conv} active={pathname === `/messages/${conv.id}`} />
+      ))}
       {loaded && q && !filtered.length && <div className="px-2 py-6 text-center text-[13px] text-ink-3">没有匹配的会话</div>}
+    </div>
+  );
+}
+
+function ConvRow({ conv, active }: { conv: ConversationDTO; active: boolean }) {
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const longPress = useLongPress(() => setSheetOpen(true));
+  return (
+    <div className="group/row relative">
+      <Link
+        href={`/messages/${conv.id}`}
+        {...longPress}
+        className={cn(
+          "flex items-start gap-2.5 rounded-lg px-2 py-2 transition-colors max-md:py-2.5 pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none]",
+          active ? "bg-active" : "hover:bg-hover",
+          conv.pinned && !active && "bg-hover/60",
+        )}
+      >
+        <ConvAvatar conv={conv} showPresence />
+        <span className="min-w-0 flex-1">
+          <span className="flex items-baseline justify-between gap-2">
+            <span className="flex min-w-0 items-center gap-1">
+              <span className="truncate text-[13.5px] font-medium text-ink max-md:text-[15px]">{conv.name}</span>
+              {conv.bizType && (
+                <span className="shrink-0 rounded bg-tag-blue px-1 py-px text-[10px] font-medium text-tag-blue-ink">
+                  {BIZ_META[conv.bizType].tag}
+                </span>
+              )}
+            </span>
+            <span className="shrink-0 text-[11px] text-ink-3">{convTime(conv.lastMessageAt)}</span>
+          </span>
+          <span className="mt-0.5 flex items-center gap-1">
+            <span className="min-w-0 flex-1 truncate text-xs text-ink-2 max-md:text-[13px]">{previewText(conv)}</span>
+            {conv.muted && <BellOff className="size-3 shrink-0 text-ink-3" />}
+            {conv.unread > 0 && (
+              <span
+                className={cn(
+                  "flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full px-1 text-[10px] font-medium leading-none text-white",
+                  conv.muted ? "bg-ink-3" : "bg-danger",
+                )}
+              >
+                {conv.unread > 99 ? "99+" : conv.unread}
+              </span>
+            )}
+          </span>
+        </span>
+      </Link>
+      <RowMenu conv={conv} />
+      <RowSheet conv={conv} open={sheetOpen} onOpenChange={setSheetOpen} />
     </div>
   );
 }

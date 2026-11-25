@@ -156,8 +156,9 @@ export function Composer({
       ],
       editorProps: {
         attributes: {
-          class: "im-composer px-3 py-2 text-sm leading-relaxed text-ink outline-none",
+          class: "im-composer px-3 py-2 text-sm leading-relaxed text-ink outline-none max-md:text-[15px]",
           spellcheck: "false",
+          enterkeyhint: "send",
         },
       },
       onUpdate: ({ editor: ed }) => {
@@ -261,7 +262,10 @@ export function Composer({
 
   return (
     <div
-      className={cn("shrink-0 border-t border-line bg-white", compact ? "px-2.5 py-2" : "px-3 pb-2.5 pt-2")}
+      className={cn(
+        "shrink-0 border-t border-line bg-white max-md:pb-[calc(var(--sab)+8px)]",
+        compact ? "px-2.5 py-2" : "px-3 pb-2.5 pt-2",
+      )}
       onPaste={onPaste}
       onDragOver={onDragOver}
       onDragLeave={() => setDragging(false)}
@@ -312,14 +316,14 @@ export function Composer({
         <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 px-2 pb-1.5">
           <div className="flex items-center gap-0.5">
             <EmojiPicker onSelect={(e) => editor?.chain().focus().insertContent(e).run()}>
-              <button type="button" className="rounded-md p-1.5 text-ink-2 hover:bg-hover" title="表情" aria-label="表情">
+              <button type="button" className="rounded-md p-1.5 text-ink-2 hover:bg-hover pointer-coarse:p-2" title="表情" aria-label="表情">
                 <Smile className="size-4" />
               </button>
             </EmojiPicker>
             <button
               type="button"
               onClick={() => imageInputRef.current?.click()}
-              className="rounded-md p-1.5 text-ink-2 hover:bg-hover"
+              className="rounded-md p-1.5 text-ink-2 hover:bg-hover pointer-coarse:p-2"
               title="发送图片"
               aria-label="发送图片"
             >
@@ -328,7 +332,7 @@ export function Composer({
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="rounded-md p-1.5 text-ink-2 hover:bg-hover"
+              className="rounded-md p-1.5 text-ink-2 hover:bg-hover pointer-coarse:p-2"
               title="发送文件"
               aria-label="发送文件"
             >
@@ -353,7 +357,7 @@ export function Composer({
         </div>
       </div>
       {!compact && (
-        <div className="mt-1 text-[11px] text-ink-3">Enter 发送，Shift+Enter 换行；支持拖拽或粘贴发送图片/文件</div>
+        <div className="mt-1 text-[11px] text-ink-3 max-md:hidden">Enter 发送，Shift+Enter 换行；支持拖拽或粘贴发送图片/文件</div>
       )}
     </div>
   );

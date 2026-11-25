@@ -13,6 +13,7 @@ import {
 import { toast } from "sonner";
 import { Button, IconButton } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { randomId } from "@/lib/client-id";
 import {
   exportWhiteboardPng, getWhiteboardTextEditorLayout, paintWhiteboard, type WhiteboardImages,
 } from "@/lib/docs/whiteboard/canvas";
@@ -354,7 +355,7 @@ export function WhiteboardCanvas({
       const fromId = activeTool === "arrow"
         ? hitElement(currentElements, point, 5 / viewport.scale, true)?.id
         : undefined;
-      gesture.current = { kind: "draw", start: point, tool: activeTool, id: crypto.randomUUID(), points: [point], fromId };
+      gesture.current = { kind: "draw", start: point, tool: activeTool, id: randomId(), points: [point], fromId };
       setSelection(null);
     }
     if (gesture.current) event.currentTarget.setPointerCapture(event.pointerId);
@@ -459,7 +460,7 @@ export function WhiteboardCanvas({
       if (key === "z" && !event.shiftKey) undo();
       if (key === "y" || (key === "z" && event.shiftKey)) redo();
       if (key === "d" && active) {
-        const copy = { ...offsetElement(active, 22, 22, elements), id: crypto.randomUUID() };
+        const copy = { ...offsetElement(active, 22, 22, elements), id: randomId() };
         commit([...elements, copy]);
         setSelection(copy.id);
       }
@@ -511,7 +512,7 @@ export function WhiteboardCanvas({
       const scale = Math.min(240 / previewImage.naturalWidth, 160 / previewImage.naturalHeight, 2);
       const width = Math.max(24, previewImage.naturalWidth * scale);
       const height = Math.max(24, previewImage.naturalHeight * scale);
-      const item = { id: crypto.randomUUID(), type: "image", ...insertNearCenter(width, height), width, height, attachmentId: image.id } as const;
+      const item = { id: randomId(), type: "image", ...insertNearCenter(width, height), width, height, attachmentId: image.id } as const;
       commit([...latestElements.current, item]);
       setSelection(item.id);
       setTool("select");
@@ -789,7 +790,7 @@ export function WhiteboardCanvas({
         onOpenChange={setPicker}
         excludeId={boardId}
         onPick={(page) => {
-          const item = { id: crypto.randomUUID(), type: "page", ...insertNearCenter(216, 66), width: 216, height: 66, documentId: page.id } as const;
+          const item = { id: randomId(), type: "page", ...insertNearCenter(216, 66), width: 216, height: 66, documentId: page.id } as const;
           setNewReferences((previous) => [...previous.filter((ref) => ref.id !== page.id), page]);
           commit([...latestElements.current, item]);
           setSelection(item.id);

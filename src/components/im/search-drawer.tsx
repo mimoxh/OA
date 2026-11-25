@@ -7,6 +7,7 @@ import type { ConversationDTO, MessageSearchHit } from "@/lib/im/types";
 import { cn } from "@/lib/utils";
 import { useGroupMembers } from "./store";
 import { convTime } from "./time";
+import { MOBILE_DRAWER } from "./drawer";
 
 type SearchKind = "all" | "image" | "file" | "link";
 
@@ -109,14 +110,14 @@ export function SearchDrawer({
   };
 
   return (
-    <aside className="flex h-full w-[340px] shrink-0 flex-col border-l border-line bg-sidebar">
+    <aside className={cn("flex h-full w-[340px] shrink-0 flex-col border-l border-line bg-sidebar", MOBILE_DRAWER)}>
       <div className="flex h-14 shrink-0 items-center justify-between border-b border-line bg-white px-4">
         <div className="flex items-center gap-1.5 text-[15px] font-semibold text-ink">
           <Search className="size-4 text-accent" />
           <span>查找聊天记录</span>
         </div>
         <button onClick={onClose} className="rounded p-1 text-ink-3 hover:bg-hover hover:text-ink" aria-label="关闭搜索">
-          <X className="size-4" />
+          <X className="size-4 max-md:size-5" />
         </button>
       </div>
 

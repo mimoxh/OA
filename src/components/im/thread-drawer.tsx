@@ -6,6 +6,8 @@ import type { ConversationDTO, UserLite } from "@/lib/im/types";
 import { loadOlderThread, loadThread, useThread } from "./store";
 import { MessageItem } from "./message-item";
 import { Composer } from "./composer";
+import { MOBILE_DRAWER } from "./drawer";
+import { cn } from "@/lib/utils";
 
 const GROUP_MS = 5 * 60 * 1000;
 
@@ -45,14 +47,14 @@ export function ThreadDrawer({
   }, [items.length]);
 
   return (
-    <aside className="flex h-full w-[360px] shrink-0 flex-col border-l border-line bg-canvas">
+    <aside className={cn("flex h-full w-[360px] shrink-0 flex-col border-l border-line bg-canvas", MOBILE_DRAWER)}>
       <div className="flex h-14 shrink-0 items-center justify-between border-b border-line bg-white px-4">
         <div className="flex items-center gap-1.5 text-[15px] font-semibold text-ink">
           <MessageSquareText className="size-4 text-accent" />
           <span>话题</span>
         </div>
         <button onClick={onClose} className="rounded p-1 text-ink-3 hover:bg-hover hover:text-ink" aria-label="关闭话题">
-          <X className="size-4" />
+          <X className="size-4 max-md:size-5" />
         </button>
       </div>
 

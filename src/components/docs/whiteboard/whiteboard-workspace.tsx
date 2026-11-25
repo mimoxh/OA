@@ -5,6 +5,7 @@ import { Download, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { downloadWhiteboardFile } from "@/lib/docs/whiteboard/canvas";
 import { parseWhiteboard, type WhiteboardElement, type WhiteboardPayload, type WhiteboardScene } from "@/lib/docs/whiteboard/content";
+import { randomId } from "@/lib/client-id";
 import { WhiteboardCanvas } from "./whiteboard-canvas";
 
 export type WhiteboardWorkspaceHandle = { flush: () => Promise<boolean> };
@@ -26,7 +27,7 @@ function loadDraft(payload: WhiteboardPayload): Draft | null {
     const sessionKey = "oa:whiteboard:tab";
     let tabId = sessionStorage.getItem(sessionKey);
     if (!tabId) {
-      tabId = crypto.randomUUID();
+      tabId = randomId();
       sessionStorage.setItem(sessionKey, tabId);
     }
     const key = `oa:whiteboard:${payload.userId}:${payload.id}:${tabId}`;

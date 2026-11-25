@@ -1,6 +1,8 @@
 package com.oa.suite.mobile;
 
 import android.annotation.SuppressLint;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageInfo;
@@ -136,6 +138,25 @@ public class OAShellPlugin extends Plugin {
     public void openLauncher(PluginCall call) {
         call.resolve();
         main().switchTo(null);
+    }
+
+    /** 局域网 HTTP 不是安全上下文，网页拿不到 navigator.clipboard，由原生写入系统剪贴板 */
+    @PluginMethod
+    public void copyText(PluginCall call) {
+        String text = call.getString("text");
+        if (text == null) {
+            call.reject("缺少 text");
+            return;
+        }
+        getActivity().runOnUiThread(() -> {
+            try {
+                ClipboardManager cm = (ClipboardManager) getContext().getSystemService(Context.CLIPBOARD_SERVICE);
+                cm.setPrimaryClip(ClipData.newPlainText("OA", text));
+                call.resolve();
+            } catch (Exception e) {
+                call.reject("写入剪贴板失败：" + e.getMessage());
+            }
+        });
     }
 
     @PluginMethod

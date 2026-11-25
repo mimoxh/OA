@@ -4,18 +4,17 @@
 
 ## 构建 debug APK
 
-需要 JDK 21、Android SDK（platform 36），Node 22+。`mobile/` 是独立的 npm 包，不在根目录 pnpm workspace 里。
+需要 JDK 21、Android SDK（platform 36），Node 22+，pnpm 11。`mobile/` 是根目录 pnpm workspace 的成员包（`oa-mobile`），依赖锁定在根目录 `pnpm-lock.yaml` 里，不要在这里用 npm 安装。
 
 ```powershell
-cd mobile
-npm install
+# 在仓库根目录安装（会同时安装 Web、桌面端和手机端依赖）
+pnpm install
 $env:JAVA_HOME = "<JDK 21 路径>"; $env:ANDROID_HOME = "$env:LOCALAPPDATA\Android\Sdk"
-npx cap sync android
-cd android; .\gradlew.bat assembleDebug
-# 产物：android/app/build/outputs/apk/debug/app-debug.apk
+pnpm mobile:build:debug          # 等同于 cd mobile; pnpm exec cap sync android; cd android; .\gradlew.bat assembleDebug
+# 产物：mobile/android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-改了 `www/` 或 `capacitor.config.json` 后要重新 `npx cap sync android`（或 `npx cap copy android`）再构建。
+改了 `www/` 或 `capacitor.config.json` 后要重新 `pnpm mobile:sync`（`cap sync android`）再构建。服务端 Docker 镜像只安装 `oa-suite`（`pnpm install --filter oa-suite`），不会安装 Capacitor 依赖；镜像里只保留 `mobile/package.json` 供锁文件校验。
 
 ## 运行时如何选择服务器
 
@@ -55,6 +54,6 @@ keytool -exportcert -rfc -alias oa -keystore .devcerts/oa-dev.p12 -storepass <�
 
 ## 已知限制
 
-- 局域网 HTTP（非 localhost）不是安全上下文：当前 OA 在 HTTP 下发不出 IM 消息（`crypto.randomUUID` 不可用），摄像头、麦克风、Web 剪贴板也不可用。详见 M0 报告 §3.1。
+- 局域网 HTTP（非 localhost）不是安全上下文：IM、白板等的客户端 ID 已改用不依赖安全上下文的生成方式，复制改走原生剪贴板（浏览器里回退到 `execCommand`），HTTP 下可以正常收发消息；但摄像头、麦克风（音视频通话）在 HTTP 下仍不可用。正式使用请按 `docs/mobile/deployment.md` 配置 HTTPS。
 - `blob:` / `data:` 链接的下载（CSV 导出、白板草稿）暂不支持。
 - 后台连接只对连接期间到达的消息弹通知，断网期间的消息不补通知（打开 App 后页面会补齐）。

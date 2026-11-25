@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { endOfDay, format, isBefore, startOfDay, startOfMonth } from "date-fns";
 import { zhCN } from "date-fns/locale";
-import { ArrowRight, BookOpen, FileText, Pin } from "lucide-react";
+import { ArrowRight, BookOpen, FileText, Inbox, Pin } from "lucide-react";
 import type { ReactNode } from "react";
 import { db } from "@/lib/db";
 import { can, getEnabledApps, requireUser } from "@/lib/auth/dal";
@@ -111,7 +111,7 @@ export default async function WorkPage() {
   const visibleSpace = { OR: [{ visibility: "PUBLIC" as const }, { members: { some: { userId: user.id } } }] };
   const none = <T,>(v: T) => Promise.resolve(v);
 
-  const [approvals, approvalCount, tasks, taskCount, events, docs, announcements] = await Promise.all([
+  const [approvals, approvalCount, tasks, taskCount, events, docs, announcements, inboxUnread] = await Promise.all([
     perm.oa
       ? db.approvalInstance.findMany({
           where: approvalTabWhere("todo", user.id),
@@ -166,6 +166,7 @@ export default async function WorkPage() {
           take: 4,
         })
       : none([]),
+    db.notification.count({ where: { userId: user.id, read: false } }),
   ]);
 
   const monthStart = startOfMonth(now);
@@ -209,9 +210,9 @@ export default async function WorkPage() {
     <>
       <TopBar crumbs={[{ label: "工作台" }]} />
       <Page>
-        <header className="pt-14 pb-2 text-center">
-          <div className="mb-3 text-[44px] leading-none">{g.icon}</div>
-          <h1 className="text-[30px] font-bold tracking-tight text-ink">
+        <header className="pt-14 pb-2 text-center max-md:pt-6">
+          <div className="mb-3 text-[44px] leading-none max-md:text-[36px]">{g.icon}</div>
+          <h1 className="text-[30px] font-bold tracking-tight text-ink max-md:text-2xl">
             {g.text}，{user.name}
           </h1>
           <p className="mt-1.5 text-[15px] text-ink-2">
@@ -220,6 +221,24 @@ export default async function WorkPage() {
             {todoTotal > 0 ? ` · 你有 ${todoTotal} 项待办` : " · 今天没有待办事项"}
           </p>
         </header>
+
+        {/* 手机布局没有侧边栏，收件箱入口放在工作台顶部 */}
+        <Link
+          href="/inbox"
+          className="mt-5 flex items-center gap-3 rounded-xl border border-line bg-white p-3 active:bg-sidebar md:hidden"
+        >
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
+            <Inbox className="size-5" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-medium text-ink">收件箱</span>
+            <span className="block truncate text-xs text-ink-3">审批、评论、@提及、任务等通知</span>
+          </span>
+          {inboxUnread > 0 && (
+            <span className="rounded-full bg-danger px-2 py-0.5 text-xs font-medium text-white">{inboxUnread > 99 ? "99+" : inboxUnread}</span>
+          )}
+          <ArrowRight className="size-4 text-ink-3" />
+        </Link>
 
         <SectionTitle>应用</SectionTitle>
         <div

@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth/token";
+import { SESSION_COOKIE, renewSessionToken, sessionCookieOptions, verifySessionToken } from "@/lib/auth/token";
 
 // /api/im/webhooks 由路由内部校验（回调用 Bearer Token；orca-catalog 校验登录会话）
 const PUBLIC_PATHS = ["/login", "/setup", "/manifest.webmanifest", "/sw.js", "/api/im/webhooks"];
@@ -17,7 +17,13 @@ export async function proxy(request: NextRequest) {
     if (pathname !== "/") url.searchParams.set("next", pathname + search);
     return NextResponse.redirect(url);
   }
-  return NextResponse.next();
+  const res = NextResponse.next();
+  // 只在 GET/HEAD 上续期：POST（Server Action）里登录/退出会自己写会话 Cookie，避免同一响应里两条 Set-Cookie 互相覆盖
+  if (session && (request.method === "GET" || request.method === "HEAD")) {
+    const renewed = await renewSessionToken(session);
+    if (renewed) res.cookies.set(SESSION_COOKIE, renewed.token, sessionCookieOptions(renewed.maxAge));
+  }
+  return res;
 }
 
 export const config = {

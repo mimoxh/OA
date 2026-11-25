@@ -95,7 +95,7 @@ export default async function ContactsPage({ searchParams }: PageProps<"/contact
 
   return (
     <div className="flex min-h-app">
-      <ContextPanel title="通讯录">
+      <ContextPanel title="通讯录" className="max-md:hidden">
         <nav className="space-y-px pt-1">
           <DeptLink href={hrefFor(null)} label="全部成员" count={total} active={!deptId} />
           {flat.map((d) => (
@@ -106,7 +106,31 @@ export default async function ContactsPage({ searchParams }: PageProps<"/contact
       </ContextPanel>
       <div className="min-w-0 flex-1">
         <TopBar crumbs={[{ label: "通讯录" }, { label: selectedName }]} actions={<SearchInput placeholder="搜索姓名、邮箱、职位、电话…" />} />
-        <Page wide>
+        <Page wide className="max-md:px-3">
+          {/* 手机布局没有左侧部门栏，用横向滚动的部门标签代替 */}
+          <div className="-mx-3 flex gap-1.5 overflow-x-auto px-3 pt-1 [scrollbar-width:none] md:hidden">
+            {[
+              { id: null, label: "全部成员", count: total },
+              ...flat.map((d) => ({ id: d.id, label: d.name, count: countMap.get(d.id) ?? 0 })),
+              ...(botCount > 0 ? [{ id: BOTS_KEY, label: "Webhook 机器人", count: botCount }] : []),
+            ].map((d) => {
+              const active = (d.id ?? "") === deptId;
+              return (
+                <Link
+                  key={d.id ?? "all"}
+                  href={hrefFor(d.id)}
+                  replace
+                  className={cn(
+                    "shrink-0 rounded-full border px-3 py-1 text-[13px]",
+                    active ? "border-accent bg-accent-soft text-accent" : "border-line bg-white text-ink-2",
+                  )}
+                >
+                  {d.label}
+                  <span className="ml-1 text-xs text-ink-3">{d.count}</span>
+                </Link>
+              );
+            })}
+          </div>
           <div className="mt-4 divide-y divide-line overflow-hidden rounded-lg border border-line bg-white">
             {users.length === 0 && bots.length === 0 ? (
               <div className="p-4">

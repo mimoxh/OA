@@ -20,7 +20,7 @@ import {
   UserRound,
   X,
 } from "lucide-react";
-import { toast } from "sonner";
+import { copyWithToast } from "@/lib/clipboard";
 import { Button, IconButton } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, UserChip } from "@/components/ui/avatar";
@@ -263,8 +263,7 @@ export function TaskDrawer({
                 aria-label="复制链接"
                 title="复制链接"
                 onClick={() => {
-                  navigator.clipboard?.writeText(`${window.location.origin}/pms/projects/${projectId}?task=${t.id}`);
-                  toast.success("链接已复制");
+                  void copyWithToast(`${window.location.origin}/pms/projects/${projectId}?task=${t.id}`, "链接已复制");
                 }}
               >
                 <Link2 className="size-4" />

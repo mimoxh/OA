@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
 import { ChevronRight, Copy, FilePlus2, FileUp, GitFork, Link2, Lock, MoreHorizontal, Palette, Pencil, Plus, Settings2, Star, StarOff, Table2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { copyWithToast } from "@/lib/clipboard";
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from "@/components/ui/menu";
 import { useAction } from "@/components/ui/use-action";
 import { cn } from "@/lib/utils";
@@ -536,10 +537,7 @@ function RowMenu({
         <MenuItem
           icon={<Link2 />}
           onSelect={() => {
-            navigator.clipboard.writeText(`${location.origin}/docs/${doc.id}`).then(
-              () => toast.success("链接已复制"),
-              () => toast.error("复制失败"),
-            );
+            void copyWithToast(`${location.origin}/docs/${doc.id}`, "链接已复制");
           }}
         >
           复制链接

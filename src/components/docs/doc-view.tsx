@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { copyWithToast } from "@/lib/clipboard";
 import type { Editor } from "@tiptap/react";
 import type { Range } from "@tiptap/core";
 import {
@@ -419,10 +420,7 @@ export function DocView({
   };
 
   const copyLink = () => {
-    navigator.clipboard.writeText(`${location.origin}/docs/${doc.id}`).then(
-      () => toast.success("链接已复制"),
-      () => toast.error("复制失败"),
-    );
+    void copyWithToast(`${location.origin}/docs/${doc.id}`, "链接已复制");
   };
 
   const mentionItems = useMemo(() => members.map((m) => ({ id: m.id, label: m.name, color: m.avatarColor, title: m.title })), [members]);

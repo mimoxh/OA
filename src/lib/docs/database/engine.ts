@@ -7,6 +7,7 @@ import {
   resolveRelativeDate,
   type DayRange,
 } from "./date-cells";
+import { randomId } from "@/lib/client-id";
 import { extractFormulaDependencies, validateFormulaSyntax } from "./formula";
 import {
   AGGREGATE_FUNCTIONS,
@@ -35,11 +36,7 @@ import {
 } from "./types";
 
 export function makeId(prefix: string): string {
-  const rand =
-    typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-      ? crypto.randomUUID().replace(/-/g, "").slice(0, 12)
-      : Math.random().toString(36).slice(2, 14);
-  return `${prefix}_${rand}`;
+  return `${prefix}_${randomId().replace(/-/g, "").slice(0, 12)}`;
 }
 
 export function defaultDatabaseSchema(): { properties: PropertyDefinition[]; views: DatabaseView[] } {

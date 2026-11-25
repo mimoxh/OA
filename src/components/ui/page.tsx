@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { MobileBack } from "@/components/mobile/mobile-back";
 
 export type Crumb = { label: ReactNode; href?: string };
 
@@ -10,6 +11,7 @@ export function TopBar({ crumbs, actions }: { crumbs: Crumb[]; actions?: ReactNo
   return (
     <div className="sticky top-0 z-20 flex h-11 items-center justify-between gap-3 bg-white/90 px-3 backdrop-blur">
       <nav className="flex min-w-0 items-center gap-0.5 text-sm text-ink-2">
+        <MobileBack />
         {crumbs.map((c, i) => (
           <span key={i} className="flex min-w-0 items-center gap-0.5">
             {i > 0 && <ChevronRight className="size-3.5 shrink-0 text-ink-3" />}

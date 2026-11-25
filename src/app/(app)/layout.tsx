@@ -34,7 +34,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
         />
         {desktop && <DesktopTopBar />}
         {/* 桌面端内容区自行滚动：滚动条从顶栏下方开始，不挤占顶栏和窗口按钮 */}
-        <div className={desktop ? "mt-[var(--titlebar-h)] h-app min-w-0 flex-1 overflow-y-auto" : "min-w-0 flex-1"}>{children}</div>
+        <div className={desktop ? "mt-[var(--titlebar-h)] h-app min-w-0 flex-1 overflow-y-auto" : "min-w-0 flex-1 max-md:pb-[var(--tabbar-h)]"}>{children}</div>
         <CommandPalette permissions={user.permissions} enabledApps={enabledApps} />
         <CallOverlay me={{ id: user.id, name: user.name, avatarColor: user.avatarColor }} />
       </div>

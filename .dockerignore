@@ -30,8 +30,9 @@ desktop/dist
 desktop/src-tauri
 desktop/README.md
 
-# 手机端（Capacitor 工程，独立安装依赖，不参与服务端构建）
-mobile
+# 手机端（Capacitor 工程，不参与服务端构建；保留 mobile/package.json 供 pnpm workspace 校验锁文件）
+mobile/*
+!mobile/package.json
 
 # 文档与测试
 docs

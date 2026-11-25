@@ -7,6 +7,7 @@ import {
   ArrowUpRight,
   BellOff,
   Check,
+  ChevronLeft,
   DoorOpen,
   Ellipsis,
   Pencil,
@@ -60,6 +61,9 @@ import { Composer } from "./composer";
 import { ThreadDrawer } from "./thread-drawer";
 import { SearchDrawer } from "./search-drawer";
 import { WebhookRunConfigBar } from "./webhook-run-config-bar";
+import { useBackHandler } from "@/components/mobile/back-stack";
+import { useIsMobileLayout } from "@/components/mobile/use-mobile-layout";
+import { MOBILE_DRAWER } from "./drawer";
 
 type Me = UserLite;
 type RightPanel = null | { kind: "settings" } | { kind: "search" } | { kind: "thread"; rootId: string };
@@ -137,13 +141,19 @@ export function ChatView({
     setPanel({ kind: "thread", rootId: msg.id });
   }, []);
 
-  const handleSelectSearchHit = useCallback((hit: MessageSearchHit) => {
-    if (hit.threadRootId) {
-      setPanel({ kind: "thread", rootId: hit.threadRootId });
-    } else {
-      setJumpSeq(hit.seq);
-    }
-  }, []);
+  const mobile = useIsMobileLayout();
+  const handleSelectSearchHit = useCallback(
+    (hit: MessageSearchHit) => {
+      if (hit.threadRootId) {
+        setPanel({ kind: "thread", rootId: hit.threadRootId });
+      } else {
+        setJumpSeq(hit.seq);
+        // 手机上搜索是全屏层，跳转后关掉它才能看到定位的消息
+        if (mobile) setPanel(null);
+      }
+    },
+    [mobile],
+  );
 
   const subtitle =
     conv.type === "DIRECT"
@@ -158,13 +168,25 @@ export function ChatView({
     run(() => updateConversationPrefs({ conversationId: convId, ...patch }), { refresh: false });
 
   const inThisCall = myActiveCall?.call.conversationId === convId;
+  useBackHandler(panel !== null, () => setPanel(null));
+
+  const back = () => {
+    // 从通知直接打开时没有上一页，回到会话列表
+    if (window.history.length > 1) router.back();
+    else router.replace("/messages");
+  };
 
   return (
     <div className="flex h-app">
       <div className="flex min-w-0 flex-1 flex-col">
         {/* 会话头 */}
-        <div className="flex h-14 shrink-0 items-center gap-3 border-b border-line px-4">
-          <ConvAvatar conv={conv} size={36} showPresence={!conv.peerIsBot} />
+        <div className="flex h-14 shrink-0 items-center gap-3 border-b border-line px-4 max-md:gap-1.5 max-md:px-1.5">
+          <button type="button" onClick={back} className="rounded-md p-1.5 text-ink-2 active:bg-hover md:hidden" aria-label="返回">
+            <ChevronLeft className="size-6" />
+          </button>
+          <span className="max-md:hidden">
+            <ConvAvatar conv={conv} size={36} showPresence={!conv.peerIsBot} />
+          </span>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5">
               <div className="truncate text-[15px] font-semibold text-ink">{conv.name}</div>
@@ -182,7 +204,7 @@ export function ChatView({
           {conv.bizHref && conv.bizLabel && (
             <Link
               href={conv.bizHref}
-              className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md border border-line-strong bg-white px-2.5 text-xs font-medium text-ink-2 transition-colors hover:bg-hover hover:text-ink"
+              className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md border border-line-strong bg-white px-2.5 text-xs font-medium text-ink-2 transition-colors hover:bg-hover hover:text-ink max-md:hidden"
             >
               {conv.bizLabel}
               <ArrowUpRight className="size-3.5" />
@@ -352,11 +374,11 @@ function GroupSettings({
   };
 
   return (
-    <aside className="flex h-full w-[280px] shrink-0 flex-col border-l border-line bg-sidebar">
+    <aside className={cn("flex h-full w-[280px] shrink-0 flex-col border-l border-line bg-sidebar", MOBILE_DRAWER)}>
       <div className="flex h-14 shrink-0 items-center justify-between border-b border-line px-4">
         <div className="text-[15px] font-semibold text-ink">群设置</div>
         <button onClick={onClose} className="rounded p-1 text-ink-3 hover:bg-hover hover:text-ink" aria-label="关闭">
-          <X className="size-4" />
+          <X className="size-4 max-md:size-5" />
         </button>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
@@ -430,7 +452,7 @@ function GroupSettings({
                 {removable && (
                   <Menu>
                     <MenuTrigger asChild>
-                      <button className="hidden shrink-0 rounded p-1 text-ink-3 hover:bg-active hover:text-ink group-hover/member:block" aria-label="成员操作">
+                      <button className="hidden shrink-0 rounded p-1 text-ink-3 hover:bg-active hover:text-ink group-hover/member:block pointer-coarse:block" aria-label="成员操作">
                         <Ellipsis className="size-3.5" />
                       </button>
                     </MenuTrigger>
