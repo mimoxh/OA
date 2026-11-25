@@ -7,6 +7,7 @@
  *   OA_PORT           对外端口（默认 17300）
  *   OA_BIND           监听地址：127.0.0.1 仅本机 / 0.0.0.0 允许局域网访问
  *   OA_CONTROL_TOKEN  壳的控制令牌（优雅退出）
+ * 数据目录下的 .env（可选）用于补充其他配置，见 ./env.ts 中的优先级说明。
  */
 import { randomBytes } from "node:crypto";
 import fs from "node:fs";
@@ -14,6 +15,7 @@ import net from "node:net";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { desktopDefaults, mergeDesktopEnv, readDataDirEnv } from "./env";
 import { migrate } from "./migrate";
 import { startGateway } from "./gateway";
 
@@ -87,6 +89,13 @@ async function main() {
   };
   for (const dir of [dataDir, ...Object.values(dirs)]) fs.mkdirSync(dir, { recursive: true });
 
+  let dataDirEnv: ReturnType<typeof readDataDirEnv> = null;
+  try {
+    dataDirEnv = readDataDirEnv(dataDir);
+  } catch (e) {
+    console.error("[oa] 读取数据目录 .env 失败，已忽略：", e);
+  }
+
   try {
     await ensurePortFree(port, bind);
   } catch (e) {
@@ -102,7 +111,7 @@ async function main() {
   if (applied.length) log("已执行数据库迁移：", applied.join(", "));
 
   const [nextPort, collabPort, rtPort] = await freePorts(3);
-  Object.assign(process.env, {
+  const managed = {
     NODE_ENV: "production",
     NEXT_TELEMETRY_DISABLED: "1",
     DATABASE_URL: `file:${dbFile}`,
@@ -121,7 +130,17 @@ async function main() {
     SESSION_COOKIE_SECURE: "false",
     PORT: String(nextPort),
     HOSTNAME: "127.0.0.1",
+  };
+  const { env, ignored } = mergeDesktopEnv({
+    processEnv: process.env,
+    fileEnv: dataDirEnv?.vars,
+    managed,
+    defaults: desktopDefaults(bind, port),
   });
+  Object.assign(process.env, env);
+  if (dataDirEnv) log(`已加载 ${dataDirEnv.file}`);
+  if (ignored.length) log("数据目录 .env 中以下配置由桌面端管理，已忽略：", ignored.join(", "));
+  log(`Webhook 回调地址 ${process.env.OA_PUBLIC_BASE_URL}，WEBHOOK_ALLOW_PRIVATE_NETWORK=${process.env.WEBHOOK_ALLOW_PRIVATE_NETWORK}`);
 
   // 独立入口文件（代码拆分共享 Prisma 等模块），模块加载即开始监听，所以要在设置好环境变量之后再导入
   await import(pathToFileURL(path.join(APP_DIR, "oa-collab.mjs")).href);
