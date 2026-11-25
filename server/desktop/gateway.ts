@@ -8,8 +8,12 @@ type GatewayOptions = {
   nextPort: number;
   collabPort: number;
   rtPort: number;
-  controlToken: string;
-  onShutdown: () => void;
+  controlToken?: string;
+  onShutdown?: () => void;
+  /** 是否启用仅回环可用的桌面壳控制接口 /__oa/*（桌面端默认开启，容器模式关闭） */
+  enableControl?: boolean;
+  /** 可选公开健康检查接口 GET /health（容器 / 反向代理探活用） */
+  healthCheck?: () => Promise<{ ok: boolean; [key: string]: unknown }>;
 };
 
 /** 本机局域网 IPv4 地址（私有网段优先，排除链路本地地址） */
@@ -44,16 +48,32 @@ function isLoopback(addr: string | undefined) {
 export function startGateway(opts: GatewayOptions) {
   const agent = new http.Agent({ keepAlive: true, maxSockets: 256 });
   const lan = opts.host === "0.0.0.0";
+  const enableControl = opts.enableControl !== false;
 
   const server = http.createServer((req, res) => {
     const url = req.url ?? "/";
-    if (url.startsWith("/__oa/")) {
+    if (opts.healthCheck && req.method === "GET" && (url === "/health" || url.startsWith("/health?"))) {
+      opts
+        .healthCheck()
+        .then((body) => sendJson(res, body.ok ? 200 : 503, body))
+        .catch(() => sendJson(res, 503, { ok: false }));
+      return;
+    }
+
+    if (enableControl && url.startsWith("/__oa/")) {
       const local = isLoopback(req.socket.remoteAddress);
       if (url === "/__oa/health" && req.method === "GET" && local) {
         sendJson(res, 200, { ok: true, lan, addresses: lan ? lanAddresses(opts.port) : [] });
         return;
       }
-      if (url === "/__oa/shutdown" && req.method === "POST" && local && opts.controlToken && req.headers["x-oa-control"] === opts.controlToken) {
+      if (
+        url === "/__oa/shutdown" &&
+        req.method === "POST" &&
+        local &&
+        opts.controlToken &&
+        opts.onShutdown &&
+        req.headers["x-oa-control"] === opts.controlToken
+      ) {
         sendJson(res, 200, { ok: true });
         opts.onShutdown();
         return;
@@ -63,9 +83,12 @@ export function startGateway(opts: GatewayOptions) {
     }
 
     const headers = { ...req.headers };
-    headers["x-forwarded-for"] = req.socket.remoteAddress ?? "";
-    headers["x-forwarded-proto"] = "http";
-    if (req.headers.host) headers["x-forwarded-host"] = req.headers.host;
+    const remote = req.socket.remoteAddress ?? "";
+    const prevFor = req.headers["x-forwarded-for"];
+    headers["x-forwarded-for"] = prevFor ? `${Array.isArray(prevFor) ? prevFor.join(", ") : prevFor}, ${remote}` : remote;
+    // 透传外部反向代理（Nginx / Lucky / NPM / fnOS 反代）的协议与主机头，直连时回退 http 与 Host
+    if (!req.headers["x-forwarded-proto"]) headers["x-forwarded-proto"] = "http";
+    if (!req.headers["x-forwarded-host"] && req.headers.host) headers["x-forwarded-host"] = req.headers.host;
 
     const upstream = http.request(
       { host: "127.0.0.1", port: opts.nextPort, method: req.method, path: url, headers, agent },

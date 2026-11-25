@@ -1,0 +1,38 @@
+# Git 与本地依赖 / 构建产物
+.git
+.gitignore
+node_modules
+.next
+.next-*
+.standalone-out
+out
+build
+coverage
+*.tsbuildinfo
+
+# 本地环境变量与运行数据（严禁打入镜像）
+.env
+.env.*
+!.env.example
+!.env.nas.example
+data
+storage
+prisma/*.db
+prisma/*.db-*
+.tmp
+.devtest
+database_server
+*.log
+
+# 桌面端源码与构建产物（保留 desktop/package.json 供 pnpm workspace 校验，保留 desktop/migrations 供自动迁移）
+desktop/node_modules
+desktop/dist
+desktop/src-tauri
+desktop/README.md
+
+# 文档与测试
+docs
+tests
+README.md
+AGENTS.md
+docker-compose*.yml

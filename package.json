@@ -21,6 +21,7 @@
     "desktop:bundle-server": "node scripts/desktop/bundle-server.mjs",
     "desktop:migration": "node scripts/desktop/migration.mjs",
     "desktop:check": "cargo check --manifest-path desktop/src-tauri/Cargo.toml",
+    "docker:bundle-server": "node scripts/docker/bundle-server.mjs",
     "orca:icons": "node scripts/orca/extract-agent-icons.mjs",
     "postinstall": "prisma generate"
   },

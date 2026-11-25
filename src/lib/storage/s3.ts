@@ -33,6 +33,7 @@ export class S3StorageDriver implements StorageDriver {
 
   private buildUrl(key: string): URL {
     const cleanKey = key
+      .replace(/\\/g, "/")
       .replace(/^\/+/, "")
       .split("/")
       .map(encodeRfc3986)

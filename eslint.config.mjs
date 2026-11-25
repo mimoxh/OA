@@ -16,6 +16,7 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // 本地调试脚本与数据目录（均在 .gitignore 中）
     ".tmp/**",
+    ".standalone-out/**",
     ".devtest/**",
     "database_server/**",
     "storage/**",

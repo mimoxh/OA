@@ -12,7 +12,7 @@ export class LocalStorageDriver implements StorageDriver {
   }
 
   private resolveSafe(key: string): string {
-    const clean = key.replace(/^\/+/, "").replace(/\\/g, "/");
+    const clean = key.replace(/\\/g, "/").replace(/^\/+/, "");
     if (!clean || clean.includes("..") || path.isAbsolute(clean)) {
       throw new Error("非法的存储路径");
     }
