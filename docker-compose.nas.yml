@@ -1,0 +1,54 @@
+# 飞牛 NAS（fnOS，推荐配置参考 N150 + 16G）生产级单容器部署编排
+# 架构：单容器 + 单端口（/、/collab、/rt、/health）+ Next standalone + SQLite WAL + 3 持久化目录
+#
+# 使用步骤：
+#   1. 复制 .env.nas.example 为 .env.nas，并至少修改 AUTH_SECRET、OA_PUBLIC_BASE_URL 与 3 个宿主机目录路径
+#   2. 电脑端构建并导入镜像 oa-suite:latest（或取消下方 build 注释在 NAS 直接构建）
+#   3. 执行：docker compose -f docker-compose.nas.yml --env-file .env.nas up -d
+
+services:
+  oa:
+    image: ${OA_IMAGE:-oa-suite:latest}
+    # 如需直接在飞牛 NAS 本地构建（构建期峰值内存约 2GB，N150 预计 3~6 分钟），取消下方 3 行注释：
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
+    container_name: oa-suite
+    restart: unless-stopped
+    init: true
+    # N150 + 16G 飞牛 NAS：日常运行约 250MB~600MB，预留 2G 上限以覆盖 100~200MB 文档 ZIP 导入/导出瞬时峰值
+    mem_limit: 2g
+    ports:
+      - "${OA_HOST_PORT:-3000}:3000"
+    env_file:
+      - .env.nas
+    environment:
+      # 固定容器内部标准路径，与下方 volumes 一一对应
+      OA_PORT: "3000"
+      OA_BIND: "0.0.0.0"
+      OA_DATA_DIR: "/data"
+      DATABASE_URL: "file:/data/db/oa.db"
+      ATTACHMENT_DIR: "/data/attachments"
+      STORAGE_LOCAL_DIR: "/data/uploads"
+      COLLAB_PUBLIC_URL: "${COLLAB_PUBLIC_URL:-/collab}"
+      REALTIME_PUBLIC_URL: "${REALTIME_PUBLIC_URL:-/rt}"
+    volumes:
+      # 1) SQLite 数据库 + WAL + 自动迁移备份 + 可选 secret.key
+      #    强烈建议放在 SSD 存储空间（如飞牛 /vol1/1000/docker/oa/db）；严禁放在 SMB/NFS 网络盘！
+      - "${OA_DB_DIR:-./nas-data/db}:/data/db"
+      # 2) 文档附件目录（单文件上限 10MB，仅本地落盘），可放 SSD 或 HDD
+      - "${OA_ATTACHMENTS_DIR:-./nas-data/attachments}:/data/attachments"
+      # 3) IM 聊天图片/文件目录（单图 10MB / 单文件 25MB，增长最快），推荐放 HDD 大容量盘（如 /vol2/...）
+      - "${OA_UPLOADS_DIR:-./nas-data/uploads}:/data/uploads"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
