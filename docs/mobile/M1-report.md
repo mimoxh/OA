@@ -11,6 +11,7 @@
 | M1 验收（单聊 / 建群 / @Bot / 图片文件 / 实时与已读 / 后台 5 分钟补齐） | **模拟器通过**，真机未测 |
 | 局域网 HTTP（M0 的阻塞问题） | **已解决**：App 用 `http://10.0.2.2:3320`、桌面浏览器用 `http://192.168.124.39:3320`（均为非安全上下文，`crypto.randomUUID` 与 `navigator.clipboard` 都不存在）收发消息、复制都正常 |
 | 桌面端回归 | 1440×900 前后截图布局一致；移动端样式全部限定在 `md` 以下或 `pointer: coarse` |
+| 手机消息页列表 → 会话 → 返回 | **模拟器与手机浏览器通过**（§2.4），含通知进入、滚动位置保留 |
 | 顺手修掉的既有问题 | 3 个（§3），桌面端同样受益 |
 | debug APK | `mobile/android/app/build/outputs/apk/debug/app-debug.apk`（本阶段重建过一次，包含原生剪贴板与去掉精确闹钟权限） |
 
@@ -62,6 +63,7 @@
 | 后台 5 分钟补齐 | 通过 | App 切到后台 278 s，期间对方发 2 条；后台连接常驻服务在运行，系统通知收到；回到前台后两条都在，没有重复、没有缺失，未读数 2 |
 | 局域网 HTTP：App | 通过（M0 时失败） | `http://10.0.2.2:3320`，`isSecureContext=false`：登录、发消息、收消息、复制都正常。`app-http-chat.png` |
 | 局域网 HTTP：桌面浏览器 | 通过 | `http://192.168.124.39:3320`，`isSecureContext=false`，`crypto.randomUUID`、`navigator.clipboard` 都不存在：发消息、实时收消息、复制都正常 |
+| 手机消息页：列表 → 点击进入会话 → 返回（含通知进入） | 通过 | 见 §2.4 |
 | 桌面浏览器回归 | 通过 | 1440×900 下 8 个页面（首页、消息、单聊、群聊、通讯录、收件箱、云文档、设置）改动前后截图（`.tmp/m1-shots/desktop-before` / `desktop-after`）逐像素对比，只有时间戳、在线状态等少量像素不同。最后一轮修改后又截了 `desktop-final`：布局一致，差异全部来自测试期间新增的数据（新消息、未读数、新建的测试机器人） |
 | Tauri 桌面端回归 | 未单独运行 | 改动只有顶栏“复制访问地址”换成统一的复制函数；桌面窗口宽度都在 `md` 以上，移动端样式不生效 |
 | `pnpm typecheck` / `pnpm lint` / `pnpm test` | 通过 | 157 项测试全部通过 |
@@ -81,17 +83,40 @@
 | 看图 | 通过：双指缩放（实测放大到 4.2 倍后不误关）、放大后拖动、双击放大 / 还原、单击关闭、返回键关闭、下载原图 |
 | 通讯录 / 工作台 / 收件箱入口 / 我的 | 通过 |
 
+### 2.4 手机消息页：列表 → 会话 → 返回（负责人追加验收）
+
+要求：手机尺寸（`md` 以下，App 与手机浏览器一致）`/messages` 只显示全屏会话列表；点会话通过路由进入 `/messages/[id]` 全屏聊天，不再同时显示列表；顶部返回按钮和 Android 返回键都回到列表并保留滚动位置；从通知进入时直接打开会话，返回时回到列表；桌面双栏不变。
+
+| 场景 | 结果 | 证据 |
+| --- | --- | --- |
+| `/messages` 只显示全屏列表 | 通过 | App 与手机浏览器（412×915）列表宽 412 = 屏宽，聊天区不渲染 |
+| 点会话 → 路由跳转到全屏聊天 | 通过 | 点击后地址变为 `/messages/<id>`，列表宽度 0（隐藏），聊天页顶部有返回按钮，底部 Tab 栏隐藏 |
+| 顶部返回按钮 → 列表，滚动位置保留 | 通过 | 列表先滚到 230 px（App）/ 155 px（浏览器），返回后仍为 230 / 155；刚看过的会话未读角标已清除 |
+| Android 返回键 → 列表，滚动位置保留 | 通过 | 同上，返回后 `scrollTop` 不变；列表页再按返回键 App 退到后台 |
+| 手机浏览器自带后退 | 通过 | `history.back()` 回到列表，滚动位置不变 |
+| 点系统通知进入（App 已在运行，停在“工作台”后切到后台） | 通过 | 下拉通知栏点“刘洋”的消息通知 → 直接打开该会话（列表隐藏），新消息可见；按返回键或点顶部返回都回到**会话列表**，不是之前的“工作台” |
+| 冷启动从通知进入（`am force-stop` 后用与通知相同的 Intent 启动） | 通过 | 直接打开会话；返回键回到列表；再按返回键 App 退到后台 |
+| 直接打开会话链接（手机浏览器新开页面） | 通过 | 点顶部返回回到 `/messages` 列表 |
+| 桌面 1440×900 | 通过 | `/messages` 与 `/messages/<id>` 仍为左侧 248 px 列表 + 右侧聊天，聊天页无返回按钮 |
+
+实现要点：
+
+- 列表与聊天本来就由 `messages-shell.tsx` 按路由段切换（列表在 `layout` 里常驻，进入会话时 `max-md:hidden`），所以从会话返回时列表不重新挂载。WebView 133 隐藏再显示时本身会保留滚动位置；另在 `MessagesShell` 里记录列表可见时的 `scrollTop`，重新显示时恢复，防止其他浏览器在 `display:none` 后把滚动位置归零。
+- **修复：从通知进入后返回会回到通知前的页面。** 原来判断“能否后退”用 `window.history.length`，但原生层收到通知是 `loadUrl` 新开文档，历史里还留着通知之前的页面（如“工作台”）和 App 启动页，返回会退回那里。新增 `src/components/mobile/nav-stack.ts`，只记录本文档内的客户端路由：有站内上一页才后退，否则替换为所属一级页面（会话 → `/messages`，其他 → `/work`）。聊天页顶部返回、二级页面返回按钮（`MobileBack`）、Android 返回键共用这一逻辑。
+
+截图（模拟器，`docs/mobile/m1-screenshots/`）：`nav-1-list`（列表，已滚动）→ `nav-2-chat`（点击进入会话）→ `nav-3-back-list`（返回后列表，滚动位置相同）；`nav-4-notification`（通知栏）→ `nav-5-from-notification`（点通知直接进入会话）→ `nav-6-notification-back`（返回到列表）；`nav-desktop`（桌面 1440×900 双栏不变）。通知相关截图来自开发实例，左下角圆形按钮是 Next.js 开发指示器，生产包没有。
 ## 3. 验证中发现并修复的问题
 
 1. **直接打开会话页时 @ 列表为空**（既有问题，桌面同样存在）：`initIm()` 首次初始化会清空 store，而子组件的 effect 先于它执行，已加载的群成员被清掉，@ 选择器只剩“所有人”。从通知点进会话、刷新会话页都会遇到。修复：首次初始化不清空，只在切换用户时清空（`src/components/im/store.ts`）。
 2. **手机上短消息也折行**（如 “@Echo” 折成两行）：气泡 `max-w-[75%]` 的参照列宽本身由内容决定，百分比循环缩小。手机端改为由消息行限宽（88%），气泡 `max-w-full`。桌面端同样有这个现象，但为了保持“桌面无变化”，本次只改了手机端（`max-md:`），桌面端是否也改请负责人决定。
 3. **对方回复后我方消息仍显示“未读”**（既有问题，桌面同样存在）：服务端发消息时会顺带推进发送者的 `lastReadSeq`，但不发 `read` 事件，客户端要到刷新才更新。修复：客户端收到对方的文字 / 图片 / 文件消息时，同步把对方已读位置推进到该消息（卡片、系统消息的已读归属不同，跳过）。
-4. 本阶段新组件的问题（已修）：看图双指缩放后手指先后抬起会被当成单击而关闭；长按弹出面板时手指仍按着，系统会在面板上选字；“我的”页对 `http://localhost`（安全上下文）也显示 HTTP 提示。
+4. **从通知进入会话后返回，回到的是通知前的页面而不是会话列表**：见 §2.4。
+5. 本阶段新组件的问题（已修）：看图双指缩放后手指先后抬起会被当成单击而关闭；长按弹出面板时手指仍按着，系统会在面板上选字；“我的”页对 `http://localhost`（安全上下文）也显示 HTTP 提示。
 
 ## 4. 主要改动
 
 - 外壳：`src/app/layout.tsx`（viewport：`viewportFit: cover`、`interactiveWidget: resizes-content`；`AppRuntime`）、`src/app/globals.css`（安全区与 Tab 栏高度变量，`h-app` 在手机上扣除 Tab 栏）、`src/components/shell/app-rail.tsx`（`md` 以下隐藏，渲染底部 Tab）、`context-panel.tsx`、`src/components/ui/page.tsx`（非 Tab 页顶栏返回按钮）。
-- 新增 `src/components/mobile/*`：底部 Tab、返回键处理（`app-runtime.tsx`、`back-stack.ts`）、长按、操作面板、看图、返回按钮、`useIsMobileLayout`。
+- 新增 `src/components/mobile/*`：底部 Tab、返回键处理（`app-runtime.tsx`、`back-stack.ts`、站内路由记录 `nav-stack.ts`）、长按、操作面板、看图、返回按钮、`useIsMobileLayout`。
 - IM：`messages-shell.tsx`（列表 / 聊天全屏切换）、`chat-view.tsx`、`composer.tsx`、`message-list.tsx`、`message-item.tsx`、`conversation-list.tsx`、`drawer.ts`（话题 / 搜索 / 成员抽屉在手机上全屏）、`store.ts`。
 - 页面：`/me`（新增）、通讯录、工作台。
 - 平台：`src/lib/client-id.ts`、`clipboard.ts`、`stale-action.ts`、`mobile-bridge.ts`、`mobile-ua.ts`、`mobile.ts`；`src/lib/auth/token.ts`、`session.ts`、`src/proxy.ts`。
@@ -100,7 +125,7 @@
 
 ## 5. 截图
 
-`docs/mobile/m1-screenshots/`（模拟器）：`messages-list`、`group-bubbles`、`group-bot-reply`、`dm-read-receipt`、`keyboard`、`message-longpress`、`conversation-longpress`、`image-viewer`、`thread-drawer`、`contacts`、`work`、`me-http`、`app-http-chat`。全部过程截图（含桌面前后对比、窄屏对比、局域网 HTTP 桌面截图）在本机 `.tmp/m1-shots/`，未入库。
+`docs/mobile/m1-screenshots/`（模拟器）：`messages-list`、`group-bubbles`、`group-bot-reply`、`dm-read-receipt`、`keyboard`、`message-longpress`、`conversation-longpress`、`image-viewer`、`thread-drawer`、`contacts`、`work`、`me-http`、`app-http-chat`，以及 §2.4 的 `nav-1-list` … `nav-6-notification-back`、`nav-desktop`。全部过程截图（含桌面前后对比、窄屏对比、局域网 HTTP 桌面截图）在本机 `.tmp/m1-shots/`，未入库。
 
 ## 6. 遗留与建议
 

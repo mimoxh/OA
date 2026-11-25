@@ -55,6 +55,7 @@ import {
   useCallStore,
   useConversationActiveCall,
 } from "@/components/call/store";
+import { navigateBack } from "@/components/mobile/nav-stack";
 import { ConvAvatar } from "./conversation-list";
 import { MessageList } from "./message-list";
 import { Composer } from "./composer";
@@ -170,11 +171,7 @@ export function ChatView({
   const inThisCall = myActiveCall?.call.conversationId === convId;
   useBackHandler(panel !== null, () => setPanel(null));
 
-  const back = () => {
-    // 从通知直接打开时没有上一页，回到会话列表
-    if (window.history.length > 1) router.back();
-    else router.replace("/messages");
-  };
+  const back = () => navigateBack(router);
 
   return (
     <div className="flex h-app">
