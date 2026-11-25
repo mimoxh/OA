@@ -437,7 +437,7 @@ describe("出站 metadata（基座 / 模型 / 思考强度）", () => {
   });
 
   it("非法 effort / 基座被拒绝且不落库", async () => {
-    await assert.rejects(() => saveConversationRunConfig(db, directId, alice.id, { effort: "max" }), /low \/ medium \/ high \/ xhigh/);
+    await assert.rejects(() => saveConversationRunConfig(db, directId, alice.id, { effort: "very high" }), /思考强度只能是/);
     await assert.rejects(() => saveConversationRunConfig(db, directId, alice.id, { agent: "bad agent" }), /基座标识/);
     assert.equal(await db.webhookConversationConfig.count({ where: { conversationId: directId } }), 0);
   });

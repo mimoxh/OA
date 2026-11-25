@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Activity, Bot, ChevronDown, Copy, KeyRound, MessageSquare, Pencil, Plus, Power, Trash2 } from "lucide-react";
+import { Activity, Bot, ChevronDown, Copy, KeyRound, MessageSquare, Pencil, Plus, Power, SquareTerminal, Trash2 } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button, LinkButton } from "@/components/ui/button";
@@ -17,9 +17,12 @@ import { useAction } from "@/components/ui/use-action";
 import { ColorPicker } from "@/components/oa/color-picker";
 import { PALETTE } from "@/lib/oa/types";
 import { formatDateTime } from "@/lib/format";
-import { AGENT_PRESETS, EFFORT_LEVELS, MODEL_SUGGESTIONS, SELF_MANAGED_AGENT_HINT } from "@/lib/im/webhook-run-config";
-import { RUN_FIELD_META, RunOption, onRunListKeyDown } from "@/components/im/webhook-run-config-bar";
+import { SELF_MANAGED_AGENT_HINT } from "@/lib/im/webhook-run-config";
+import { agentLabel, effortChoices, findAgent, findModel, type OrcaCatalog } from "@/lib/im/orca-catalog-shared";
+import { AgentOptions, CatalogFooter, ModelOptions, RUN_FIELD_META, RunDivider, RunOption, onRunListKeyDown } from "@/components/im/run-options";
+import { useOrcaCatalog } from "@/components/im/use-orca-catalog";
 import { AgentIcon } from "@/components/im/agent-icon";
+import { ORCA_AGENT_LABELS } from "@/components/im/orca-agent-icons.generated";
 import { cn } from "@/lib/utils";
 import {
   createWebhookBotAction,
@@ -66,8 +69,6 @@ export type WebhookBotRow = {
   logs: WebhookLogRow[];
 };
 
-const CUSTOM_AGENT = "__custom__";
-const isPresetAgent = (a: string) => (AGENT_PRESETS as readonly string[]).includes(a);
 
 const TRIGGER_LABEL: Record<TriggerMode, string> = {
   mention_only: "群聊仅 @ 或回复时触发",
@@ -97,66 +98,117 @@ function runConfigPayload(form: FormState) {
   return { defaultAgent: form.defaultAgent, defaultModel: form.defaultModel, defaultEffort: form.defaultEffort };
 }
 
-/** 默认基座选择器：与聊天页同一套 Popover 选项与品牌图标（原生 select 无法显示图标） */
-function AgentPicker({ form, setForm }: { form: FormState; setForm: (f: FormState) => void }) {
+const pickerTrigger = cn(
+  "flex h-8 w-full items-center gap-1.5 rounded-md border border-line-strong bg-white px-2.5 text-left text-sm text-ink transition-shadow",
+  "focus:border-accent focus:outline-none focus:ring-[3px] focus:ring-accent/15 data-[state=open]:border-accent data-[state=open]:ring-[3px] data-[state=open]:ring-accent/15",
+);
+
+type CatalogState = ReturnType<typeof useOrcaCatalog>;
+
+function Footer({ orca }: { orca: CatalogState }) {
+  return <CatalogFooter catalog={orca.catalog} loading={orca.loading} error={orca.error} onRefresh={() => void orca.refresh()} />;
+}
+
+/** 默认基座选择器：与聊天页同一套 Popover 选项与 Orca 原版图标（原生 select 无法显示图标） */
+function AgentPicker({ form, setForm, orca }: { form: FormState; setForm: (f: FormState) => void; orca: CatalogState }) {
   const [open, setOpen] = useState(false);
-  const value = form.customAgent ? CUSTOM_AGENT : form.defaultAgent;
   const pick = (next: Partial<FormState>) => {
     setOpen(false);
     setForm({ ...form, ...next });
   };
-  const label = form.customAgent ? "自定义…" : form.defaultAgent || UNSET;
+  const agent = form.defaultAgent.trim().toLowerCase();
+  const label = form.customAgent ? "自定义…" : agent ? agentLabel(orca.catalog, agent, ORCA_AGENT_LABELS) : UNSET;
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <button
-          type="button"
-          aria-label={`默认${RUN_FIELD_META.agent.title}：${label}`}
-          className={cn(
-            "flex h-8 w-full items-center gap-1.5 rounded-md border border-line-strong bg-white px-2.5 text-left text-sm text-ink transition-shadow",
-            "focus:border-accent focus:outline-none focus:ring-[3px] focus:ring-accent/15 data-[state=open]:border-accent data-[state=open]:ring-[3px] data-[state=open]:ring-accent/15",
-          )}
-        >
-          <AgentIcon agent={form.customAgent ? form.defaultAgent || CUSTOM_AGENT : form.defaultAgent} size={14} />
-          <span className={cn("min-w-0 flex-1 truncate", !form.customAgent && !form.defaultAgent && "text-ink-3")}>{label}</span>
+        <button type="button" aria-label={`默认${RUN_FIELD_META.agent.title}：${label}`} title={agent || undefined} className={pickerTrigger}>
+          {form.customAgent && !agent ? <SquareTerminal className="size-3.5 shrink-0 text-ink-3" /> : <AgentIcon agent={agent} size={14} />}
+          <span className={cn("min-w-0 flex-1 truncate", !form.customAgent && !agent && "text-ink-3")}>{label}</span>
           <ChevronDown className="size-4 shrink-0 text-ink-3" />
         </button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] min-w-48 p-1" onKeyDown={onRunListKeyDown}>
-        <RunOption selected={value === ""} icon={<AgentIcon agent={null} size={14} />} onSelect={() => pick({ customAgent: false, defaultAgent: "" })}>
+      <PopoverContent align="start" className="w-72 p-1" onKeyDown={onRunListKeyDown}>
+        <RunOption selected={!form.customAgent && !agent} icon={<AgentIcon agent={null} size={14} />} onSelect={() => pick({ customAgent: false, defaultAgent: "" })}>
           {UNSET}
         </RunOption>
-        <div className="my-1 h-px bg-line" />
-        {AGENT_PRESETS.map((a) => (
-          <RunOption key={a} selected={value === a} icon={<AgentIcon agent={a} size={14} />} onSelect={() => pick({ customAgent: false, defaultAgent: a })}>
-            {a}
-          </RunOption>
-        ))}
-        <div className="my-1 h-px bg-line" />
+        <RunDivider />
+        <div className="max-h-72 overflow-y-auto">
+          <AgentOptions catalog={orca.catalog} value={form.customAgent ? null : agent || null} onSelect={(a) => pick({ customAgent: false, defaultAgent: a })} />
+        </div>
+        <RunDivider />
         <RunOption
-          selected={value === CUSTOM_AGENT}
-          icon={<AgentIcon agent={CUSTOM_AGENT} size={14} />}
+          selected={form.customAgent}
+          icon={<SquareTerminal className="size-3.5 text-ink-3" />}
           onSelect={() => pick(form.customAgent ? {} : { customAgent: true, defaultAgent: "" })}
         >
           自定义…
         </RunOption>
+        <Footer orca={orca} />
       </PopoverContent>
     </Popover>
   );
 }
 
+/** 默认模型选择器：所选基座的真实模型（可搜索），目录缺失时为常用预设；可直接输入任意模型 ID */
+function ModelPicker({ form, setForm, orca }: { form: FormState; setForm: (f: FormState) => void; orca: CatalogState }) {
+  const [open, setOpen] = useState(false);
+  const agent = form.defaultAgent.trim().toLowerCase() || null;
+  const model = form.defaultModel.trim() || null;
+  const entry = findModel(findAgent(orca.catalog, agent), model);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button type="button" aria-label={`默认${RUN_FIELD_META.model.title}：${model ?? UNSET}`} title={model ?? undefined} className={pickerTrigger}>
+          <span className={cn("min-w-0 flex-1 truncate", !model && "text-ink-3", model && !entry && "font-mono text-xs")}>
+            {entry ? entry.label : (model ?? UNSET)}
+          </span>
+          <ChevronDown className="size-4 shrink-0 text-ink-3" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-80 p-1" onKeyDown={onRunListKeyDown}>
+        <ModelOptions
+          autoFocus
+          catalog={orca.catalog}
+          agent={agent}
+          value={model}
+          onSelect={(m) => {
+            setOpen(false);
+            setForm({ ...form, defaultModel: m ?? "" });
+          }}
+          clear={{ label: UNSET, meta: "由基座决定" }}
+        />
+        <Footer orca={orca} />
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function effortHint(catalog: OrcaCatalog | null, agent: string | null, model: string | null, value: string) {
+  const { efforts, source } = effortChoices(catalog, agent, model);
+  if (value && !efforts.some((e) => e.value === value) && source !== "generic") return `当前值 ${value} 不在该模型支持的档位中（仍会按原值发送）`;
+  if (source === "model") return `${model} 支持 ${efforts.map((e) => e.value).join(" / ")}`;
+  if (source === "none") return `${model} 不支持调节思考强度`;
+  return model ? "该模型未声明档位，显示通用选项" : "随所选模型显示支持的档位";
+}
+
 function RunConfigFields({ form, setForm }: { form: FormState; setForm: (f: FormState) => void }) {
-  const agent = form.defaultAgent.trim().toLowerCase();
-  const selfManagedHint = agent && !form.defaultModel.trim() ? SELF_MANAGED_AGENT_HINT[agent] : undefined;
+  const orca = useOrcaCatalog();
+  const agent = form.defaultAgent.trim().toLowerCase() || null;
+  const model = form.defaultModel.trim() || null;
+  const selfManagedHint = agent && !model ? SELF_MANAGED_AGENT_HINT[agent] : undefined;
+  const { efforts } = effortChoices(orca.catalog, agent, model);
+  const effort = form.defaultEffort.trim().toLowerCase();
+  const historyEffort = effort && !efforts.some((e) => e.value === effort) ? effort : null;
   return (
     <div className="col-span-2 rounded-md border border-line p-3">
       <div className="mb-1 text-xs font-medium text-ink-2">默认运行配置</div>
       <p className="mb-2.5 text-xs text-ink-3">
         随每条出站消息写入 <code>payload.metadata</code>（agent / model / effort）；聊天中可按会话切换，未指定的项由外部 Bot 自行决定。
+        基座、模型与思考强度选项读取自本机 Orca。
       </p>
       <div className="grid grid-cols-3 gap-3">
         <Field label={<RunFieldLabel field="agent" />}>
-          <AgentPicker form={form} setForm={setForm} />
+          <AgentPicker form={form} setForm={setForm} orca={orca} />
           {form.customAgent && (
             <Input
               className="mt-1.5 font-mono"
@@ -168,28 +220,17 @@ function RunConfigFields({ form, setForm }: { form: FormState; setForm: (f: Form
           )}
         </Field>
         <Field label={<RunFieldLabel field="model" />} hint={selfManagedHint ?? "留空则由基座决定"}>
-          <Input
-            value={form.defaultModel}
-            maxLength={120}
-            list="webhook-model-suggestions"
-            className="font-mono"
-            placeholder="如 claude-opus-5-5"
-            onChange={(e) => setForm({ ...form, defaultModel: e.target.value })}
-          />
-          <datalist id="webhook-model-suggestions">
-            {MODEL_SUGGESTIONS.map((m) => (
-              <option key={m} value={m} />
-            ))}
-          </datalist>
+          <ModelPicker form={form} setForm={setForm} orca={orca} />
         </Field>
-        <Field label={<RunFieldLabel field="effort" />}>
-          <Select value={form.defaultEffort} onChange={(e) => setForm({ ...form, defaultEffort: e.target.value })}>
+        <Field label={<RunFieldLabel field="effort" />} hint={effortHint(orca.catalog, agent, model, effort)}>
+          <Select value={effort} onChange={(e) => setForm({ ...form, defaultEffort: e.target.value })}>
             <option value="">{UNSET}</option>
-            {EFFORT_LEVELS.map((x) => (
-              <option key={x} value={x}>
-                {x}
+            {efforts.map((x) => (
+              <option key={x.value} value={x.value}>
+                {x.label !== x.value ? `${x.value}（${x.label}）` : x.value}
               </option>
             ))}
+            {historyEffort && <option value={historyEffort}>{historyEffort}（当前值）</option>}
           </Select>
         </Field>
       </div>
@@ -460,7 +501,8 @@ function EditBotButton({ bot }: { bot: WebhookBotRow }) {
     clearSecret: false,
     clearHeaders: false,
     defaultAgent: bot.defaultAgent ?? "",
-    customAgent: !!bot.defaultAgent && !isPresetAgent(bot.defaultAgent),
+    // 已保存的基座即使不在当前 Orca 列表中，也在选择器里作为“自定义”项回显
+    customAgent: false,
     defaultModel: bot.defaultModel ?? "",
     defaultEffort: bot.defaultEffort ?? "",
   };
