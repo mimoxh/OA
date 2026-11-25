@@ -71,8 +71,28 @@ export function signPayload(secret: string, body: string): string {
 
 // ── 出站 URL 校验（SSRF 防护） ──
 
+function envFlag(value: string | undefined): boolean | null {
+  const v = value?.trim().toLowerCase();
+  return v === "true" ? true : v === "false" ? false : null;
+}
+
+/** 显式的 WEBHOOK_ALLOW_PRIVATE_NETWORK=true / false 优先；未配置时仅非生产环境放行内网 */
 export function allowPrivateNetwork(): boolean {
-  return process.env.WEBHOOK_ALLOW_PRIVATE_NETWORK === "true" || process.env.NODE_ENV !== "production";
+  return envFlag(process.env.WEBHOOK_ALLOW_PRIVATE_NETWORK) ?? process.env.NODE_ENV !== "production";
+}
+
+function normalizeHost(host: string): string {
+  return host.trim().toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "");
+}
+
+/** WEBHOOK_ALLOWED_HOSTS：逗号分隔的主机名，`*.example.com` 匹配其所有子域名（不含 example.com 本身） */
+export function allowedHostPatterns(raw: string | undefined = process.env.WEBHOOK_ALLOWED_HOSTS): string[] {
+  return (raw ?? "").split(",").map(normalizeHost).filter(Boolean);
+}
+
+export function isAllowedHost(host: string, patterns: string[] = allowedHostPatterns()): boolean {
+  const h = normalizeHost(host);
+  return patterns.some((p) => (p.startsWith("*.") ? h.endsWith(p.slice(1)) : h === p));
 }
 
 function ipv4ToInt(ip: string): number {
@@ -96,12 +116,13 @@ const V4_BLOCKED: [string, number][] = [
   ["240.0.0.0", 4],
 ];
 
+function inV4Range(ip: string, base: string, bits: number): boolean {
+  const mask = bits === 0 ? 0 : (~0 << (32 - bits)) >>> 0;
+  return (ipv4ToInt(ip) & mask) === (ipv4ToInt(base) & mask);
+}
+
 function isBlockedV4(ip: string): boolean {
-  const n = ipv4ToInt(ip);
-  return V4_BLOCKED.some(([base, bits]) => {
-    const mask = bits === 0 ? 0 : (~0 << (32 - bits)) >>> 0;
-    return (n & mask) === (ipv4ToInt(base) & mask);
-  });
+  return V4_BLOCKED.some(([base, bits]) => inV4Range(ip, base, bits));
 }
 
 function expandV6(ip: string): number[] | null {
@@ -122,15 +143,19 @@ function expandV6(ip: string): number[] | null {
   return groups.map((g) => parseInt(g || "0", 16));
 }
 
+/** IPv4 映射 / 兼容地址（::ffff:a.b.c.d、::a.b.c.d）中内嵌的 IPv4 */
+function embeddedV4(g: number[]): string | null {
+  if (!g.slice(0, 5).every((x) => x === 0) || (g[5] !== 0xffff && g[5] !== 0)) return null;
+  return `${g[6] >> 8}.${g[6] & 0xff}.${g[7] >> 8}.${g[7] & 0xff}`;
+}
+
 function isBlockedV6(ip: string): boolean {
   const g = expandV6(ip);
   if (!g) return true;
   if (g.every((x) => x === 0)) return true; // ::
   if (g.slice(0, 7).every((x) => x === 0) && g[7] === 1) return true; // ::1
-  // IPv4 映射 / 兼容地址按 IPv4 规则判断
-  if (g.slice(0, 5).every((x) => x === 0) && (g[5] === 0xffff || g[5] === 0)) {
-    return isBlockedV4(`${g[6] >> 8}.${g[6] & 0xff}.${g[7] >> 8}.${g[7] & 0xff}`);
-  }
+  const v4 = embeddedV4(g);
+  if (v4) return isBlockedV4(v4);
   if ((g[0] & 0xfe00) === 0xfc00) return true; // fc00::/7 唯一本地（含 fd00:ec2::254 元数据）
   if ((g[0] & 0xffc0) === 0xfe80) return true; // fe80::/10 链路本地
   if ((g[0] & 0xff00) === 0xff00) return true; // 组播
@@ -145,15 +170,56 @@ export function isPrivateAddress(ip: string): boolean {
   return true;
 }
 
-const BLOCKED_HOSTNAMES = new Set(["localhost", "metadata", "metadata.google.internal", "metadata.goog"]);
+/** 统一成 IPv4 点分形式（IPv4 映射 / 兼容的 IPv6 也会还原），其他返回 null */
+function asV4(ip: string): string | null {
+  const kind = isIP(ip);
+  if (kind === 4) return ip;
+  if (kind !== 6) return null;
+  const g = expandV6(ip);
+  return g ? embeddedV4(g) : null;
+}
+
+/** Clash / Mihomo 等代理 TUN 模式的 FakeIP 网段 */
+function isFakeIp(ip: string): boolean {
+  const v4 = asV4(ip);
+  return !!v4 && inV4Range(v4, "198.18.0.0", 15);
+}
+
+// 云元数据端点：即使放行内网（WEBHOOK_ALLOW_PRIVATE_NETWORK / WEBHOOK_ALLOWED_HOSTS）也一律拦截
+const METADATA_HOSTNAMES = new Set(["metadata", "metadata.google.internal", "metadata.goog"]);
+const METADATA_V4 = new Set(["169.254.169.254"]);
+const METADATA_V6 = "fd00:ec2:0:0:0:0:0:254";
+
+export function isMetadataAddress(ip: string): boolean {
+  const v4 = asV4(ip);
+  if (v4) return METADATA_V4.has(v4);
+  if (isIP(ip) !== 6) return false;
+  return expandV6(ip)?.map((x) => x.toString(16)).join(":") === METADATA_V6;
+}
+
+function isMetadataHost(host: string): boolean {
+  const h = normalizeHost(host);
+  return isIP(h) ? isMetadataAddress(h) : METADATA_HOSTNAMES.has(h);
+}
+
+const BLOCKED_HOSTNAMES = new Set(["localhost", ...METADATA_HOSTNAMES]);
 
 function isPrivateHostname(host: string): boolean {
-  const h = host.toLowerCase().replace(/\.$/, "");
+  const h = normalizeHost(host);
   return BLOCKED_HOSTNAMES.has(h) || h.endsWith(".localhost") || h.endsWith(".local") || h.endsWith(".internal");
 }
 
+const ALLOW_HINT = "如目标是可信的本机 / 局域网服务，可设置 WEBHOOK_ALLOW_PRIVATE_NETWORK=true，或把该主机加入 WEBHOOK_ALLOWED_HOSTS";
+
+export type OutboundUrlOptions = {
+  /** 是否放行内网 / 环回 / 保留地址，默认取 allowPrivateNetwork() */
+  allowPrivate?: boolean;
+  /** 按主机名放行的白名单，默认取 WEBHOOK_ALLOWED_HOSTS */
+  allowedHosts?: string[];
+};
+
 /** 同步校验：协议、格式与字面量地址。返回规范化后的 URL 字符串。 */
-export function validateOutboundUrl(raw: string, opts: { allowPrivate?: boolean } = {}): string {
+export function validateOutboundUrl(raw: string, opts: OutboundUrlOptions = {}): string {
   const allowPrivate = opts.allowPrivate ?? allowPrivateNetwork();
   let url: URL;
   try {
@@ -164,26 +230,55 @@ export function validateOutboundUrl(raw: string, opts: { allowPrivate?: boolean 
   if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error("Outbound URL 仅支持 http 或 https");
   if (url.username || url.password) throw new Error("Outbound URL 不能包含账号密码，请改用自定义 Header");
   if (!url.hostname) throw new Error("Outbound URL 缺少主机名");
-  if (!allowPrivate) {
-    const host = url.hostname.replace(/^\[|\]$/g, "");
+  const host = url.hostname.replace(/^\[|\]$/g, "");
+  if (isMetadataHost(host)) throw new Error(`Outbound URL 不能指向云元数据地址（${host}），该限制不可放行`);
+  if (!allowPrivate && !isAllowedHost(host, opts.allowedHosts ?? allowedHostPatterns())) {
     if (isIP(host) ? isPrivateAddress(host) : isPrivateHostname(host)) {
-      throw new Error("Outbound URL 不能指向内网、环回或云元数据地址（可设置 WEBHOOK_ALLOW_PRIVATE_NETWORK=true 放行）");
+      throw new Error(`Outbound URL 不能指向内网、环回或保留地址（${host}）。${ALLOW_HINT}`);
     }
   }
   return url.toString();
 }
 
-/** 发送前再次解析 DNS，拦截解析到内网的域名 */
-export async function assertResolvedPublic(raw: string, opts: { allowPrivate?: boolean } = {}): Promise<void> {
+export type ResolveHost = (host: string) => Promise<{ address: string; family: number }[]>;
+
+const resolveHost: ResolveHost = (host) => lookup(host, { all: true, verbatim: true });
+
+function uniq(list: string[]): string[] {
+  return [...new Set(list)];
+}
+
+/**
+ * 发送前再次解析 DNS：解析到云元数据地址时一律拦截；
+ * 未放行内网（且主机不在 WEBHOOK_ALLOWED_HOSTS 中）时，解析到内网 / 保留地址也拦截。
+ */
+export async function assertResolvedPublic(raw: string, opts: OutboundUrlOptions & { resolve?: ResolveHost } = {}): Promise<void> {
   const allowPrivate = opts.allowPrivate ?? allowPrivateNetwork();
-  validateOutboundUrl(raw, { allowPrivate });
-  if (allowPrivate) return;
+  const allowedHosts = opts.allowedHosts ?? allowedHostPatterns();
+  validateOutboundUrl(raw, { allowPrivate, allowedHosts });
   const host = new URL(raw).hostname.replace(/^\[|\]$/g, "");
   if (isIP(host)) return;
-  const addrs = await lookup(host, { all: true, verbatim: true });
-  if (!addrs.length || addrs.some((a) => isPrivateAddress(a.address))) {
-    throw new Error("Outbound URL 解析到内网地址，已拦截");
+  const trusted = allowPrivate || isAllowedHost(host, allowedHosts);
+  let addrs: { address: string }[];
+  try {
+    addrs = await (opts.resolve ?? resolveHost)(host);
+  } catch (e) {
+    // 已放行时交给 fetch 报告真实的连接错误
+    if (trusted) return;
+    const code = (e as NodeJS.ErrnoException).code ?? (e instanceof Error ? e.message : "未知错误");
+    throw new Error(`Outbound URL 域名 ${host} DNS 解析失败（${code}），已拦截`);
   }
+  const metadata = uniq(addrs.map((a) => a.address).filter(isMetadataAddress));
+  if (metadata.length) throw new Error(`Outbound URL 域名 ${host} 解析到云元数据地址 ${metadata.join(", ")}，已拦截（该限制不可放行）`);
+  if (trusted) return;
+  if (!addrs.length) throw new Error(`Outbound URL 域名 ${host} 未解析到任何地址，已拦截`);
+  const blocked = uniq(addrs.map((a) => a.address).filter(isPrivateAddress));
+  if (!blocked.length) return;
+  const shown = blocked.slice(0, 5).join(", ") + (blocked.length > 5 ? ` 等 ${blocked.length} 个` : "");
+  const fakeIp = blocked.some(isFakeIp)
+    ? "；198.18.0.0/15 是 Clash / Mihomo 等代理 TUN 模式的 FakeIP 网段，说明域名被代理接管而非真实公网地址"
+    : "";
+  throw new Error(`Outbound URL 解析到内网地址，已拦截：${host} → ${shown}${fakeIp}。${ALLOW_HINT}`);
 }
 
 export function maskUrl(raw: string): string {

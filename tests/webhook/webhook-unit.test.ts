@@ -165,6 +165,8 @@ describe("Outbound URL 校验（SSRF）", () => {
       env.NODE_ENV = "development";
       delete env.WEBHOOK_ALLOW_PRIVATE_NETWORK;
       assert.equal(crypto.allowPrivateNetwork(), true);
+      env.WEBHOOK_ALLOW_PRIVATE_NETWORK = "false";
+      assert.equal(crypto.allowPrivateNetwork(), false);
     } finally {
       env.NODE_ENV = prev.node;
       if (prev.allow === undefined) delete env.WEBHOOK_ALLOW_PRIVATE_NETWORK;
@@ -180,6 +182,126 @@ describe("Outbound URL 校验（SSRF）", () => {
   });
 });
 
+describe("Outbound URL 云元数据硬拦截", () => {
+  const open = { allowPrivate: true };
+  const metadata = [
+    "http://169.254.169.254/latest/meta-data/",
+    "http://2852039166/",
+    "http://[::ffff:169.254.169.254]/",
+    "http://[fd00:ec2::254]/",
+    "http://metadata/",
+    "http://metadata.google.internal/computeMetadata/v1/",
+    "http://METADATA.GOOG./",
+  ];
+  for (const url of metadata) {
+    it(`放行内网时仍拦截 ${url}`, () => {
+      assert.throws(() => crypto.validateOutboundUrl(url, open), /云元数据/);
+      assert.throws(() => crypto.validateOutboundUrl(url, { allowPrivate: false, allowedHosts: [new URL(url).hostname] }), /云元数据/);
+    });
+  }
+  it("放行内网时其余链路本地 / 唯一本地地址不受影响", () => {
+    assert.equal(crypto.validateOutboundUrl("http://169.254.1.1/", open), "http://169.254.1.1/");
+    assert.equal(crypto.validateOutboundUrl("http://[fd00::1]/", open), "http://[fd00::1]/");
+  });
+  it("域名解析到元数据地址时，即使放行内网也拦截", async () => {
+    const resolve = async () => [{ address: "169.254.169.254", family: 4 }];
+    await assert.rejects(() => crypto.assertResolvedPublic("http://rebind.example.com/", { allowPrivate: true, resolve }), /云元数据地址 169\.254\.169\.254/);
+    const v6 = async () => [{ address: "fd00:ec2::254", family: 6 }];
+    await assert.rejects(() => crypto.assertResolvedPublic("http://rebind.example.com/", { allowPrivate: true, resolve: v6 }), /云元数据/);
+  });
+});
+
+describe("Outbound URL DNS 二次校验", () => {
+  const strict = { allowPrivate: false, allowedHosts: [] as string[] };
+  const fixed = (...ips: string[]) => async () => ips.map((address) => ({ address, family: address.includes(":") ? 6 : 4 }));
+
+  it("严格模式下解析到 FakeIP 时报错列出命中 IP 并给出放行方式", async () => {
+    await assert.rejects(
+      () => crypto.assertResolvedPublic("https://hooks.example.com/x", { ...strict, resolve: fixed("198.18.0.42") }),
+      (e: Error) => {
+        assert.match(e.message, /解析到内网地址，已拦截/);
+        assert.match(e.message, /hooks\.example\.com → 198\.18\.0\.42/);
+        assert.match(e.message, /FakeIP/);
+        assert.match(e.message, /WEBHOOK_ALLOW_PRIVATE_NETWORK=true/);
+        assert.match(e.message, /WEBHOOK_ALLOWED_HOSTS/);
+        return true;
+      },
+    );
+  });
+  it("严格模式下解析到私网地址时列出全部命中 IP，不误报 FakeIP", async () => {
+    await assert.rejects(
+      () => crypto.assertResolvedPublic("https://bot.corp.example/", { ...strict, resolve: fixed("8.8.8.8", "192.168.1.20", "::ffff:10.0.0.5") }),
+      (e: Error) => {
+        assert.match(e.message, /192\.168\.1\.20, ::ffff:10\.0\.0\.5/);
+        assert.doesNotMatch(e.message, /8\.8\.8\.8/);
+        assert.doesNotMatch(e.message, /FakeIP/);
+        return true;
+      },
+    );
+  });
+  it("严格模式下公网解析放行，空结果与解析失败拦截", async () => {
+    await assert.doesNotReject(() => crypto.assertResolvedPublic("https://hooks.example.com/", { ...strict, resolve: fixed("93.184.216.34", "2606:4700::1111") }));
+    await assert.rejects(() => crypto.assertResolvedPublic("https://hooks.example.com/", { ...strict, resolve: fixed() }), /未解析到任何地址/);
+    const fail = async () => {
+      throw Object.assign(new Error("getaddrinfo ENOTFOUND"), { code: "ENOTFOUND" });
+    };
+    await assert.rejects(() => crypto.assertResolvedPublic("https://nx.example.com/", { ...strict, resolve: fail }), /DNS 解析失败（ENOTFOUND）/);
+    await assert.doesNotReject(() => crypto.assertResolvedPublic("https://nx.example.com/", { allowPrivate: true, resolve: fail }));
+  });
+  it("放行内网时 FakeIP / 私网解析结果通过", async () => {
+    await assert.doesNotReject(() => crypto.assertResolvedPublic("https://hooks.example.com/", { allowPrivate: true, resolve: fixed("198.18.0.42") }));
+    await assert.doesNotReject(() => crypto.assertResolvedPublic("http://bot.lan.example/", { allowPrivate: true, resolve: fixed("192.168.1.20") }));
+  });
+  it("未传 allowPrivate 时按环境变量：生产默认拦截、显式 true 放行", async () => {
+    const env = process.env as Record<string, string | undefined>;
+    const prev = { node: env.NODE_ENV, allow: env.WEBHOOK_ALLOW_PRIVATE_NETWORK, hosts: env.WEBHOOK_ALLOWED_HOSTS };
+    const resolve = fixed("198.18.0.42");
+    try {
+      env.NODE_ENV = "production";
+      delete env.WEBHOOK_ALLOW_PRIVATE_NETWORK;
+      delete env.WEBHOOK_ALLOWED_HOSTS;
+      await assert.rejects(() => crypto.assertResolvedPublic("https://hooks.example.com/", { resolve }), /FakeIP/);
+      env.WEBHOOK_ALLOW_PRIVATE_NETWORK = "true";
+      await assert.doesNotReject(() => crypto.assertResolvedPublic("https://hooks.example.com/", { resolve }));
+      env.WEBHOOK_ALLOW_PRIVATE_NETWORK = "false";
+      env.WEBHOOK_ALLOWED_HOSTS = " Hooks.Example.com , *.lan.example ";
+      await assert.doesNotReject(() => crypto.assertResolvedPublic("https://hooks.example.com/", { resolve }));
+      await assert.doesNotReject(() => crypto.assertResolvedPublic("http://a.b.lan.example/", { resolve }));
+      await assert.rejects(() => crypto.assertResolvedPublic("https://other.example.com/", { resolve }), /FakeIP/);
+    } finally {
+      for (const [k, v] of [["NODE_ENV", prev.node], ["WEBHOOK_ALLOW_PRIVATE_NETWORK", prev.allow], ["WEBHOOK_ALLOWED_HOSTS", prev.hosts]] as const) {
+        if (v === undefined) delete env[k];
+        else env[k] = v;
+      }
+    }
+  });
+});
+
+describe("WEBHOOK_ALLOWED_HOSTS 白名单", () => {
+  it("解析逗号分隔、忽略空项并统一小写", () => {
+    assert.deepEqual(crypto.allowedHostPatterns(" Bot.LAN , ,*.Example.com.,[::1] "), ["bot.lan", "*.example.com", "::1"]);
+    assert.deepEqual(crypto.allowedHostPatterns(undefined), []);
+  });
+  it("精确匹配与 *. 子域名通配", () => {
+    const p = ["bot.lan", "*.example.com", "192.168.1.20", "::1"];
+    assert.equal(crypto.isAllowedHost("BOT.lan.", p), true);
+    assert.equal(crypto.isAllowedHost("a.example.com", p), true);
+    assert.equal(crypto.isAllowedHost("a.b.example.com", p), true);
+    assert.equal(crypto.isAllowedHost("example.com", p), false);
+    assert.equal(crypto.isAllowedHost("evilexample.com", p), false);
+    assert.equal(crypto.isAllowedHost("bot.lan.evil.com", p), false);
+    assert.equal(crypto.isAllowedHost("192.168.1.20", p), true);
+    assert.equal(crypto.isAllowedHost("[::1]", p), true);
+  });
+  it("严格模式下白名单主机可指向内网，其他主机仍拦截", () => {
+    const opts = { allowPrivate: false, allowedHosts: ["printer.local", "192.168.1.20", "::1"] };
+    assert.equal(crypto.validateOutboundUrl("http://printer.local/hook", opts), "http://printer.local/hook");
+    assert.equal(crypto.validateOutboundUrl("http://192.168.1.20:8080/", opts), "http://192.168.1.20:8080/");
+    assert.equal(crypto.validateOutboundUrl("http://[::1]:7777/", opts), "http://[::1]:7777/");
+    assert.throws(() => crypto.validateOutboundUrl("http://192.168.1.21/", opts), /内网.*192\.168\.1\.21.*WEBHOOK_ALLOWED_HOSTS/);
+    assert.throws(() => crypto.validateOutboundUrl("http://localhost/", opts), /内网/);
+  });
+});
 describe("自定义 Header", () => {
   it("解析合法 JSON 并拒绝系统保留与注入", () => {
     assert.deepEqual(crypto.parseHeadersJson('{"Authorization":"Bearer x"}'), { Authorization: "Bearer x" });
