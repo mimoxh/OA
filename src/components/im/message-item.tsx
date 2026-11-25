@@ -502,9 +502,9 @@ export function MessageItem({
     <div
       {...(editing ? {} : longPress)}
       className={cn(
-        "group/bubble relative w-fit max-w-[min(560px,75%)] rounded-xl px-3 py-2 text-[14px] leading-relaxed pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none]",
+        // 外层列宽由内容决定，气泡上的百分比上限会循环缩小导致短文本也折行，所以百分比限宽放在行容器上
+        "group/bubble relative w-fit max-w-[min(560px,100%)] rounded-xl px-3 py-2 text-[14px] leading-relaxed pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none]",
         inThread && "max-w-[270px]",
-        // 外层列宽由内容决定，百分比上限会循环缩小导致短文本也折行；移动端改由行容器限宽
         "max-md:max-w-full",
         mine ? "rounded-tr-sm bg-accent-soft text-ink" : "rounded-tl-sm border border-line bg-white text-ink",
         frameless && "border-none bg-transparent p-0",
@@ -626,7 +626,14 @@ export function MessageItem({
         highlighted && "bg-accent-soft/60 py-1.5",
       )}
     >
-      <div className={cn("flex max-w-full gap-2 max-md:max-w-[88%]", mine && "flex-row-reverse")}>
+      <div
+        className={cn(
+          // 75% 指气泡占消息区的比例，再加上头像列（w-8 + gap-2）
+          "flex max-w-full gap-2 max-md:max-w-[88%]",
+          !inThread && "md:max-w-[calc(75%+2.5rem)]",
+          mine && "flex-row-reverse",
+        )}
+      >
         {/* 头像占位保持对齐 */}
         <div className="w-8 shrink-0">
           {!grouped &&
@@ -747,7 +754,7 @@ export function PendingItem({
 }) {
   return (
     <div className="flex justify-end px-4 pt-0.5">
-      <div className="flex items-center gap-1.5 max-md:max-w-[88%]">
+      <div className="flex max-w-[75%] items-center gap-1.5 max-md:max-w-[88%]">
         {failed ? (
           <>
             <button onClick={onRetry} className="text-xs text-danger hover:underline">
@@ -760,7 +767,7 @@ export function PendingItem({
         ) : (
           <span className="size-3.5 animate-spin rounded-full border-2 border-line-strong border-t-accent" />
         )}
-        <div className="w-fit max-w-[min(560px,75%)] rounded-xl rounded-tr-sm bg-accent-soft px-3 py-2 text-[14px] leading-relaxed text-ink opacity-70 max-md:min-w-0 max-md:max-w-full">
+        <div className="w-fit min-w-0 max-w-[min(560px,100%)] rounded-xl rounded-tr-sm bg-accent-soft px-3 py-2 text-[14px] leading-relaxed text-ink opacity-70 max-md:max-w-full">
           <div className="whitespace-pre-wrap break-words">{text}</div>
         </div>
       </div>

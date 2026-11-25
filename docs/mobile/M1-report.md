@@ -1,7 +1,7 @@
 # OA 手机端 M1 报告：移动布局、登录与 IM（Android / Capacitor）
 
 > 对应 `docs/mobile/mobile-plan.md` §M1。验证日期：2026-11-25。上一阶段见 `M0-validation-report.md`。
-> 结论：M1 范围内的功能已实现，**在模拟器上逐项通过**；没有真机，真机验收仍待做（见 §6）。桌面浏览器界面无变化；`pnpm typecheck`、`pnpm lint`、`pnpm test`（157 项）全部通过。
+> 结论：M1 范围内的功能已实现，**在模拟器上逐项通过**；没有真机，真机验收仍待做（见 §6）。桌面浏览器界面除消息气泡不再误折行（§3 第 2 条，负责人决定一起修）外无变化；`pnpm typecheck`、`pnpm lint`、`pnpm test`（157 项）全部通过。
 
 ## 0. 结论速览
 
@@ -10,7 +10,7 @@
 | 负责人 6 项决定 | 全部落实（§1） |
 | M1 验收（单聊 / 建群 / @Bot / 图片文件 / 实时与已读 / 后台 5 分钟补齐） | **模拟器通过**，真机未测 |
 | 局域网 HTTP（M0 的阻塞问题） | **已解决**：App 用 `http://10.0.2.2:3320`、桌面浏览器用 `http://192.168.124.39:3320`（均为非安全上下文，`crypto.randomUUID` 与 `navigator.clipboard` 都不存在）收发消息、复制都正常 |
-| 桌面端回归 | 1440×900 前后截图布局一致；移动端样式全部限定在 `md` 以下或 `pointer: coarse` |
+| 桌面端回归 | 1440×900 前后截图布局一致；移动端样式全部限定在 `md` 以下或 `pointer: coarse`。之后按负责人决定修了电脑端气泡误折行，消息区只有气泡换行变化（§3 第 2 条） |
 | 手机消息页列表 → 会话 → 返回 | **模拟器与手机浏览器通过**（§2.4），含通知进入、滚动位置保留 |
 | 顺手修掉的既有问题 | 3 个（§3），桌面端同样受益 |
 | debug APK | `mobile/android/app/build/outputs/apk/debug/app-debug.apk`（本阶段重建过一次，包含原生剪贴板与去掉精确闹钟权限） |
@@ -108,7 +108,12 @@
 ## 3. 验证中发现并修复的问题
 
 1. **直接打开会话页时 @ 列表为空**（既有问题，桌面同样存在）：`initIm()` 首次初始化会清空 store，而子组件的 effect 先于它执行，已加载的群成员被清掉，@ 选择器只剩“所有人”。从通知点进会话、刷新会话页都会遇到。修复：首次初始化不清空，只在切换用户时清空（`src/components/im/store.ts`）。
-2. **手机上短消息也折行**（如 “@Echo” 折成两行）：气泡 `max-w-[75%]` 的参照列宽本身由内容决定，百分比循环缩小。手机端改为由消息行限宽（88%），气泡 `max-w-full`。桌面端同样有这个现象，但为了保持“桌面无变化”，本次只改了手机端（`max-md:`），桌面端是否也改请负责人决定。
+2. **短消息也折行**（如 “@Echo” 折成 “@E / cho”，手机和电脑都有）：气泡上的 `max-w-[min(560px,75%)]` 参照的是外层列宽，而列宽本身由内容决定，百分比上限会循环缩小，短文本也被折行。修复：百分比限宽移到宽度确定的消息行容器上，气泡只保留 560 px 上限并 `max-w-full`（`src/components/im/message-item.tsx`，正式消息和发送中 / 失败的气泡都改了）。
+   - 手机（`md` 以下）：行容器限宽 88%（含头像），气泡 `max-w-full`。
+   - 电脑（`md` 及以上，负责人决定一起修）：行容器限宽 `calc(75% + 2.5rem)`（75% 给气泡，2.5rem 是头像列），气泡最宽 560 px；话题面板里的气泡仍是原来的 270 px 上限（话题面板本来就不受影响）。
+   - 结果（DOM 实测）：1440×900 下单聊、群聊里没有一条短文本折行；30 字左右的消息一行显示（474 px）；长消息在 560 px 处换行（1024×768 窗口下按 75% 在 510 px 处换行）。图片（最宽 320 px）、文件卡片（280 px）、业务卡片（320 px）、链接预览、引用回复都在气泡内正常显示，引用回复那一行也不再被压窄。
+   - 回归（1440×900，改动前后同一数据截图、逐像素对比）：`消息` 列表页、审批助手卡片会话、话题面板与改动前一致（只有左侧导航栏头像处有 7–12 个零散采样点的抗锯齿差异）；单聊、群聊只在消息区域（标题栏以下、输入框以上）有差异，全部来自气泡变宽、行数减少后消息上移；会话列表、标题栏、输入框、导航栏无变化。手机 412×915 的单聊、群聊前后截图逐像素完全相同。
+   - 截图：`docs/mobile/m1-screenshots/desktop-bubble/` 下 `before-*.png` / `after-*.png`（`messages`、`dm`、`group`、`thread`、`card`），以及长消息换行 `after-group-long.png`。
 3. **对方回复后我方消息仍显示“未读”**（既有问题，桌面同样存在）：服务端发消息时会顺带推进发送者的 `lastReadSeq`，但不发 `read` 事件，客户端要到刷新才更新。修复：客户端收到对方的文字 / 图片 / 文件消息时，同步把对方已读位置推进到该消息（卡片、系统消息的已读归属不同，跳过）。
 4. **从通知进入会话后返回，回到的是通知前的页面而不是会话列表**：见 §2.4。
 5. 本阶段新组件的问题（已修）：看图双指缩放后手指先后抬起会被当成单击而关闭；长按弹出面板时手指仍按着，系统会在面板上选字；“我的”页对 `http://localhost`（安全上下文）也显示 HTTP 提示。
@@ -125,13 +130,12 @@
 
 ## 5. 截图
 
-`docs/mobile/m1-screenshots/`（模拟器）：`messages-list`、`group-bubbles`、`group-bot-reply`、`dm-read-receipt`、`keyboard`、`message-longpress`、`conversation-longpress`、`image-viewer`、`thread-drawer`、`contacts`、`work`、`me-http`、`app-http-chat`，以及 §2.4 的 `nav-1-list` … `nav-6-notification-back`、`nav-desktop`。全部过程截图（含桌面前后对比、窄屏对比、局域网 HTTP 桌面截图）在本机 `.tmp/m1-shots/`，未入库。
+`docs/mobile/m1-screenshots/`（模拟器）：`messages-list`、`group-bubbles`、`group-bot-reply`、`dm-read-receipt`、`keyboard`、`message-longpress`、`conversation-longpress`、`image-viewer`、`thread-drawer`、`contacts`、`work`、`me-http`、`app-http-chat`，电脑端气泡前后对比 `desktop-bubble/`（§3 第 2 条），以及 §2.4 的 `nav-1-list` … `nav-6-notification-back`、`nav-desktop`。全部过程截图（含桌面前后对比、窄屏对比、局域网 HTTP 桌面截图）在本机 `.tmp/m1-shots/`，未入库。
 
 ## 6. 遗留与建议
 
 - **真机未测**：中文输入法联想 / 语音输入与 Tiptap 的组合输入、国产 ROM 后台保活、低端机长列表性能都需要真机确认（M0 设备清单 `M0-device-checklist.md` 可复用）。
 - **自动刷新会丢掉当次发送的内容**：服务升级后第一次发送会触发“找不到 Action”并自动刷新，这条消息不会发出，需要用户重发。后续可以在刷新前把内容存成草稿。
-- **桌面端气泡折行**（§3 第 2 条）是否同步修复，待负责人决定。
 - Docker 容器内未实测（本机 Docker Desktop 无法启动），用的是同一打包步骤产出的 standalone 包。
 - Tauri 桌面端未实际启动回归。
 - 开发模式下局域网访问需要把地址加入 `next.config.ts` 的 `allowedDevOrigins`，这只影响开发调试，本次未改。
