@@ -77,6 +77,90 @@ export function setMobileKeepAlive(enabled: boolean) {
   return call("OAShell", "setKeepAlive", { enabled });
 }
 
+export type MobilePushChannelKey = "dm" | "group" | "mention" | "system";
+
+export type MobilePushChannel = {
+  key: MobilePushChannelKey | "service";
+  id: string;
+  name: string;
+  description: string;
+  /** NotificationManager.IMPORTANCE_*；0 表示用户在系统里关掉了该渠道 */
+  importance: number;
+  enabled: boolean;
+};
+
+export type MobilePushState = {
+  notifyEnabled: boolean;
+  keepAlive: boolean;
+  hasServer: boolean;
+  /** 系统层面的 App 通知总开关 */
+  notificationsEnabled: boolean;
+  permissionGranted: boolean;
+  ignoringBatteryOptimizations: boolean;
+  manufacturer: string;
+  brand: string;
+  model: string;
+  release: string;
+  sdkInt: number;
+  vendorAutostart: boolean;
+  channels: MobilePushChannel[];
+  service: {
+    state?: string;
+    lastError?: string | null;
+    connectedAt?: number;
+    connects?: number;
+    events?: number;
+    notified?: number;
+    pushCapable?: boolean;
+    lastSync?: number;
+    missedShown?: number;
+  };
+};
+
+export function getMobilePushState() {
+  return call<MobilePushState>("OAShell", "getPushState");
+}
+
+export function setMobileNotifyEnabled(enabled: boolean) {
+  return call("OAShell", "setNotifyEnabled", { enabled });
+}
+
+export function requestMobileNotificationPermission() {
+  return call<{ granted: boolean }>("OAShell", "requestNotificationPermission");
+}
+
+export function requestMobileIgnoreBatteryOptimizations() {
+  return call("OAShell", "requestIgnoreBatteryOptimizations");
+}
+
+export function openMobileAppSettings() {
+  return call("OAShell", "openAppSettings");
+}
+
+export function openMobileChannelSettings(channel: MobilePushChannelKey | "service") {
+  return call("OAShell", "openChannelSettings", { channel });
+}
+
+/** 按厂商跳转自启动 / 后台运行 / 电池设置页；找不到时回退到应用详情页。返回实际打开的是哪一种 */
+export function openMobileVendorSettings(kind: "autostart" | "battery") {
+  return call<{ opened: "vendor" | "system" | "app-details" }>("OAShell", "openVendorSettings", { kind });
+}
+
+/** App 在前台时由页面弹出的提醒，走与后台服务相同的原生通知渠道 */
+export function showMobileNotification(n: {
+  conversationId?: string | null;
+  title: string;
+  body: string;
+  path: string;
+  channel: MobilePushChannelKey;
+}) {
+  return call("OAShell", "showNotification", n);
+}
+
+export function clearMobileNotifications(conversationId?: string) {
+  return call("OAShell", "clearNotifications", conversationId ? { conversationId } : {});
+}
+
 export async function copyTextNative(text: string): Promise<boolean> {
   return (await call("OAShell", "copyText", { text })) !== null;
 }

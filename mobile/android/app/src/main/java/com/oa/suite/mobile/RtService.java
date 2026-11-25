@@ -1,14 +1,9 @@
 package com.oa.suite.mobile;
 
-import android.Manifest;
 import android.app.Notification;
-import android.app.NotificationChannel;
-import android.app.NotificationManager;
-import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
-import android.content.pm.PackageManager;
 import android.content.pm.ServiceInfo;
 import android.net.ConnectivityManager;
 import android.net.Network;
@@ -20,13 +15,15 @@ import android.util.Base64;
 import android.util.Log;
 import android.webkit.CookieManager;
 import android.webkit.WebSettings;
-import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
 import androidx.core.content.ContextCompat;
 import com.getcapacitor.JSObject;
 import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import okhttp3.Call;
 import okhttp3.Callback;
@@ -35,23 +32,23 @@ import okhttp3.Request;
 import okhttp3.Response;
 import okhttp3.WebSocket;
 import okhttp3.WebSocketListener;
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 /**
- * M0 保活原型：前台服务（specialUse）常驻一条 /rt WebSocket。
- * 认证复用 WebView 的会话 Cookie（CookieManager 可读 httpOnly Cookie）→ GET /api/realtime-token 换 rt 令牌，
- * 与网页端 RealtimeProvider 走同一条链路，服务端无需改动。App 不在前台时把 message.new 显示为本地通知。
+ * 后台推送：前台服务（specialUse）常驻一条 /rt?client=bg WebSocket。
+ * 认证复用 WebView 的会话 Cookie（CookieManager 可读 httpOnly Cookie）→ GET /api/realtime-token 换 rt 令牌。
+ * 服务端按 src/lib/push/rules.ts 算好提醒（标题、渠道、免打扰 / @ / 本人 / 机器人规则）后发 push.notify，
+ * 这里只负责显示；重连后用 /api/push/missed 补拉断线期间漏掉的提醒。后台连接不计入在线状态。
  */
 public class RtService extends Service {
 
     private static final String TAG = "OARt";
-    static final String CH_SERVICE = "oa_keepalive";
-    static final String CH_MESSAGES = "oa_messages";
     private static final int ONGOING_ID = 1;
     private static final long MAX_BACKOFF_MS = 60_000;
     private static final long UNAUTHORIZED_RETRY_MS = 30_000;
 
-    // 诊断状态（OAShell.getState 读取）
+    // 诊断状态（OAShell.getState / getPushState 读取）
     private static volatile String state = "stopped";
     private static volatile String lastError = null;
     private static volatile String server = null;
@@ -60,6 +57,9 @@ public class RtService extends Service {
     private static volatile int connects = 0;
     private static volatile int notified = 0;
     private static volatile int events = 0;
+    private static volatile boolean pushCapable = false;
+    private static volatile int missedShown = 0;
+    private static volatile long lastNotifyAt = 0;
 
     private static volatile RtService instance;
 
@@ -72,7 +72,14 @@ public class RtService extends Service {
     private String meId;
     private Network lastNetwork;
     private ConnectivityManager.NetworkCallback netCallback;
+    /** 会话 → 已提醒过的最大 seq：补拉与实时推送可能重叠（补拉请求发出时连接已建立），按 seq 去重 */
+    private final Map<String, Integer> shownSeq = new HashMap<>();
     private final Runnable connectTask = this::connect;
+
+    /** 是否应保持后台连接：已选服务器、未关闭后台保活、未关闭“我的 → 通知”总开关 */
+    static boolean shouldRun(Context c) {
+        return ServerStore.getServerUrl(c) != null && ServerStore.isKeepAlive(c) && ServerStore.isNotifyEnabled(c);
+    }
 
     static void start(Context c) {
         try {
@@ -84,12 +91,18 @@ public class RtService extends Service {
         }
     }
 
+    /** 按当前设置启动或停止服务 */
+    static void sync(Context c) {
+        if (shouldRun(c)) start(c);
+        else stop(c);
+    }
+
     /** App 回到前台或切到后台时调用：服务已在运行且当前未连接（例如刚登录）就立即重连，而不是等退避计时器。 */
     static void kick() {
         RtService s = instance;
         if (s == null) return;
         s.handler.post(() -> {
-            if (s.ws == null && s.server != null) {
+            if (s.ws == null && server != null) {
                 s.attempt = 0;
                 s.schedule(0);
             }
@@ -110,13 +123,18 @@ public class RtService extends Service {
         o.put("connects", connects);
         o.put("events", events);
         o.put("notified", notified);
+        o.put("pushCapable", pushCapable);
+        o.put("missedShown", missedShown);
+        o.put("lastNotifyAt", lastNotifyAt);
+        RtService s = instance;
+        o.put("lastSync", s == null ? 0 : ServerStore.getLastSync(s, server));
         return o;
     }
 
     @Override
     public void onCreate() {
         super.onCreate();
-        createChannels();
+        Notifier.ensureChannels(this);
         http = new OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
             // WebSocket 是长连接，不设读超时；连接是否存活由 ping/pong 判断
@@ -133,14 +151,14 @@ public class RtService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        Notification n = ongoing("正在连接…");
+        String url = ServerStore.getServerUrl(this);
+        Notification n = Notifier.ongoing(this, host(url), "正在连接…");
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             startForeground(ONGOING_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
         } else {
             startForeground(ONGOING_ID, n);
         }
-        String url = ServerStore.getServerUrl(this);
-        if (url == null) {
+        if (!shouldRun(this)) {
             stopSelf();
             return START_NOT_STICKY;
         }
@@ -148,6 +166,8 @@ public class RtService extends Service {
             if (!url.equals(server)) {
                 server = url;
                 closeSocket();
+                shownSeq.clear();
+                pushCapable = false;
                 attempt = 0;
             }
             if (ws == null) schedule(0);
@@ -168,7 +188,7 @@ public class RtService extends Service {
             closeSocket();
             thread.quitSafely();
         });
-        setState("stopped", null);
+        state = "stopped";
         super.onDestroy();
     }
 
@@ -196,6 +216,10 @@ public class RtService extends Service {
             base = "Android";
         }
         return base + " " + MainActivity.userAgentMark() + " OAMobileService";
+    }
+
+    private static String host(String url) {
+        return url == null ? "" : url.replaceFirst("^https?://", "");
     }
 
     private void connect() {
@@ -263,10 +287,12 @@ public class RtService extends Service {
             String token = j.getString("token");
             String url = j.getString("url");
             meId = jwtUserId(token);
+            String sep = url.contains("?") ? "&" : "?";
             Request wsReq = new Request.Builder()
-                .url(url + "?token=" + URLEncoder.encode(token, StandardCharsets.UTF_8.name()))
+                .url(url + sep + "token=" + URLEncoder.encode(token, StandardCharsets.UTF_8.name()) + "&client=bg")
                 .header("User-Agent", userAgent())
                 .build();
+            pushCapable = false;
             ws = http.newWebSocket(wsReq, new Listener());
         } catch (Exception e) {
             setState("disconnected", "令牌响应无效：" + e.getMessage());
@@ -300,6 +326,8 @@ public class RtService extends Service {
                 connects++;
                 connectedAt = System.currentTimeMillis();
                 setState("connected", null);
+                // 连接已建立再补拉：之后到达的消息走实时推送，重叠部分按 seq 去重
+                fetchMissed(server);
             });
         }
 
@@ -343,7 +371,73 @@ public class RtService extends Service {
         }
         events++;
         lastEventAt = System.currentTimeMillis();
-        if (!"message.new".equals(ev.optString("type"))) return;
+        switch (ev.optString("type")) {
+            case "push.hello":
+                pushCapable = true;
+                return;
+            case "push.notify": {
+                JSONObject n = ev.optJSONObject("notification");
+                if (n == null) return;
+                advanceSync(parseTime(n.optString("sentAt")));
+                // 静默：用户正在电脑端使用 OA，只推进补拉游标
+                if (ev.optBoolean("silent")) {
+                    markShown(n);
+                    return;
+                }
+                // App 在前台时由页面（?client=app）负责提醒，并能判断用户是否正停留在该会话
+                if (AppState.isForeground()) {
+                    markShown(n);
+                    return;
+                }
+                showPush(n, false);
+                return;
+            }
+            case "push.clear": {
+                String conv = ev.optString("conversationId", null);
+                if (conv != null) Notifier.clear(this, conv);
+                return;
+            }
+            case "message.new":
+                if (!pushCapable) legacyMessage(ev);
+                return;
+            default:
+        }
+    }
+
+    private void markShown(JSONObject n) {
+        String conv = n.optString("conversationId");
+        int seq = n.optInt("seq", 0);
+        Integer prev = shownSeq.get(conv);
+        if (prev == null || seq > prev) shownSeq.put(conv, seq);
+    }
+
+    private boolean showPush(JSONObject n, boolean missed) {
+        String conv = n.optString("conversationId");
+        int seq = n.optInt("seq", 0);
+        Integer prev = shownSeq.get(conv);
+        if (prev != null && seq <= prev) return false;
+        shownSeq.put(conv, seq);
+        boolean shown = Notifier.show(
+            this,
+            conv,
+            n.optString("channel", "dm"),
+            n.optString("title", "新消息"),
+            n.optString("body", ""),
+            n.optString("path", "/messages/" + conv),
+            Math.max(1, n.optInt("count", 1))
+        );
+        if (shown) {
+            notified++;
+            lastNotifyAt = System.currentTimeMillis();
+            if (missed) missedShown++;
+        } else if (!Notifier.hasPermission(this)) {
+            lastError = "没有通知权限，已丢弃一条消息提醒";
+        }
+        return shown;
+    }
+
+    /** 旧服务端（没有 push.hello）：按 M0 的方式把 message.new 显示为提醒 */
+    private void legacyMessage(JSONObject ev) {
         JSONObject msg = ev.optJSONObject("message");
         if (msg == null) return;
         JSONObject sender = msg.optJSONObject("sender");
@@ -351,10 +445,13 @@ public class RtService extends Service {
         if (AppState.isForeground()) return;
         String conversationId = ev.optString("conversationId", msg.optString("conversationId"));
         String title = sender != null ? sender.optString("name", "新消息") : "系统通知";
-        showMessage(conversationId, title, summary(msg));
+        if (Notifier.show(this, conversationId, "dm", title, legacySummary(msg), "/messages/" + conversationId, 1)) {
+            notified++;
+            lastNotifyAt = System.currentTimeMillis();
+        }
     }
 
-    private static String summary(JSONObject msg) {
+    private static String legacySummary(JSONObject msg) {
         if (msg.optBoolean("recalled")) return "撤回了一条消息";
         String type = msg.optString("type");
         String t = msg.optString("text", "").trim();
@@ -370,35 +467,77 @@ public class RtService extends Service {
         }
     }
 
-    private void showMessage(String conversationId, String title, String body) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
-            && ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-            lastError = "没有通知权限，已丢弃一条消息提醒";
-            return;
+    private static long parseTime(String iso) {
+        if (iso == null || iso.isEmpty()) return 0;
+        try {
+            return Instant.parse(iso).toEpochMilli();
+        } catch (Exception e) {
+            return 0;
         }
-        Intent open = new Intent(this, MainActivity.class)
-            .putExtra(MainActivity.EXTRA_PATH, "/messages/" + conversationId)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-        PendingIntent pi = PendingIntent.getActivity(
-            this,
-            conversationId.hashCode(),
-            open,
-            PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT
-        );
-        Notification n = new NotificationCompat.Builder(this, CH_MESSAGES)
-            .setSmallIcon(R.drawable.ic_stat_oa)
-            .setContentTitle(title)
-            .setContentText(body)
-            .setStyle(new NotificationCompat.BigTextStyle().bigText(body))
-            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setAutoCancel(true)
-            .setWhen(System.currentTimeMillis())
-            .setShowWhen(true)
-            .setContentIntent(pi)
+    }
+
+    private void advanceSync(long serverTime) {
+        if (serverTime <= 0 || server == null) return;
+        if (serverTime > ServerStore.getLastSync(this, server)) ServerStore.setLastSync(this, server, serverTime);
+    }
+
+    /** 补拉断线期间漏掉的提醒（每个会话一条，带未读条数）；首次连接只记录游标 */
+    private void fetchMissed(String base) {
+        if (base == null) return;
+        String cookie = CookieManager.getInstance().getCookie(base);
+        if (cookie == null || cookie.isEmpty()) return;
+        long since = ServerStore.getLastSync(this, base);
+        Request req = new Request.Builder()
+            .url(base + "/api/push/missed" + (since > 0 ? "?since=" + since : ""))
+            .header("Cookie", cookie)
+            .header("User-Agent", userAgent())
+            .header("Accept", "application/json")
             .build();
-        NotificationManagerCompat.from(this).notify(conversationId, 2, n);
-        notified++;
+        Call c = http.newCall(req);
+        c.timeout().timeout(20, TimeUnit.SECONDS);
+        c.enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                Log.w(TAG, "missed push fetch failed", e);
+            }
+
+            @Override
+            public void onResponse(Call call, Response res) {
+                String body = null;
+                int code = res.code();
+                try {
+                    body = res.body() != null ? res.body().string() : null;
+                } catch (IOException ignored) {
+                } finally {
+                    res.close();
+                }
+                final String text = body;
+                if (code != 200 || text == null) return;
+                handler.post(() -> onMissed(base, text));
+            }
+        });
+    }
+
+    private void onMissed(String base, String body) {
+        if (!base.equals(server)) return;
+        try {
+            JSONObject j = new JSONObject(body);
+            JSONArray list = j.optJSONArray("notifications");
+            if (list != null && !AppState.isForeground()) {
+                for (int i = 0; i < list.length(); i++) {
+                    JSONObject n = list.optJSONObject(i);
+                    if (n != null) showPush(n, true);
+                }
+            } else if (list != null) {
+                for (int i = 0; i < list.length(); i++) {
+                    JSONObject n = list.optJSONObject(i);
+                    if (n != null) markShown(n);
+                }
+            }
+            advanceSync(j.optLong("now", 0));
+        } catch (Exception e) {
+            Log.w(TAG, "invalid missed push response", e);
+        }
     }
 
     private void setState(String s, String error) {
@@ -420,39 +559,9 @@ public class RtService extends Service {
             default:
                 label = "连接中断，稍后自动重连";
         }
-        NotificationManagerCompat nm = NotificationManagerCompat.from(this);
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU
-            || ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
-            nm.notify(ONGOING_ID, ongoing(label));
+        if (Notifier.hasPermission(this)) {
+            NotificationManagerCompat.from(this).notify(ONGOING_ID, Notifier.ongoing(this, host(server), label));
         }
-    }
-
-    private Notification ongoing(String text) {
-        Intent open = new Intent(this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-        PendingIntent pi = PendingIntent.getActivity(this, 0, open, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
-        String host = server == null ? "" : server.replaceFirst("^https?://", "");
-        return new NotificationCompat.Builder(this, CH_SERVICE)
-            .setSmallIcon(R.drawable.ic_stat_oa)
-            .setContentTitle("协作平台 OA · " + host)
-            .setContentText(text)
-            .setOngoing(true)
-            .setOnlyAlertOnce(true)
-            .setPriority(NotificationCompat.PRIORITY_MIN)
-            .setCategory(NotificationCompat.CATEGORY_SERVICE)
-            .setContentIntent(pi)
-            .build();
-    }
-
-    private void createChannels() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
-        NotificationManager nm = getSystemService(NotificationManager.class);
-        NotificationChannel keep = new NotificationChannel(CH_SERVICE, "后台连接", NotificationManager.IMPORTANCE_MIN);
-        keep.setDescription("保持与 OA 服务器的连接，用于接收新消息提醒");
-        keep.setShowBadge(false);
-        NotificationChannel msg = new NotificationChannel(CH_MESSAGES, "新消息", NotificationManager.IMPORTANCE_HIGH);
-        msg.setDescription("单聊、群聊与业务通知");
-        nm.createNotificationChannel(keep);
-        nm.createNotificationChannel(msg);
     }
 
     private void registerNetworkCallback() {

@@ -6,6 +6,13 @@ import { WebSocketServer, WebSocket } from "ws";
 import { db } from "@/lib/db";
 import { verifyScopedToken } from "@/lib/auth/token";
 import { STALE_CALL_MS, type CallPeerInfo } from "@/lib/im/types";
+import {
+  countsForPresence,
+  isActiveOnDesktop,
+  parseClientKind,
+  shouldSendToClient,
+  type RtClientKind,
+} from "@/lib/push/realtime-filter";
 
 const PORT = Number(process.env.REALTIME_PORT ?? 1235);
 const EVENTS_CHANNEL = "rt:events";
@@ -20,12 +27,27 @@ const onlineKey = (instanceId: string) => `rt:online:${instanceId}`;
 const callRoomKey = (callId: string) => `rt:call:${callId}:peers`;
 const CALL_PEER_TTL_SEC = 90;
 
-type Client = { id: string; ws: WebSocket; userId: string; alive: boolean; callId: string | null };
+type Client = {
+  id: string;
+  ws: WebSocket;
+  userId: string;
+  alive: boolean;
+  callId: string | null;
+  kind: RtClientKind;
+  /** 仅 web 连接上报：最近一次“页面可见 + 有焦点 + 有输入”的时间，0 表示不活跃 */
+  activeAt: number;
+};
 type CallRoomEntry = { peer: CallPeerInfo; conversationId: string; client: Client };
 type LeasedCallPeer = { peer: CallPeerInfo; expiresAt: number };
 
 const socketsByUser = new Map<string, Set<Client>>();
 const allSockets = new Set<Client>();
+// 计入在线状态的连接数（不含手机后台连接 ?client=bg）
+const presentUsers = new Map<string, number>();
+
+function presentUserIds() {
+  return [...presentUsers.keys()];
+}
 const callRooms = new Map<string, Map<string, CallRoomEntry>>();
 
 let redisPub: RedisClient | null = null;
@@ -48,8 +70,18 @@ function deliver(userIds: string[], event: object) {
     callRooms.delete(callEvent.callId);
     if (room && redisReady) void redisPub?.del(callRoomKey(callEvent.callId)).catch(() => {});
   }
+  const type = typeof callEvent.type === "string" ? callEvent.type : "";
   for (const id of userIds) {
-    for (const client of socketsByUser.get(id) ?? []) {
+    const clients = socketsByUser.get(id);
+    if (!clients) continue;
+    // 电脑端正在使用时，手机端的提醒照常送达但标记为静默（只用于推进补拉游标，不弹通知）
+    const silent = type === "push.notify" && isActiveOnDesktop(clients, Date.now());
+    for (const client of clients) {
+      if (!shouldSendToClient(client.kind, type)) continue;
+      if (silent) {
+        send(client, { ...event, silent: true });
+        continue;
+      }
       if (callEvent.targetConnectionId && callEvent.targetConnectionId !== client.id) continue;
       if (
         callEvent.type === "call.peer-joined" && callEvent.callId && client.callId === callEvent.callId &&
@@ -76,12 +108,12 @@ async function publishOrDeliver(userIds: string[], event: object) {
 }
 
 function broadcastAll(event: object) {
-  for (const client of allSockets) send(client, event);
+  for (const client of allSockets) if (client.kind !== "bg") send(client, event);
 }
 
 // ── Redis 多实例在线状态辅助 ──
 async function getGlobalOnlineUserIds(): Promise<string[]> {
-  const local = [...socketsByUser.keys()];
+  const local = presentUserIds();
   if (!redisReady || !redisPub) return local;
   try {
     const cutoff = Date.now() - INSTANCE_STALE_MS;
@@ -114,7 +146,7 @@ async function syncInstancePresence() {
   try {
     const now = Date.now();
     const key = onlineKey(INSTANCE_ID);
-    const localUsers = [...socketsByUser.keys()];
+    const localUsers = presentUserIds();
     const pipe = redisPub.pipeline();
     pipe.zadd(INSTANCES_KEY, now, INSTANCE_ID);
     pipe.zremrangebyscore(INSTANCES_KEY, 0, now - INSTANCE_STALE_MS);
@@ -349,8 +381,9 @@ const server = createServer(async (req, res) => {
   if (req.method === "GET" && url.pathname === "/health") {
     sendJson(res, 200, {
       ok: true,
-      users: socketsByUser.size,
+      users: presentUsers.size,
       connections: allSockets.size,
+      bgConnections: [...allSockets].filter((c) => c.kind === "bg").length,
       callRooms: callRooms.size,
       redis: redisReady,
       instanceId: INSTANCE_ID,
@@ -389,6 +422,7 @@ const wss = new WebSocketServer({ noServer: true, maxPayload: 128 * 1024 });
 server.on("upgrade", (req, socket, head) => {
   const url = new URL(req.url ?? "/", "http://localhost");
   const token = url.searchParams.get("token");
+  const kind = parseClientKind(url.searchParams.get("client"));
   verifyScopedToken(token, "rt")
     .then((session) => {
       if (!session?.userId) {
@@ -396,24 +430,29 @@ server.on("upgrade", (req, socket, head) => {
         socket.destroy();
         return;
       }
-      wss.handleUpgrade(req, socket, head, (ws) => onConnect(ws, session.userId!));
+      wss.handleUpgrade(req, socket, head, (ws) => onConnect(ws, session.userId!, kind));
     })
     .catch(() => socket.destroy());
 });
 
-function onConnect(ws: WebSocket, userId: string) {
-  const client: Client = { id: randomUUID(), ws, userId, alive: true, callId: null };
+function onConnect(ws: WebSocket, userId: string, kind: RtClientKind) {
+  const client: Client = { id: randomUUID(), ws, userId, alive: true, callId: null, kind, activeAt: 0 };
   let callOperations = Promise.resolve();
   allSockets.add(client);
   let set = socketsByUser.get(userId);
-  const isFirst = !set || set.size === 0;
   if (!set) {
     set = new Set();
     socketsByUser.set(userId, set);
   }
   set.add(client);
+  const present = countsForPresence(kind);
+  const isFirst = present && !presentUsers.has(userId);
+  if (present) presentUsers.set(userId, (presentUsers.get(userId) ?? 0) + 1);
 
-  if (redisReady && redisPub) {
+  if (!present) {
+    // 后台连接：不参与在线状态；告知客户端服务端支持 push.*（旧服务端没有这条，客户端据此回退到 message.new）
+    send(client, { type: "push.hello", v: 1 });
+  } else if (redisReady && redisPub) {
     const pub = redisPub;
     void (async () => {
       if (isFirst) {
@@ -432,7 +471,7 @@ function onConnect(ws: WebSocket, userId: string) {
       send(client, { type: "presence.snapshot", userIds });
     })();
   } else {
-    send(client, { type: "presence.snapshot", userIds: [...socketsByUser.keys()] });
+    send(client, { type: "presence.snapshot", userIds: presentUserIds() });
   }
   if (isFirst) broadcastAll({ type: "presence", userId, online: true });
 
@@ -448,6 +487,11 @@ function onConnect(ws: WebSocket, userId: string) {
       return;
     }
     if (!msg || typeof msg !== "object" || msg.type === "ping") return;
+    if (msg.type === "activity") {
+      if (client.kind === "web") client.activeAt = msg.active === true ? Date.now() : 0;
+      return;
+    }
+    if (client.kind === "bg") return;
     if (msg.type === "typing" && typeof msg.conversationId === "string") {
       const conversationId = msg.conversationId;
       void memberIds(conversationId)
@@ -472,20 +516,25 @@ function onConnect(ws: WebSocket, userId: string) {
     allSockets.delete(client);
     const set = socketsByUser.get(userId);
     set?.delete(client);
-    if (set && set.size === 0) {
-      socketsByUser.delete(userId);
+    if (set && set.size === 0) socketsByUser.delete(userId);
+    if (!present) return;
+    const left = (presentUsers.get(userId) ?? 1) - 1;
+    if (left > 0) {
+      presentUsers.set(userId, left);
+    } else {
+      presentUsers.delete(userId);
       if (redisReady && redisPub) {
         const pub = redisPub;
         void (async () => {
           try {
             await pub.srem(onlineKey(INSTANCE_ID), userId);
-            if (socketsByUser.has(userId)) return;
+            if (presentUsers.has(userId)) return;
             const elsewhere = await isOnlineElsewhere(userId);
-            if (elsewhere || socketsByUser.has(userId)) return;
+            if (elsewhere || presentUsers.has(userId)) return;
             broadcastAll({ type: "presence", userId, online: false });
             await pub.publish(PRESENCE_CHANNEL, JSON.stringify({ instanceId: INSTANCE_ID, userId, online: false }));
           } catch {
-            if (!socketsByUser.has(userId)) broadcastAll({ type: "presence", userId, online: false });
+            if (!presentUsers.has(userId)) broadcastAll({ type: "presence", userId, online: false });
           }
         })();
       } else {
@@ -540,7 +589,7 @@ if (process.env.REDIS_URL) {
             const item = JSON.parse(message) as { instanceId?: unknown; userId?: unknown; online?: unknown };
             if (item.instanceId === INSTANCE_ID) return;
             if (typeof item.userId !== "string" || typeof item.online !== "boolean") return;
-            if (!item.online && socketsByUser.has(item.userId)) return;
+            if (!item.online && presentUsers.has(item.userId)) return;
             broadcastAll({ type: "presence", userId: item.userId, online: item.online });
           }
         } catch {}
@@ -570,7 +619,7 @@ async function shutdown() {
   await Promise.allSettled([...allSockets].map((client) => leaveCallRoom(client)));
   if (redisReady && redisPub) {
     try {
-      const localUsers = [...socketsByUser.keys()];
+      const localUsers = presentUserIds();
       await redisPub.pipeline().del(onlineKey(INSTANCE_ID)).zrem(INSTANCES_KEY, INSTANCE_ID).exec();
       for (const userId of localUsers) {
         const elsewhere = await isOnlineElsewhere(userId);

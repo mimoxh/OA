@@ -53,6 +53,7 @@ public class MainActivity extends BridgeActivity {
             }
             intent.removeExtra(EXTRA_SERVER_URL);
             startPath = safePath(intent.getStringExtra(EXTRA_PATH));
+            clearConversationNotification(startPath);
             // 初始 intent 会在 load() 里再经过 onNewIntent，去掉深链参数避免重复导航
             intent.removeExtra(EXTRA_PATH);
         }
@@ -69,7 +70,7 @@ public class MainActivity extends BridgeActivity {
             webView.addJavascriptInterface(new ErrorPageBridge(), "OAShellNative");
         }
 
-        if (serverUrl != null && ServerStore.isKeepAlive(this)) {
+        if (serverUrl != null && RtService.shouldRun(this)) {
             requestNotificationPermissionIfNeeded();
             RtService.start(this);
         }
@@ -160,6 +161,7 @@ public class MainActivity extends BridgeActivity {
             return;
         }
         intent.removeExtra(EXTRA_PATH);
+        clearConversationNotification(path);
         bridge.getWebView().loadUrl(serverUrl + path);
     }
 
@@ -182,6 +184,16 @@ public class MainActivity extends BridgeActivity {
         super.onStop();
         AppState.setForeground(false);
         RtService.kick();
+    }
+
+    /** 点通知打开会话时立即撤销该会话的提醒（页面标记已读后服务端还会发 push.clear） */
+    private void clearConversationNotification(String path) {
+        if (path != null && path.startsWith("/messages/")) {
+            String id = path.substring("/messages/".length());
+            int q = id.indexOf('?');
+            if (q >= 0) id = id.substring(0, q);
+            if (!id.isEmpty() && !id.contains("/")) Notifier.clear(this, id);
+        }
     }
 
     private void requestNotificationPermissionIfNeeded() {

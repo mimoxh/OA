@@ -4,6 +4,7 @@ import { useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import type { ConversationDTO, MessageDTO, UserLite } from "@/lib/im/types";
 import { showDesktopNotification } from "@/lib/im/desktop-notify";
+import { clearMobileNotifications, isMobileApp, showMobileNotification, type MobilePushChannelKey } from "@/lib/mobile-bridge";
 import { randomId } from "@/lib/client-id";
 import { subscribeRealtime, type RealtimeEvent } from "@/components/realtime/provider";
 import {
@@ -633,6 +634,8 @@ export function setDraft(convId: string, content: unknown) {
 // ── 事件 ──
 
 function maybeNotifyMessage(convId: string, msg: MessageDTO) {
+  // 手机 App 内改用服务端算好的 push.notify（见 maybeNotifyPush），与后台服务的提醒内容一致
+  if (isMobileApp()) return;
   const meId = state.meId;
   if (!meId || msg.type === "SYSTEM" || msg.sender?.id === meId) return;
   const conv = state.convs.get(convId);
@@ -652,9 +655,35 @@ function maybeNotifyMessage(convId: string, msg: MessageDTO) {
   });
 }
 
+type PushNotifyPayload = {
+  conversationId: string;
+  channel: MobilePushChannelKey;
+  title: string;
+  body: string;
+  path: string;
+};
+
+/**
+ * App 在前台时的提醒（只有 App 内页面会收到 push.notify）。退到后台后由原生后台服务提醒，这里不再重复；
+ * 停在该会话时不提醒；电脑端正在使用时服务端会标记 silent。
+ */
+function maybeNotifyPush(e: RealtimeEvent) {
+  const n = e.notification as PushNotifyPayload | undefined;
+  if (!n?.conversationId || e.silent === true) return;
+  if (typeof document !== "undefined" && document.hidden) return;
+  if (state.activeConvId === n.conversationId) return;
+  void showMobileNotification({ conversationId: n.conversationId, title: n.title, body: n.body, path: n.path, channel: n.channel });
+}
+
 function handleEvent(e: RealtimeEvent) {
   const meId = state.meId;
   switch (e.type) {
+    case "push.notify":
+      maybeNotifyPush(e);
+      break;
+    case "push.clear":
+      if (typeof e.conversationId === "string") void clearMobileNotifications(e.conversationId);
+      break;
     case "message.new": {
       const convId = e.conversationId as string;
       const msg = e.message as MessageDTO;

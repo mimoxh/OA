@@ -28,7 +28,9 @@ export function useTrackNavStack() {
 
 /** 二级页面没有本文档内的上一页时回到的一级页面 */
 export function backFallback(pathname: string) {
-  return pathname.startsWith("/messages/") ? "/messages" : "/work";
+  if (pathname.startsWith("/messages/")) return "/messages";
+  if (pathname.startsWith("/me/")) return "/me";
+  return "/work";
 }
 
 type Router = ReturnType<typeof useRouter>;

@@ -16,6 +16,8 @@ final class ServerStore {
     private static final String KEY_RECENT = "recent_servers";
     private static final String KEY_KEEP_ALIVE = "keep_alive";
     private static final String KEY_LAUNCHER = "launcher_requested";
+    private static final String KEY_NOTIFY = "notify_enabled";
+    private static final String KEY_LAST_SYNC = "push_last_sync:";
     private static final int MAX_RECENT = 8;
 
     private ServerStore() {}
@@ -95,6 +97,24 @@ final class ServerStore {
 
     static void setKeepAlive(Context c, boolean on) {
         prefs(c).edit().putBoolean(KEY_KEEP_ALIVE, on).apply();
+    }
+
+    /** 我的 → 通知 的总开关：关闭后不弹任何消息提醒，也不保持后台连接 */
+    static boolean isNotifyEnabled(Context c) {
+        return prefs(c).getBoolean(KEY_NOTIFY, true);
+    }
+
+    static void setNotifyEnabled(Context c, boolean on) {
+        prefs(c).edit().putBoolean(KEY_NOTIFY, on).apply();
+    }
+
+    /** 补拉游标：上次收到推送或补拉时的服务端时间（毫秒），按服务器分别保存 */
+    static long getLastSync(Context c, String server) {
+        return server == null ? 0 : prefs(c).getLong(KEY_LAST_SYNC + server, 0);
+    }
+
+    static void setLastSync(Context c, String server, long value) {
+        if (server != null) prefs(c).edit().putLong(KEY_LAST_SYNC + server, value).apply();
     }
 
     /** 用户主动回到启动页时为 true：下次创建 Activity 时加载包内启动页而不是服务器。 */

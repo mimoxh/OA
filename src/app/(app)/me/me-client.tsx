@@ -1,22 +1,22 @@
 "use client";
 
 import { useEffect, useState, useTransition, type ReactNode } from "react";
-import { Bell, ChevronRight, LogOut, RefreshCw, Server, Smartphone } from "lucide-react";
-import { toast } from "sonner";
+import { useRouter } from "next/navigation";
+import { Bell, ChevronRight, LogOut, RefreshCw, Server } from "lucide-react";
 import { logout } from "@/app/login/actions";
 import { resetIm } from "@/components/im/store";
 import { stopRealtime } from "@/components/realtime/provider";
 import {
+  getMobilePushState,
   getMobileShellState,
   openMobileLauncher,
-  openMobileNotificationSettings,
-  setMobileKeepAlive,
   useIsMobileApp,
+  type MobilePushState,
   type MobileShellState,
 } from "@/lib/mobile-bridge";
 import { cn } from "@/lib/utils";
 
-function Item({ icon, label, value, onClick, children }: { icon: ReactNode; label: string; value?: ReactNode; onClick?: () => void; children?: ReactNode }) {
+export function Item({ icon, label, value, onClick, children }: { icon: ReactNode; label: string; value?: ReactNode; onClick?: () => void; children?: ReactNode }) {
   const body = (
     <>
       <span className="text-ink-2 [&>svg]:size-5">{icon}</span>
@@ -35,7 +35,7 @@ function Item({ icon, label, value, onClick, children }: { icon: ReactNode; labe
   );
 }
 
-function Switch({ checked, onChange, disabled }: { checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
+export function Switch({ checked, onChange, disabled }: { checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
   return (
     <button
       type="button"
@@ -53,7 +53,9 @@ function Switch({ checked, onChange, disabled }: { checked: boolean; onChange: (
 /** 服务器、通知与版本信息。App 内读取原生壳层状态；浏览器里只显示当前地址 */
 export function MeAppSection() {
   const inApp = useIsMobileApp();
+  const router = useRouter();
   const [state, setState] = useState<MobileShellState | null>(null);
+  const [push, setPush] = useState<MobilePushState | null>(null);
   const [origin, setOrigin] = useState("");
   const [insecure, setInsecure] = useState(false);
 
@@ -63,7 +65,10 @@ export function MeAppSection() {
     // localhost 走 HTTP 也算安全上下文（调试时 adb reverse），只在真正的非安全连接下提示
     setInsecure(!window.isSecureContext);
     if (!inApp) return;
-    const load = () => void getMobileShellState().then(setState);
+    const load = () => {
+      void getMobileShellState().then(setState);
+      void getMobilePushState().then(setPush);
+    };
     load();
     // 从系统通知设置页返回后刷新开关状态
     const onVis = () => !document.hidden && load();
@@ -71,11 +76,17 @@ export function MeAppSection() {
     return () => document.removeEventListener("visibilitychange", onVis);
   }, [inApp]);
 
-  const toggleKeepAlive = async (on: boolean) => {
-    setState((s) => (s ? { ...s, keepAlive: on } : s));
-    await setMobileKeepAlive(on);
-    toast.success(on ? "已开启后台接收消息" : "已关闭后台接收消息");
-  };
+  const notifyValue = !inApp
+    ? undefined
+    : !push
+      ? undefined
+      : !push.notifyEnabled || !push.permissionGranted || !push.notificationsEnabled
+        ? "已关闭"
+        : push.keepAlive && push.service.state === "connected"
+          ? "已开启 · 后台已连接"
+          : push.keepAlive
+            ? "已开启 · 后台未连接"
+            : "仅 App 打开时";
 
   const server = state?.activeServerUrl ?? origin;
   return (
@@ -90,17 +101,12 @@ export function MeAppSection() {
         {inApp && <Item icon={<RefreshCw />} label="切换服务器" onClick={() => openMobileLauncher()} />}
       </div>
 
+      <div className="mt-3 divide-y divide-line overflow-hidden rounded-xl bg-white">
+        <Item icon={<Bell />} label="通知" value={notifyValue} onClick={() => router.push("/me/notifications")} />
+      </div>
+
       {inApp && (
         <div className="mt-3 divide-y divide-line overflow-hidden rounded-xl bg-white">
-          <Item
-            icon={<Bell />}
-            label="通知设置"
-            value={state ? (state.notificationsEnabled ? "已开启" : "已关闭") : undefined}
-            onClick={() => openMobileNotificationSettings()}
-          />
-          <Item icon={<Smartphone />} label="后台接收消息">
-            <Switch checked={!!state?.keepAlive} disabled={!state} onChange={(v) => void toggleKeepAlive(v)} />
-          </Item>
           {state && (
             <Item
               icon={<span className="block size-5" />}

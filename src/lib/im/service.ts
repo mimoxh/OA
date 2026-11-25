@@ -1,6 +1,7 @@
 import type { Conversation, ConversationMember, Message, User } from "@/generated/prisma/client";
 import { Prisma } from "@/generated/prisma/client";
 import type { DbClient } from "@/lib/db";
+import { queuePushClear, queueMessagePush } from "@/lib/push/dispatch";
 import { queueEvent } from "@/lib/realtime/buffer";
 import { SAFE_INLINE_IMAGES } from "@/lib/storage";
 import { REF_LABEL } from "./biz-meta";
@@ -108,10 +109,13 @@ export async function appendMessage(
         where: { conversationId: input.conversationId, userId: readBy, lastReadSeq: { lt: msg.seq } },
         data: { lastReadSeq: msg.seq },
       });
+      // 在电脑上回复后，手机上该会话的提醒随之撤掉
+      queuePushClear(readBy, input.conversationId, msg.seq);
     }
     const dto = await toMessageDTO(client, msg);
     const ids = await conversationUserIds(client, input.conversationId);
     queueEvent(ids, { type: "message.new", conversationId: input.conversationId, message: dto });
+    if (!input.createdAt) await queueMessagePush(client, input.conversationId, dto, input.senderId);
 
     // 若为话题回复：更新根消息回复计数与最后回复时间，并推送根消息刷新事件
     if (input.threadRootId) {
@@ -633,6 +637,7 @@ export async function markRead(client: DbClient, userId: string, conversationId:
   });
   const recipients = conv.type === "BOT" ? [userId] : await conversationUserIds(client, conversationId);
   queueEvent(recipients, { type: "read", conversationId, userId, seq: next });
+  queuePushClear(userId, conversationId, next);
 }
 
 export async function setConversationPrefs(

@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import type { CallDTO, CallKind, CallPeerInfo, IceServerConfig, RtcJoinConfig } from "@/lib/im/types";
 import { focusDesktopWindow } from "@/lib/desktop-bridge";
 import { showDesktopNotification } from "@/lib/im/desktop-notify";
-import { sendRealtime, subscribeRealtime, type RealtimeEvent } from "@/components/realtime/provider";
+import { sendRealtime, setRealtimeParkGuard, subscribeRealtime, type RealtimeEvent } from "@/components/realtime/provider";
 
 export type RemotePeer = CallPeerInfo & {
   stream: MediaStream | null;
@@ -825,6 +825,8 @@ export function initCallStore(userId: string) {
   if (!hooksInstalled) {
     hooksInstalled = true;
     subscribeRealtime(handleRealtimeEvent);
+    // 通话信令走页面实时连接：通话中或有来电时 App 退到后台也不断开
+    setRealtimeParkGuard(() => !!snapshot.active || !!snapshot.incoming);
     window.addEventListener("beforeunload", () => {
       if (snapshot.active) {
         sendRealtime({ type: "call.leave", callId: snapshot.active.call.id });

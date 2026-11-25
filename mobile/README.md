@@ -23,6 +23,15 @@ pnpm mobile:build:debug          # 等同于 cd mobile; pnpm exec cap sync andro
 - 深链：`--es oa_path /messages/<id>`（通知点击用的就是它）。
 - debug 包专用：`adb shell am start -n com.oa.suite.mobile/.MainActivity --es oa_server_url <地址>` 直接指定服务器，便于自动化测试；release 包忽略此参数。
 
+## 后台推送（M2）
+
+- `RtService`：前台服务常驻一条 `/rt?client=bg` WebSocket（会话 Cookie 换 rt 令牌），只接收服务端算好的 `push.notify` / `push.clear`，不计入在线状态；重连后调 `/api/push/missed` 补拉断线期间的提醒，按会话 seq 去重。
+- `Notifier`：渠道 `oa_dm` / `oa_group` / `oa_mention` / `oa_system`（与 `src/lib/push/types.ts` 的 `PushChannel` 对应）和常驻通知 `oa_keepalive`；同一会话只占一条通知。
+- `BootReceiver`：开机（`BOOT_COMPLETED`）和 App 升级（`MY_PACKAGE_REPLACED`）后按设置启动后台服务，不需要打开 App。
+- App 在前台时由页面（`?client=app`）提醒，后台服务不重复提醒；页面切到后台 60 秒后断开自己的连接，只留后台连接。
+- 设置页：Web 的「我的 → 通知」（`/me/notifications`）与厂商引导页（`/me/notifications/guide`），通过 `OAShell` 插件读写原生设置。
+- 规则、去重和验证结果见 `docs/mobile/M2-report.md`，真机清单见 `docs/mobile/M2-device-checklist.md`。
+
 ## 联调
 
 隔离 dev 实例（不要占用默认端口和数据库，参考根目录 `AGENTS.md`），然后让模拟器访问本机端口：
@@ -56,4 +65,4 @@ keytool -exportcert -rfc -alias oa -keystore .devcerts/oa-dev.p12 -storepass <�
 
 - 局域网 HTTP（非 localhost）不是安全上下文：IM、白板等的客户端 ID 已改用不依赖安全上下文的生成方式，复制改走原生剪贴板（浏览器里回退到 `execCommand`），HTTP 下可以正常收发消息；但摄像头、麦克风（音视频通话）在 HTTP 下仍不可用。正式使用请按 `docs/mobile/deployment.md` 配置 HTTPS。
 - `blob:` / `data:` 链接的下载（CSV 导出、白板草稿）暂不支持。
-- 后台连接只对连接期间到达的消息弹通知，断网期间的消息不补通知（打开 App 后页面会补齐）。
+- 后台推送只实现了自建长连接（`PUSH_DRIVERS=realtime`）；被系统强杀且不允许自启动时收不到提醒，极光 / 个推驱动只留了接口（`src/lib/push/drivers/`）。

@@ -1,8 +1,11 @@
 package com.oa.suite.mobile;
 
+import android.Manifest;
 import android.annotation.SuppressLint;
+import android.content.ActivityNotFoundException;
 import android.content.ClipData;
 import android.content.ClipboardManager;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageInfo;
@@ -16,17 +19,53 @@ import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
+import com.getcapacitor.PermissionState;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import com.getcapacitor.annotation.Permission;
+import com.getcapacitor.annotation.PermissionCallback;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.util.Locale;
 
-/** 壳层能力：服务器选择与切换、连通性检测、后台保活开关、诊断信息。启动页与远程 OA 页面都可调用。 */
-@CapacitorPlugin(name = "OAShell")
+/** 壳层能力：服务器选择与切换、连通性检测、后台保活与通知设置、诊断信息。启动页与远程 OA 页面都可调用。 */
+@CapacitorPlugin(
+    name = "OAShell",
+    permissions = { @Permission(alias = "notifications", strings = { Manifest.permission.POST_NOTIFICATIONS }) }
+)
 public class OAShellPlugin extends Plugin {
+
+    /** 各厂商“自启动 / 后台运行”管理页（不同系统版本路径不同，依次尝试） */
+    private static final String[][] AUTOSTART = {
+        { "xiaomi", "com.miui.securitycenter", "com.miui.permcenter.autostart.AutoStartManagementActivity" },
+        { "honor", "com.hihonor.systemmanager", "com.hihonor.systemmanager.startupmgr.ui.StartupNormalAppListActivity" },
+        { "honor", "com.huawei.systemmanager", "com.huawei.systemmanager.startupmgr.ui.StartupNormalAppListActivity" },
+        { "huawei", "com.huawei.systemmanager", "com.huawei.systemmanager.startupmgr.ui.StartupNormalAppListActivity" },
+        { "huawei", "com.huawei.systemmanager", "com.huawei.systemmanager.optimize.process.ProtectActivity" },
+        { "oppo", "com.coloros.safecenter", "com.coloros.safecenter.permission.startup.StartupAppListActivity" },
+        { "oppo", "com.coloros.safecenter", "com.coloros.safecenter.startupapp.StartupAppListActivity" },
+        { "oppo", "com.oppo.safe", "com.oppo.safe.permission.startup.StartupAppListActivity" },
+        { "vivo", "com.vivo.permissionmanager", "com.vivo.permissionmanager.activity.BgStartUpManagerActivity" },
+        { "vivo", "com.iqoo.secure", "com.iqoo.secure.ui.phoneoptimize.BgStartUpManager" },
+        { "samsung", "com.samsung.android.lool", "com.samsung.android.sm.ui.battery.BatteryActivity" },
+        { "meizu", "com.meizu.safe", "com.meizu.safe.permission.SmartBGActivity" },
+    };
+
+    /** 与网页端 guide-client.tsx 的 vendorOf 保持一致 */
+    static String vendor() {
+        String m = (Build.MANUFACTURER + " " + Build.BRAND).toLowerCase(Locale.ROOT);
+        if (m.matches(".*(xiaomi|redmi|poco).*")) return "xiaomi";
+        if (m.contains("honor")) return "honor";
+        if (m.contains("huawei")) return "huawei";
+        if (m.matches(".*(oppo|realme|oneplus).*")) return "oppo";
+        if (m.matches(".*(vivo|iqoo).*")) return "vivo";
+        if (m.contains("samsung")) return "samsung";
+        if (m.contains("meizu")) return "meizu";
+        return "other";
+    }
 
     private MainActivity main() {
         return (MainActivity) getActivity();
@@ -59,6 +98,155 @@ public class OAShellPlugin extends Plugin {
         o.put("notificationsEnabled", NotificationManagerCompat.from(c).areNotificationsEnabled());
         o.put("service", RtService.snapshot());
         call.resolve(o);
+    }
+
+    @PluginMethod
+    public void getPushState(PluginCall call) {
+        Context c = getContext();
+        JSObject o = new JSObject();
+        o.put("notifyEnabled", ServerStore.isNotifyEnabled(c));
+        o.put("keepAlive", ServerStore.isKeepAlive(c));
+        o.put("hasServer", ServerStore.getServerUrl(c) != null);
+        o.put("notificationsEnabled", NotificationManagerCompat.from(c).areNotificationsEnabled());
+        o.put("permissionGranted", Notifier.hasPermission(c));
+        PowerManager pm = (PowerManager) c.getSystemService(Context.POWER_SERVICE);
+        o.put("ignoringBatteryOptimizations", pm != null && pm.isIgnoringBatteryOptimizations(c.getPackageName()));
+        o.put("manufacturer", Build.MANUFACTURER);
+        o.put("brand", Build.BRAND);
+        o.put("model", Build.MODEL);
+        o.put("release", Build.VERSION.RELEASE);
+        o.put("sdkInt", Build.VERSION.SDK_INT);
+        String v = vendor();
+        boolean autostart = false;
+        for (String[] a : AUTOSTART) if (a[0].equals(v)) autostart = true;
+        o.put("vendor", v);
+        o.put("vendorAutostart", autostart);
+        o.put("channels", Notifier.channelsState(c));
+        o.put("service", RtService.snapshot());
+        call.resolve(o);
+    }
+
+    @PluginMethod
+    public void setNotifyEnabled(PluginCall call) {
+        boolean on = Boolean.TRUE.equals(call.getBoolean("enabled", true));
+        Context c = getContext();
+        ServerStore.setNotifyEnabled(c, on);
+        if (!on) Notifier.clear(c, null);
+        RtService.sync(c);
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void requestNotificationPermission(PluginCall call) {
+        if (Notifier.hasPermission(getContext()) || getPermissionState("notifications") == PermissionState.GRANTED) {
+            resolveGranted(call);
+            return;
+        }
+        requestPermissionForAlias("notifications", call, "onNotificationPermission");
+    }
+
+    @PermissionCallback
+    private void onNotificationPermission(PluginCall call) {
+        resolveGranted(call);
+        // 刚授权：常驻通知此前发不出来，重启服务让它显示
+        if (Notifier.hasPermission(getContext())) RtService.sync(getContext());
+    }
+
+    private void resolveGranted(PluginCall call) {
+        JSObject o = new JSObject();
+        o.put("granted", Notifier.hasPermission(getContext()));
+        call.resolve(o);
+    }
+
+    @PluginMethod
+    public void openChannelSettings(PluginCall call) {
+        String key = call.getString("channel");
+        Intent i;
+        if (key == null || key.isEmpty()) {
+            i = new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS);
+        } else {
+            Notifier.ensureChannels(getContext());
+            i = new Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_CHANNEL_ID, Notifier.channelId(key));
+        }
+        i.putExtra(Settings.EXTRA_APP_PACKAGE, getContext().getPackageName());
+        startSafely(i, call);
+    }
+
+    @SuppressLint("BatteryLife")
+    @PluginMethod
+    public void openVendorSettings(PluginCall call) {
+        String kind = call.getString("kind", "autostart");
+        String pkg = getContext().getPackageName();
+        String v = vendor();
+        if ("battery".equals(kind)) {
+            if ("xiaomi".equals(v)) {
+                Intent mi = new Intent()
+                    .setComponent(new ComponentName("com.miui.powerkeeper", "com.miui.powerkeeper.ui.HiddenAppsConfigActivity"))
+                    .putExtra("package_name", pkg)
+                    .putExtra("package_label", "OA");
+                if (tryStart(mi)) {
+                    resolveOpened(call, "vendor");
+                    return;
+                }
+            }
+            if (tryStart(new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))) {
+                resolveOpened(call, "system");
+                return;
+            }
+        } else {
+            for (String[] a : AUTOSTART) {
+                if (!a[0].equals(v)) continue;
+                if (tryStart(new Intent().setComponent(new ComponentName(a[1], a[2])))) {
+                    resolveOpened(call, "vendor");
+                    return;
+                }
+            }
+        }
+        if (tryStart(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + pkg)))) {
+            resolveOpened(call, "app-details");
+            return;
+        }
+        call.reject("无法打开系统设置");
+    }
+
+    private boolean tryStart(Intent i) {
+        try {
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getActivity().startActivity(i);
+            return true;
+        } catch (ActivityNotFoundException | SecurityException e) {
+            return false;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private static void resolveOpened(PluginCall call, String opened) {
+        JSObject o = new JSObject();
+        o.put("opened", opened);
+        call.resolve(o);
+    }
+
+    /** App 在前台时页面收到 push.notify（且不在该会话）→ 走同一套原生渠道弹出 */
+    @PluginMethod
+    public void showNotification(PluginCall call) {
+        String title = call.getString("title");
+        if (title == null) {
+            call.reject("缺少 title");
+            return;
+        }
+        String conv = call.getString("conversationId");
+        String path = call.getString("path", conv == null ? "/messages" : "/messages/" + conv);
+        boolean shown = Notifier.show(getContext(), conv, call.getString("channel", "dm"), title, call.getString("body", ""), path, 1);
+        JSObject o = new JSObject();
+        o.put("shown", shown);
+        call.resolve(o);
+    }
+
+    @PluginMethod
+    public void clearNotifications(PluginCall call) {
+        Notifier.clear(getContext(), call.getString("conversationId"));
+        call.resolve();
     }
 
     /** 在原生层探测服务器（不受启动页 https 源的混合内容与 CORS 限制）。 */
@@ -163,8 +351,7 @@ public class OAShellPlugin extends Plugin {
     public void setKeepAlive(PluginCall call) {
         boolean on = Boolean.TRUE.equals(call.getBoolean("enabled", true));
         ServerStore.setKeepAlive(getContext(), on);
-        if (on && ServerStore.getServerUrl(getContext()) != null) RtService.start(getContext());
-        else RtService.stop(getContext());
+        RtService.sync(getContext());
         call.resolve();
     }
 
