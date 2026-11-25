@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth/token";
 
-// /api/im/webhooks 由路由内部校验 Bearer Token
+// /api/im/webhooks 由路由内部校验（回调用 Bearer Token；orca-catalog 校验登录会话）
 const PUBLIC_PATHS = ["/login", "/setup", "/manifest.webmanifest", "/sw.js", "/api/im/webhooks"];
 
 export async function proxy(request: NextRequest) {

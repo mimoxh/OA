@@ -124,6 +124,11 @@ pnpm next dev --port 3103
   - `desktop/` 中的 Tauri v2 桌面壳支持系统托盘、单实例、原生通知和未读数同步。桌面命令限于已连接的工作空间。
   - 根目录执行 `pnpm install` 后可运行 `pnpm desktop:dev`、`pnpm desktop:check` 和 `pnpm desktop:build`。前置依赖见 `desktop/README.md`。
 - `notify()` 除写 Notification 表外，还会派发 `notification.new` 并向对应机器人会话投递卡片；审批状态变化时 `approval.ts` 末尾调用 `refreshApprovalCards` 刷新所有相关卡片。
+- Webhook 机器人运行配置（`payload.metadata = { agent, model, effort }`）的选项来自同机 Orca：
+  - `GET /api/im/webhooks/orca-catalog`（需登录，`?refresh=1` 强制刷新，服务端缓存 60s）合并 `orca agent installed --json` 与 Orca 模型目录 `agent-model-catalog.db`（`src/lib/im/orca-catalog.ts`）。模型目录以 better-sqlite3 只读打开（不用 `immutable`，数据主要在 `-wal` 中），只读打开失败时复制主库与 `-wal` 到临时目录读取；CLI / 目录缺失或格式变化时降级为静态预设并返回 `warnings`。
+  - 路径覆盖：`ORCA_MODEL_CATALOG_PATH`（目录文件）、`ORCA_USER_DATA_DIR`（Orca userData 目录）、`ORCA_CLI_PATH`（CLI 可执行文件）。
+  - `effort` 只校验格式（小写标识，如 `max` / `minimal` / `ultra`），具体档位以模型目录声明为准；保存的历史值即使不在当前目录中也原样回显与发送。
+  - 基座图标为 Orca 客户端原版：`pnpm orca:icons [Orca resources 目录]` 只读解析安装包，生成 `src/components/im/orca-agent-icons.generated.ts`（矢量）与 `public/agent-icons/*.png`（位图），Orca 升级后重新运行即可。深色主题通过根元素 `.dark` / `data-theme="dark"` 启用（`globals.css` 的 `dark` 变体）。
 - 补 IM 演示数据：`pnpm db:seed:im`（幂等）：无群聊时建群/单聊，并为还没有机器人会话的用户按历史通知回填卡片。
 
 ### 端口与环境变量

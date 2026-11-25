@@ -33,13 +33,18 @@ describe("resolveRunMetadata 合并优先级", () => {
   it("空白字符串与非法 effort 归一化为 null 并回退", () => {
     assert.deepEqual(resolveRunMetadata({ defaultAgent: "  ", defaultModel: "", defaultEffort: " " }), EMPTY_RUN_METADATA);
     assert.deepEqual(resolveRunMetadata(botDefaults, { agent: "   ", model: " ", effort: "" }), { agent: "droid", model: null, effort: "high" });
-    assert.deepEqual(resolveRunMetadata({ ...botDefaults, defaultEffort: "ultra" }), { agent: "droid", model: null, effort: null });
+    assert.deepEqual(resolveRunMetadata({ ...botDefaults, defaultEffort: "very high" }), { agent: "droid", model: null, effort: null });
+    // Orca 模型目录中的其他档位（如 Claude 的 max）按原值透传
+    assert.deepEqual(resolveRunMetadata({ ...botDefaults, defaultEffort: "max" }), { agent: "droid", model: null, effort: "max" });
     assert.equal(resolveRunMetadata(botDefaults, { model: "  gpt-6-astra  " }).model, "gpt-6-astra");
   });
   it("normalizeEffort / isEmptyRunConfig", () => {
     assert.equal(normalizeEffort("HIGH"), "high");
     assert.equal(normalizeEffort(" xhigh "), "xhigh");
-    assert.equal(normalizeEffort("max"), null);
+    assert.equal(normalizeEffort("Max"), "max");
+    assert.equal(normalizeEffort("extra-high"), "extra-high");
+    assert.equal(normalizeEffort("very high"), null);
+    assert.equal(normalizeEffort("<x>"), null);
     assert.equal(normalizeEffort(null), null);
     assert.equal(isEmptyRunConfig({ agent: " ", model: "", effort: null }), true);
     assert.equal(isEmptyRunConfig({ effort: "low" }), false);
@@ -60,10 +65,14 @@ describe("运行配置校验", () => {
     for (const model of ["gpt-6-astra", "openai/gpt-5.5:latest", "anthropic@claude_opus+1"]) {
       assert.equal(runConfigPatchSchema.parse({ model }).model, model);
     }
-    for (const effort of ["low", "medium", "high", "xhigh"]) assert.equal(runConfigPatchSchema.parse({ effort }).effort, effort);
+    // Orca 各基座的强度档位：通用四档之外还有 none / minimal / max / ultra / extra-high 等
+    for (const effort of ["low", "medium", "high", "xhigh", "max", "minimal", "none", "ultra", "extra-high"]) {
+      assert.equal(runConfigPatchSchema.parse({ effort }).effort, effort);
+    }
+    assert.equal(runConfigPatchSchema.parse({ effort: " MAX " }).effort, "max");
   });
   it("非法输入被拒绝", () => {
-    for (const effort of ["max", "ultra", "minimal", 3, true]) {
+    for (const effort of ["very high", "-low", "1x", "e".repeat(25), "<script>", 3, true]) {
       assert.equal(runConfigPatchSchema.safeParse({ effort }).success, false, `effort=${String(effort)}`);
     }
     for (const agent of ["bad agent", "-x", "a".repeat(41), "中文", 1]) {
@@ -72,8 +81,8 @@ describe("运行配置校验", () => {
     for (const model of ["has space", "m".repeat(121), "<script>", "-leading"]) {
       assert.equal(runConfigPatchSchema.safeParse({ model }).success, false, `model=${model}`);
     }
-    const r = runConfigPatchSchema.safeParse({ effort: "max" });
-    assert.ok(!r.success && /low \/ medium \/ high \/ xhigh/.test(r.error.issues[0].message));
+    const r = runConfigPatchSchema.safeParse({ effort: "very high" });
+    assert.ok(!r.success && /思考强度只能是/.test(r.error.issues[0].message));
   });
   it("机器人表单：默认运行配置可选、空白归一化，非法 effort 拒绝", () => {
     const base = { name: "Orca", avatarColor: "#9065b0", outboundUrl: "https://hooks.example.com/x" };
@@ -83,7 +92,8 @@ describe("运行配置校验", () => {
     assert.equal(created.defaultEffort, null);
     const omitted = createBotSchema.parse(base);
     assert.equal(omitted.defaultAgent, undefined);
-    assert.equal(createBotSchema.safeParse({ ...base, defaultEffort: "ultra" }).success, false);
+    assert.equal(createBotSchema.safeParse({ ...base, defaultEffort: "very high" }).success, false);
+    assert.equal(createBotSchema.parse({ ...base, defaultEffort: "Max" }).defaultEffort, "max");
     assert.equal(updateBotSchema.safeParse({ id: "c1", name: "Orca", avatarColor: "#9065b0", defaultEffort: "xhigh" }).success, true);
     assert.equal(updateBotSchema.safeParse({ id: "c1", name: "Orca", avatarColor: "#9065b0", defaultAgent: "has space" }).success, false);
   });

@@ -4,11 +4,14 @@ import { parseInput } from "@/lib/oa/validate";
 
 // 纯函数与常量可在客户端组件中 import；数据库函数只接受调用方传入的 client
 
-export const AGENT_PRESETS = ["antigravity", "claude", "codex", "droid", "opencode2", "dsh", "devin"] as const;
-export const EFFORT_LEVELS = ["low", "medium", "high", "xhigh"] as const;
-export type Effort = (typeof EFFORT_LEVELS)[number];
+export { AGENT_PRESETS, MODEL_SUGGESTIONS } from "./orca-catalog-shared";
 
-export const MODEL_SUGGESTIONS = ["claude-opus-5-5", "claude-sonnet-5", "gpt-6-astra", "gpt-5.5-codex", "gemini-3-pro"];
+/**
+ * 思考强度（Effort）标识。各基座取值不同（Orca 目录中可见 none / minimal / low / medium / high / xhigh / max / ultra 等），
+ * 以模型目录声明为准，这里只校验格式：小写字母开头，字母、数字、- 与 _，最长 24 个字符。
+ */
+export type Effort = string;
+const EFFORT_RE = /^[a-z][a-z0-9_-]{0,23}$/;
 
 /** 由基座自身配置管理默认模型 / 强度的基座：metadata 留空时不会覆盖其配置 */
 export const SELF_MANAGED_AGENT_HINT: Record<string, string> = {
@@ -42,7 +45,11 @@ export const modelField = z.preprocess(
 );
 export const effortField = z.preprocess(
   blank(true),
-  z.enum(EFFORT_LEVELS, { error: "思考强度只能是 low / medium / high / xhigh" }).nullable().optional(),
+  z
+    .string({ error: "思考强度格式不正确" })
+    .regex(EFFORT_RE, "思考强度只能是小写字母开头的标识（如 low / high / max），最长 24 个字符")
+    .nullable()
+    .optional(),
 );
 
 export const runConfigPatchSchema = z.object({ agent: agentField, model: modelField, effort: effortField });
@@ -53,7 +60,7 @@ function clean(v: string | null | undefined): string | null {
 
 export function normalizeEffort(v: string | null | undefined): Effort | null {
   const t = clean(v)?.toLowerCase();
-  return t && (EFFORT_LEVELS as readonly string[]).includes(t) ? (t as Effort) : null;
+  return t && EFFORT_RE.test(t) ? t : null;
 }
 
 export function isEmptyRunConfig(v: RunConfigPatch | null | undefined): boolean {
