@@ -40,5 +40,5 @@
     ".next-s4/types/**/*.ts",
     ".next-s4/dev/types/**/*.ts"
   ],
-  "exclude": ["node_modules", "desktop"]
+  "exclude": ["node_modules", "desktop", "mobile"]
 }
