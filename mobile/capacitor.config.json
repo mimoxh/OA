@@ -2,9 +2,6 @@
   "appId": "com.oa.suite.mobile",
   "appName": "协作平台 OA",
   "webDir": "www",
-  "android": {
-    "appendUserAgent": "OAMobile/0.1.0"
-  },
   "server": {
     "androidScheme": "https",
     "errorPath": "error.html"

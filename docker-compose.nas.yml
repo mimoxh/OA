@@ -30,6 +30,7 @@ services:
       DATABASE_URL: "file:/data/db/oa.db"
       ATTACHMENT_DIR: "/data/attachments"
       STORAGE_LOCAL_DIR: "/data/uploads"
+      MOBILE_RELEASE_DIR: "/data/mobile"
       COLLAB_PUBLIC_URL: "${COLLAB_PUBLIC_URL:-/collab}"
       REALTIME_PUBLIC_URL: "${REALTIME_PUBLIC_URL:-/rt}"
     volumes:
@@ -40,6 +41,9 @@ services:
       - "${OA_ATTACHMENTS_DIR:-./nas-data/attachments}:/data/attachments"
       # 3) IM 聊天图片/文件目录（单图 10MB / 单文件 25MB，增长最快），推荐放 HDD 大容量盘（如 /vol2/...）
       - "${OA_UPLOADS_DIR:-./nas-data/uploads}:/data/uploads"
+      # 4) Android 安装包发布目录（release.json + 最近两个版本的 APK，每个约 1–2 MB，只读挂载）：
+      #    在电脑上 pnpm mobile:publish --dir <该目录> 后，下载页 /download/android 与 App 检查更新立即生效，无需重建镜像或重启容器
+      - "${OA_MOBILE_DIR:-./nas-data/mobile}:/data/mobile:ro"
     healthcheck:
       test:
         [

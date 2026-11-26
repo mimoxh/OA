@@ -2,7 +2,16 @@ import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE, renewSessionToken, sessionCookieOptions, verifySessionToken } from "@/lib/auth/token";
 
 // /api/im/webhooks 由路由内部校验（回调用 Bearer Token；orca-catalog 校验登录会话）
-const PUBLIC_PATHS = ["/login", "/setup", "/manifest.webmanifest", "/sw.js", "/api/im/webhooks"];
+// /download/android 与 /api/mobile/version：安装 App 之前、未登录的旧版 App 都要能访问
+const PUBLIC_PATHS = [
+  "/login",
+  "/setup",
+  "/manifest.webmanifest",
+  "/sw.js",
+  "/api/im/webhooks",
+  "/api/mobile/version",
+  "/download/android",
+];
 
 export async function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;

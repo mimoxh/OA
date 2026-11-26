@@ -24,6 +24,8 @@ public class BootReceiver extends BroadcastReceiver {
             default:
                 return;
         }
+        // 覆盖安装完成：删掉已安装的更新包
+        if (Intent.ACTION_MY_PACKAGE_REPLACED.equals(action)) AppUpdater.query(context);
         if (!RtService.shouldRun(context)) return;
         Log.i("OARt", "restore background connection after " + action);
         RtService.start(context);

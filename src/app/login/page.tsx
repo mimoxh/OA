@@ -1,6 +1,8 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth/dal";
 import { db } from "@/lib/db";
+import { isMobileRequest } from "@/lib/mobile";
 import { DesktopDragStrip } from "@/components/desktop/window-controls";
 import { LoginForm } from "./login-form";
 
@@ -15,6 +17,7 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
   const demo = !!(await db.user.findUnique({ where: { email: DEMO_ADMIN_EMAIL }, select: { id: true } }));
   const sp = await searchParams;
   const next = typeof sp.next === "string" ? sp.next : "/messages";
+  const inApp = await isMobileRequest();
   return (
     <div className="flex min-h-screen items-center justify-center bg-sidebar px-4">
       <DesktopDragStrip />
@@ -32,6 +35,13 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
             <div>sales@demo.com · 销售 ｜ buyer@demo.com · 采购</div>
             <div>wh@demo.com · 仓管 ｜ dispatch@demo.com · 调度</div>
             <div>pm@demo.com · 项目经理 ｜ finance@demo.com · 财务</div>
+          </div>
+        )}
+        {!inApp && (
+          <div className="mt-6 text-center text-[13px]">
+            <Link href="/download/android" prefetch={false} className="text-ink-2 hover:text-accent hover:underline" data-android-download-link>
+              下载 Android App
+            </Link>
           </div>
         )}
       </div>

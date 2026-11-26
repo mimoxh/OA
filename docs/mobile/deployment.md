@@ -84,3 +84,15 @@ Let's Encrypt 不会给裸 IP 或 `.local` 域名签证书，但可以给**自�
 - 手机 App 登录：30 天滑动续期。期间只要打开过 App（发起过页面请求）就自动顺延；连续 30 天没打开需要重新登录；无论是否活跃，距上次输入密码满 180 天必须重新登录。
 - 浏览器 / 桌面端登录：仍为 7 天固定有效期，不续期。
 - 客户端类型在登录时写入签名令牌，之后修改 User-Agent 不能把浏览器会话变成 30 天会话。
+
+## 6. Android 安装包分发
+
+App 不上架应用商店，由 OA 服务端自带的下载页分发：
+
+- `/download/android`：下载页（版本、更新说明、二维码、安装步骤、证书指纹），无需登录；电脑登录页底部有入口。
+- `/download/android/<文件名>.apk`、`/download/android/latest.apk`：安装包下载，支持断点续传（Range）。
+- `/api/mobile/version?current=<versionCode>`：App 检查更新用，无需登录，返回最新版本、最低支持版本、下载地址和 `update: none | optional | required`。
+
+安装包放在**发布目录**（`release.json` + 最近两个版本的 APK），不打进镜像：NAS 上由 `docker-compose.nas.yml` 把宿主机 `OA_MOBILE_DIR`（默认 `./nas-data/mobile`）只读挂载到 `/data/mobile`；桌面一体包用 `<数据目录>/mobile`。发布方法见 `docs/mobile/BUILD.md` §5，发布后立即生效，不用重启容器。
+
+下载页与二维码按访问者的请求地址生成。经反代访问时必须透传 `X-Forwarded-Host` / `X-Forwarded-Proto`（§2 已要求）；用 `127.0.0.1` 打开下载页时页面会提示改用局域网 IP 或域名。

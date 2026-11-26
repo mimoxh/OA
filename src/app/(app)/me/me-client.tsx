@@ -2,9 +2,10 @@
 
 import { useEffect, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { Bell, ChevronRight, LogOut, RefreshCw, Server } from "lucide-react";
+import { Bell, ChevronRight, Download, LogOut, RefreshCw, Server } from "lucide-react";
 import { logout } from "@/app/login/actions";
 import { resetIm } from "@/components/im/store";
+import { CHECK_UPDATE_EVENT } from "@/components/mobile/app-update";
 import { stopRealtime } from "@/components/realtime/provider";
 import {
   getMobilePushState,
@@ -125,6 +126,7 @@ export function MeAppSection() {
               value={`${state.appVersion}${state.debug ? "（调试版）" : ""} · Android ${state.release}`}
             />
           )}
+          <Item icon={<Download />} label="检查更新" onClick={() => window.dispatchEvent(new Event(CHECK_UPDATE_EVENT))} />
         </div>
       )}
     </>

@@ -83,6 +83,8 @@ public class OAShellPlugin extends Plugin {
         o.put("recent", recent);
         o.put("keepAlive", ServerStore.isKeepAlive(c));
         o.put("appVersion", BuildConfig.VERSION_NAME);
+        o.put("versionCode", BuildConfig.VERSION_CODE);
+        o.put("canInstallPackages", AppUpdater.canInstall(c));
         o.put("debug", BuildConfig.DEBUG);
         o.put("sdkInt", Build.VERSION.SDK_INT);
         o.put("release", Build.VERSION.RELEASE);
@@ -372,6 +374,115 @@ public class OAShellPlugin extends Plugin {
         } catch (ActivityNotFoundException e) {
             call.reject("没有可用的浏览器");
         }
+    }
+
+    /** 下载新版本安装包（只接受当前服务器同源地址），返回下载进度 */
+    @PluginMethod
+    public void downloadUpdate(PluginCall call) {
+        String url = call.getString("url");
+        Integer code = call.getInt("versionCode");
+        if (url == null || code == null || code <= 0) {
+            call.reject("缺少 url 或 versionCode");
+            return;
+        }
+        String server = main().getServerUrl();
+        if (server == null || !sameOrigin(server, url)) {
+            call.reject("只能从当前服务器下载更新");
+            return;
+        }
+        if (code <= BuildConfig.VERSION_CODE) {
+            call.reject("已是最新版本");
+            return;
+        }
+        try {
+            AppUpdater.start(getContext(), url, code, call.getString("versionName", ""), call.getString("sha256", ""));
+            call.resolve(progress(AppUpdater.query(getContext())));
+        } catch (Exception e) {
+            call.reject("无法开始下载：" + e.getMessage());
+        }
+    }
+
+    @PluginMethod
+    public void getUpdateProgress(PluginCall call) {
+        call.resolve(progress(AppUpdater.query(getContext())));
+    }
+
+    /** 调起系统安装器；没有「安装未知应用」权限时返回 needs_permission，由页面引导用户去设置 */
+    @PluginMethod
+    public void installUpdate(PluginCall call) {
+        Context c = getContext();
+        AppUpdater.Progress p = AppUpdater.query(c);
+        JSObject o = progress(p);
+        if (!"ready".equals(p.state)) {
+            o.put("status", "not_ready");
+            call.resolve(o);
+            return;
+        }
+        if (!AppUpdater.canInstall(c)) {
+            o.put("status", "needs_permission");
+            call.resolve(o);
+            return;
+        }
+        try {
+            getActivity().startActivity(AppUpdater.installIntent(c));
+            o.put("status", "started");
+        } catch (Exception e) {
+            o.put("status", "failed");
+            o.put("error", "无法打开系统安装器：" + e.getMessage());
+        }
+        call.resolve(o);
+    }
+
+    @PluginMethod
+    public void canInstallPackages(PluginCall call) {
+        JSObject o = new JSObject();
+        o.put("allowed", AppUpdater.canInstall(getContext()));
+        call.resolve(o);
+    }
+
+    /** 系统「安装未知应用」设置页（只针对本应用） */
+    @PluginMethod
+    public void openInstallPermissionSettings(PluginCall call) {
+        Intent i = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+            ? new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + getContext().getPackageName()))
+            : new Intent(Settings.ACTION_SECURITY_SETTINGS);
+        startSafely(i, call);
+    }
+
+    @PluginMethod
+    public void cancelUpdate(PluginCall call) {
+        AppUpdater.clear(getContext());
+        call.resolve();
+    }
+
+    private static JSObject progress(AppUpdater.Progress p) {
+        JSObject o = new JSObject();
+        o.put("state", p.state);
+        o.put("downloaded", p.downloaded);
+        o.put("total", p.total);
+        o.put("targetCode", p.targetCode);
+        o.put("targetName", p.targetName);
+        if (p.error != null) o.put("error", p.error);
+        return o;
+    }
+
+    private static boolean sameOrigin(String a, String b) {
+        try {
+            Uri x = Uri.parse(a);
+            Uri y = Uri.parse(b);
+            return x.getScheme() != null
+                && x.getScheme().equalsIgnoreCase(y.getScheme())
+                && x.getHost() != null
+                && x.getHost().equalsIgnoreCase(y.getHost())
+                && port(x) == port(y);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private static int port(Uri u) {
+        if (u.getPort() > 0) return u.getPort();
+        return "https".equalsIgnoreCase(u.getScheme()) ? 443 : 80;
     }
 
     @PluginMethod

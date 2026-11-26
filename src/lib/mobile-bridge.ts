@@ -49,6 +49,9 @@ export type MobileShellState = {
   recent: string[];
   keepAlive: boolean;
   appVersion: string;
+  /** M4 起提供；更早的 App 没有该字段，按 appVersion 换算 */
+  versionCode?: number;
+  canInstallPackages?: boolean;
   debug: boolean;
   release: string;
   sdkInt: number;
@@ -216,4 +219,57 @@ export function onMobileAppState(cb: (active: boolean) => void): () => void {
     cancelled = true;
     if (handle) void handle.remove();
   };
+}
+
+export type MobileUpdateProgress = {
+  state: "idle" | "downloading" | "paused" | "ready" | "failed";
+  downloaded: number;
+  total: number;
+  targetCode: number;
+  targetName: string;
+  error?: string;
+  /** installUpdate 的结果 */
+  status?: "started" | "needs_permission" | "not_ready" | "failed";
+};
+
+type CallResult<T> = { ok: true; value: T } | { ok: false; missing: boolean; error: string };
+
+/** 与 call 相同，但区分“旧版 App 没有这个原生方法”和“方法报错” */
+async function callChecked<T>(plugin: string, method: string, args?: Record<string, unknown>): Promise<CallResult<T>> {
+  const p = plugins()?.[plugin];
+  const fn = p?.[method];
+  if (typeof fn !== "function") return { ok: false, missing: true, error: "" };
+  try {
+    return { ok: true, value: (await fn.call(p, args)) as T };
+  } catch (e) {
+    const code = (e as { code?: string })?.code;
+    return { ok: false, missing: code === "UNIMPLEMENTED", error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/** 下载新版本安装包（原生 DownloadManager），只接受当前服务器同源地址 */
+export function downloadMobileUpdate(args: { url: string; versionCode: number; versionName: string; sha256: string }) {
+  return callChecked<MobileUpdateProgress>("OAShell", "downloadUpdate", args);
+}
+
+export function getMobileUpdateProgress() {
+  return callChecked<MobileUpdateProgress>("OAShell", "getUpdateProgress");
+}
+
+/** 调起系统安装器；status 为 needs_permission 时需引导用户打开「安装未知应用」 */
+export function installMobileUpdate() {
+  return callChecked<MobileUpdateProgress>("OAShell", "installUpdate");
+}
+
+export async function canMobileInstallPackages(): Promise<boolean | null> {
+  const r = await callChecked<{ allowed: boolean }>("OAShell", "canInstallPackages");
+  return r.ok ? r.value.allowed : null;
+}
+
+export function openMobileInstallPermissionSettings() {
+  return call("OAShell", "openInstallPermissionSettings");
+}
+
+export function cancelMobileUpdate() {
+  return call("OAShell", "cancelUpdate");
 }

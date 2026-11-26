@@ -1,5 +1,7 @@
 # OA 手机端 M3 真机测试清单：白板、审批、文档只读、换账号推送、PDF 预览
 
+> **已合并**：真机统一按 `docs/mobile/device-checklist.md`（M0–M4 合并版，按优先级排列）测试，本文件只保留作历史记录。
+
 > 配合 `docs/mobile/M3-report.md` 使用。M3 只在模拟器上验证过（负责人决定：真机测试放到 M4 之后统一做），本清单列出模拟器无法代替、必须在真机上确认的项目。
 > 前置：`docs/mobile/M0-device-checklist.md` 的 §1 机型、§2 准备继续适用；推送相关项目见 `M2-device-checklist.md`。每款机型约需 1.5 小时。
 

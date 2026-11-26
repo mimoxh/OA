@@ -14,6 +14,14 @@ pnpm mobile:build:debug          # 等同于 cd mobile; pnpm exec cap sync andro
 # 产物：mobile/android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
+## 构建正式（release）APK 与发布
+
+`pnpm mobile:build` 产出正式签名、R8 压缩的 `app-release.apk`，`pnpm mobile:publish --dir <发布目录>` 发布到 NAS 下载页 `/download/android`。签名密钥不入库，放在 `%USERPROFILE%\.oa-mobile\`。环境、版本号规则、密钥备份、发布参数见 `docs/mobile/BUILD.md`。
+
+- debug 包与 release 包签名不同，不能互相覆盖安装，切换前先 `adb uninstall com.oa.suite.mobile`。
+- release 包关闭 WebView 远程调试，下面的 `tools/cdp.mjs` 只能用于 debug 包；release 包的自动化测试改用 `uiautomator` + `adb shell input`。
+- App 内更新（`AppUpdater`）：页面 `src/components/mobile/app-update.tsx` 调 `/api/mobile/version`，原生层用系统下载器把 APK 下到 App 私有外部目录 `updates/`，校验 SHA-256、包名、版本号和签名证书后通过 FileProvider 调起系统安装器；升级完成（`MY_PACKAGE_REPLACED`）后清理该目录。
+
 改了 `www/` 或 `capacitor.config.json` 后要重新 `pnpm mobile:sync`（`cap sync android`）再构建。服务端 Docker 镜像只安装 `oa-suite`（`pnpm install --filter oa-suite`），不会安装 Capacitor 依赖；镜像里只保留 `mobile/package.json` 供锁文件校验。
 
 ## 运行时如何选择服务器
