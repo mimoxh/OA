@@ -2,6 +2,7 @@
 
 > 对应 `docs/mobile/mobile-plan.md` §M3。验证日期：2026-11-26。上一阶段见 `M2-report.md`。
 > 结论：M3 范围内的功能已实现，**全部验收项在模拟器上通过**（Android 16 模拟器 `oa_m0_api36`，下文标注「仅模拟器」）。真机项目（白板帧率、手势与系统返回冲突、软键盘、相机）整理到 `M3-device-checklist.md`。`pnpm typecheck`、`pnpm lint`、`pnpm test`（200 项，含新增触屏容差 10 项）全部通过；桌面 1440×900 前后对比无布局变化。
+> M3 收尾（§8）：换账号 / 退出 / 会话过期 / 切换服务器后的后台推送已修正，App 内与手机浏览器可全屏预览 PDF；验收全部在模拟器上通过。
 
 ## 0. 结论速览
 
@@ -159,8 +160,8 @@
 
 ## 6. 遗留问题与待负责人决定
 
-1. **（M2 遗留，本次发现）切换账号后后台连接仍是旧账号。** 测试脚本清 Cookie 后在 App 里换账号登录、不重启 App，`RtService` 仍用旧账号的 rt 令牌，新账号收不到后台推送；强制停止并重开 App 后正常。原因：`RtService` 只在建立连接时用 Cookie 换令牌。建议在登录 / 退出时由页面调用原生方法重连后台服务（改动在原生层，需要新 APK）。正常的「退出登录」流程是否同样受影响未单独验证。是否放进 M4，请负责人决定。
-2. **App 内不能预览 PDF。** 只提供下载，下载后由系统应用打开。模拟器上没有验证系统 PDF 阅读器能否打开（模拟器未装）。如需 App 内预览，需要引入 PDF 渲染（如 pdf.js），工作量另估。
+1. **（已在 M3 收尾解决，见 §8.2）（M2 遗留，本次发现）切换账号后后台连接仍是旧账号。** 测试脚本清 Cookie 后在 App 里换账号登录、不重启 App，`RtService` 仍用旧账号的 rt 令牌，新账号收不到后台推送；强制停止并重开 App 后正常。原因：`RtService` 只在建立连接时用 Cookie 换令牌。建议在登录 / 退出时由页面调用原生方法重连后台服务（改动在原生层，需要新 APK）。正常的「退出登录」流程是否同样受影响未单独验证。是否放进 M4，请负责人决定。
+2. **（已在 M3 收尾解决，见 §8.3）App 内不能预览 PDF。** 只提供下载，下载后由系统应用打开。模拟器上没有验证系统 PDF 阅读器能否打开（模拟器未装）。如需 App 内预览，需要引入 PDF 渲染（如 pdf.js），工作量另估。
 3. **冲突时「载入最新版本」会丢弃本机草稿。** 与电脑端一致，确认框和横幅都提示先复制草稿。是否需要自动合并（例如只合并新增元素），请负责人决定。
 4. **「从相册选择」** 走系统文件选择器，模拟器上只验证了拍照路径；相册路径列入真机清单。
 5. **真机项目**（白板帧率、系统返回手势与画布手势冲突、软键盘、相机、长按与系统选字冲突）见 `M3-device-checklist.md`，按负责人决定放到 M4 之后统一做。
@@ -169,3 +170,86 @@
 
 - 分支 `mimoxh/oa-mobile-research`，M3 提交在 M2 提交 `12b76be` 之后（提交号见 `git log`）。
 - 测试脚本（本机 `.tmp/`，未入库）：`m3-app.mjs`（CDP 触摸驱动）、`m3-run.mjs` + `m3-s*.mjs`（各步骤）、`m3-submit.mjs`（电脑端提交审批）、`m3-tapnotif.mjs`（点通知）、`m3-share.ts`（分享文档到会话）、`m3-shots.mjs` + `m3-diff.mjs`（桌面截图与对比）。
+- M3 收尾提交在 M3 提交 `ec444ae` 之后。测试脚本（本机 `.tmp/`，未入库）：`m3b-acct.mjs`（App 内退出 / 登录 / 推送状态 / 通知栏读取）、`m3b-expire.mjs`（让会话失效）、`m3b-mkpdf.mjs`（生成测试 PDF）、`m3b-sendfile.ts`（发送文件消息）、`m3b-pdf.mjs` / `m3b-pdfdl.mjs` / `m3b-docpdf.mjs`（App 内 PDF 预览、下载、文档附件）、`m3b-mweb.mjs`（手机浏览器与电脑端）、`m3b-desklogout.mjs`（电脑端退出与附件链接）。
+
+## 8. M3 收尾：换账号后的后台推送、App 内 PDF 预览
+
+> 验证日期：2026-11-26。环境同 §3（独立实例端口 3320，Android 16 模拟器 `oa_m0_api36`），结果都是「仅模拟器」。解决 §6 的第 1、2 项。
+
+### 8.1 结论速览
+
+| 验收项 | 结果 |
+| --- | --- |
+| A 退出 → 登录 B：私信、群 @、审批只提醒 B，锁屏后台 | **通过（仅模拟器）**：分别给 A、B 各发私信 / 群 @ / 审批，锁屏下只出现 B 的 3 条（`m3b-01-lock-B-only`、`m3b-01-shade-B-only`） |
+| 只退出不登录 | **通过（仅模拟器）**：后台服务进入 `signed_out`，通知栏里旧账号的提醒被清掉，实时服务 `bgConnections` 为 0；之后给 A 发私信 / 群 @ / 审批，锁屏下没有任何提醒 |
+| 会话过期 / 401 | **通过（仅模拟器）**：篡改 `oa_session` 后换令牌得到 401，后台服务进入 `unauthorized`，弹出「OA 登录已失效」通知（`m3b-02-session-expired`）；75 秒内令牌请求次数保持不变（不再每 30 秒重试）。点通知进入登录页，重新登录后恢复 `connected` |
+| 切换服务器 | **通过（仅模拟器）**：「我的 → 切换服务器」回到启动页（`m3b-03-launcher`），页面里的实时连接随即断开；连上另一个地址后旧账号的提醒被清掉，新服务器上的账号只收到自己的提醒（`m3b-04-server-switch-A-only`） |
+| 原生单元测试 | 通过：`PushSessionTest` 9 / 9（`gradlew testDebugUnitTest`） |
+| IM 文件消息、文档附件的 PDF 在 App 内全屏预览 | **通过（仅模拟器）**：滚动、双指缩放、双击放大 / 还原、页码、顶栏「下载」、Android 返回键关闭 |
+| 审批附件 | **不适用**：审批表单字段只有 text / textarea / number / date / select / user（`ApprovalFlow.formSchema`），数据模型里没有附件，没有可预览的入口 |
+| 局域网 HTTP | 通过：App 连 `http://10.0.2.2:3320`，PDF 与 pdf.js 资源同源加载，带登录 Cookie |
+| 18.4 MB / 100 页不卡死，有进度 | **通过（仅模拟器）**：进度条显示百分比和字节数，约 6.3 秒出第一页；加载期间无长任务或最长 56 ms，50 ms 定时器最大间隔 94 ms |
+| 加密 / 损坏文件 | 通过：分别提示「该 PDF 已加密」「无法解析该文件」，并给出「下载文件」按钮；下载保存到 `Download/OA/` |
+| 手机浏览器 | 通过：无头 Edge 412×915 触屏模拟，大文件预览、损坏文件提示都正常 |
+| 电脑端 | 不变：IM 文件仍是下载链接，文档附件「预览」仍在新标签页打开；1440×900 九个页面前后像素对比最大 0.01% |
+| typecheck / lint / test | 全部通过（test 200 / 200） |
+| Schema / 后端业务接口 | **未改**（新增只读静态资源路由 `/api/pdfjs/*`） |
+
+### 8.2 换账号与后台推送
+
+问题根源：`RtService` 只在建立连接时用 WebView 的 Cookie 换 rt 令牌，之后不再关心页面里的登录状态；401 时每 30 秒重试一次。
+
+- **账号判定**抽成不依赖 Android 的 `PushSession.java`：`gate(cookie)` 给出 `SIGNED_OUT`（没有 Cookie）/ `BLOCKED`（这个 Cookie 已被拒绝或已用来退出）/ `PROCEED`；`onUnauthorized(cookie)` 记住被拒的 Cookie；`onTokenUser(userId)` 发现令牌里的账号与上次不同；`onWebSession(userId, cookie)` 处理页面报告的登录 / 退出；`forget()` 用于切换服务器。
+- **账号变化时清理**（`RtService.resetIdentity`）：作废当前连接代次并关闭旧 WebSocket、清空 `shownSeq` 去重表、清掉本 App 的全部提醒、删除该服务器的补拉游标。补拉游标改为按「服务器 + 账号」分别保存（`ServerStore.getLastSync / setLastSync`），换账号后不会用旧账号的游标补拉。
+- **页面通知原生层**：新增 `OAShell.setSessionUser({ userId })`。页面进入登录态时报告当前账号（`RealtimeProvider`），「我的 → 退出登录」和侧栏「退出登录」先报告 `null` 再调用 `logout()`，登录页挂载时也报告 `null`（兜底 Cookie 被其他方式清掉的情况）。「切换服务器」先断开页面实时连接再打开启动页。
+- **401**：不再重试，状态 `unauthorized`；App 在后台时发一条「OA 登录已失效」通知（系统通道，点开进入 `/login`）。页面重新登录后 Cookie 变化，`gate` 自动放行。
+- **切换服务器**：`MainActivity.switchTo` 清掉旧服务器的提醒与游标；`RtService` 收到新服务器地址时调用 `resetIdentity`。
+- 诊断：`getPushState()` 新增 `userId`、`tokenRequests`，新状态 `signed_out`、`unauthorized`。
+
+### 8.3 App 内 PDF 预览
+
+**方案选择：pdf.js（`pdfjs-dist@6.5.438`，legacy 构建）在页面内渲染。** 理由：
+
+1. Android WebView 不能内嵌显示 PDF（`<iframe>` / 新标签页都会变成下载），系统没有可调用的内置阅读器；原生方案（`PdfRenderer` 或第三方 SDK）要先把文件下载到本地、按平台各写一套，iOS 以后还要再写一遍。
+2. pdf.js 在 App 的 WebView 和手机浏览器里是同一份代码，PDF 走同源请求、自动带登录 Cookie，局域网 HTTP 无需额外配置。
+3. legacy 构建兼容较旧的 WebView 内核；只在打开预览时按需加载（动态 `import`），不增加其他页面的首屏体积。
+
+实现：
+
+- `src/components/mobile/pdf-viewer.tsx`：`PdfViewer` 全屏 Radix 对话框（Android 返回键与 Esc 关闭，沿用 `AppRuntime` 的返回键处理）。加载中显示进度条和「正在加载 32%（5.9 MB / 18.4 MB）」，下载完显示「正在解析…」。只渲染可见页前后 2 页，单页画布限制在 800 万像素以内；纵向滚动翻页，底部显示「当前页 / 总页数」和缩放倍数。双指缩放过程中只做 CSS 缩放，松手后按新倍数重排并重绘，保持手指下的内容不动；双击放大到 2.5 倍或还原，最大 4 倍。错误分类：加密、无法解析、401 / 403 / 404，均给出「下载文件」。
+- 入口：IM 文件消息（`message-item.tsx`）在手机布局或 App 内对 PDF 显示「点击预览」并打开预览，其他文件仍直接下载；文档附件（`file-attachment.tsx`）的「预览」在手机布局或 App 内打开页内预览（M3 中 App 内只能下载）。电脑端两处都保持原样。
+- pdf.js 运行时资源（worker、CMap、标准字体、JPX / JBIG2 解码 wasm、ICC）由新路由 `src/app/api/pdfjs/[...path]/route.ts` 从 `node_modules/pdfjs-dist` 按白名单读取。standalone 产物追踪不到这些文件，`scripts/desktop/pdfjs-assets.mjs` 在 Docker 与桌面端打包时复制进产物（205 个文件，约 4.5 MB）。
+
+### 8.4 PDF 验收过程与数据
+
+测试文件由 `.tmp/m3b-mkpdf.mjs` 生成，王芳在私信里发给李娜，李娜在 App 内打开（`m3b-pdf-01-im-file-bubbles`）：
+
+| 文件 | 大小 | 结果 |
+| --- | --- | --- |
+| 小文件-3页.pdf（含中文 CMap 字体） | 4.5 KB | 约 1.0 秒显示「1 / 3」（`m3b-pdf-02-small`）；上滑到「3 / 3」；双指放大到 400%，文字清晰（`m3b-pdf-03-small-pinch-zoom`）；双击还原；返回键关闭预览，仍在会话页 |
+| 大文件-100页.pdf（每页一张噪点图） | 18.4 MB | 两次测量 6.4 / 6.3 秒出第一页，进度 0% → 99% 连续更新（`m3b-pdf-04-large-progress`）；长任务两次分别为 0 次、6 × 56 ms，50 ms 定时器最大间隔 94 / 73 ms；跳到中间显示「51 / 100」，此时只有第 49–54 页有画布（`m3b-pdf-05-large-page51`）；双指放大（`m3b-pdf-06-large-zoom`）、双击还原、返回键关闭 |
+| 加密文件.pdf（需要密码） | 3.5 KB | 约 0.9 秒显示「该 PDF 已加密」与「下载文件」（`m3b-pdf-07-encrypted`） |
+| 损坏文件.pdf | 39.1 KB | 约 0.4 秒显示「无法解析该文件」与「下载文件」（`m3b-pdf-08-corrupt`）；点「下载文件」后系统下载器保存到 `Download/OA/损坏文件.pdf`（40,009 字节，与原文件一致） |
+| 文档附件「M3 测试附件.pdf」 | 747.5 KB | 文档里点「预览」（`m3b-pdf-09-doc-attachment`），约 1.2 秒显示「1 / 8」（`m3b-pdf-10-doc-preview`）；返回键关闭后仍在文档页 |
+
+手机浏览器（无头 Edge，412×915，触屏模拟，李娜登录）：大文件预览显示「1 / 100」（`m3b-pdf-11-mobile-browser`），损坏文件显示错误与下载按钮。电脑端（1440×900）IM 文件气泡仍是 `<a download>` 下载链接（`m3b-desktop-im-files`），文档附件「预览」仍是 `target=_blank` 链接（`m3b-desktop-doc`）；侧栏「退出登录」正常回到 `/login`。
+
+说明：模拟器访问的是本机回环地址，6 秒左右的加载时间主要是 WebView 读取 18 MB 的耗时；真机走 Wi-Fi 时受带宽影响，列入真机清单。
+
+### 8.5 桌面回归
+
+用改动前的提交（M3 `ec444ae`）和改动后的代码分别构建 standalone，在同一份数据上用无头 Edge 以王芳登录，1440×900 截取 9 个页面逐像素对比（RGB 差和大于 30 记为不同）：IM 文件会话、群聊、消息列表、文档（含 PDF 附件）、文档列表、工作台、设置、通讯录、收件箱。8 个页面 0.00%，收件箱 0.01%（相对时间）。桌面不回归。
+
+### 8.6 检查命令
+
+- `pnpm typecheck`、`pnpm lint`：通过。
+- `pnpm test`：200 / 200 通过。
+- `gradlew testDebugUnitTest assembleDebug`：通过，`PushSessionTest` 9 / 9。
+- debug APK：`mobile/android/app/build/outputs/apk/debug/app-debug.apk`（4,774,259 字节，SHA-256 `B0DE3BF5BF69B9281DA2FAF548C715E54588DDE414104E7B0BD1578CC60B83B8`，未入库；本次改了原生层，必须用新包；模拟器上安装的就是这个包）。
+
+### 8.7 遗留问题与待负责人决定
+
+1. **手机浏览器的返回手势不会关闭 PDF 预览。** 在手机浏览器里按返回会离开当前页（与图片查看等其他浮层一致），需要点左上角关闭。App 内的 Android 返回键正常关闭预览。如需浏览器返回也先关闭浮层，可以统一给浮层加一层浏览历史，影响所有弹窗，建议单独评估。
+2. **大文件整份下载。** pdf.js 目前等整份文件下载完再显示第一页（18 MB 在模拟器上约 6 秒）。如果局域网较慢，可以让文件接口支持 HTTP Range，pdf.js 就能先显示前几页；这需要改后端文件接口，本次没有做。
+3. **后台服务的 `lastError` 保留最近一次错误**，换账号后不会清空，只用于诊断，不影响提醒。
+4. 真机项目见 `M3-device-checklist.md` §6（换账号推送）、§7（PDF 预览）。

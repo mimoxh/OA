@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useSyncExternalStore, type ReactNode } from "react";
-import { isMobileApp } from "@/lib/mobile-bridge";
+import { isMobileApp, setMobileSessionUser } from "@/lib/mobile-bridge";
 
 export type RealtimeEvent = { type: string } & Record<string, unknown>;
 type Listener = (event: RealtimeEvent) => void;
@@ -275,6 +275,7 @@ export function RealtimeProvider({ meId, children }: { meId: string; children: R
     import("@/components/call/store").then((m) => m.initCallStore(meId));
     import("@/lib/im/desktop-notify").then((m) => void m.registerServiceWorker());
     startRealtime(meId);
+    if (isMobileApp()) void setMobileSessionUser(meId);
     return subscribeRealtime((event) => {
       if (event.type === "notification.new") {
         window.dispatchEvent(new Event("notifications:changed"));

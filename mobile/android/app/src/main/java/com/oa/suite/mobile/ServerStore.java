@@ -108,13 +108,29 @@ final class ServerStore {
         prefs(c).edit().putBoolean(KEY_NOTIFY, on).apply();
     }
 
-    /** 补拉游标：上次收到推送或补拉时的服务端时间（毫秒），按服务器分别保存 */
-    static long getLastSync(Context c, String server) {
-        return server == null ? 0 : prefs(c).getLong(KEY_LAST_SYNC + server, 0);
+    /** 补拉游标：上次收到推送或补拉时的服务端时间（毫秒），按服务器 + 账号分别保存 */
+    static long getLastSync(Context c, String server, String userId) {
+        return server == null || userId == null ? 0 : prefs(c).getLong(lastSyncKey(server, userId), 0);
     }
 
-    static void setLastSync(Context c, String server, long value) {
-        if (server != null) prefs(c).edit().putLong(KEY_LAST_SYNC + server, value).apply();
+    static void setLastSync(Context c, String server, String userId, long value) {
+        if (server != null && userId != null) prefs(c).edit().putLong(lastSyncKey(server, userId), value).apply();
+    }
+
+    /** 退出登录 / 换账号 / 换服务器：作废该服务器下所有账号的补拉游标（含 M2 按服务器保存的旧格式） */
+    static void clearLastSync(Context c, String server) {
+        if (server == null) return;
+        SharedPreferences p = prefs(c);
+        SharedPreferences.Editor e = p.edit();
+        String legacy = KEY_LAST_SYNC + server;
+        for (String k : p.getAll().keySet()) {
+            if (k.equals(legacy) || k.startsWith(legacy + "#")) e.remove(k);
+        }
+        e.commit();
+    }
+
+    private static String lastSyncKey(String server, String userId) {
+        return KEY_LAST_SYNC + server + "#" + userId;
     }
 
     /** 用户主动回到启动页时为 true：下次创建 Activity 时加载包内启动页而不是服务器。 */

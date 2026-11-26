@@ -9,6 +9,7 @@ import {
   CheckCheck,
   Copy,
   Download,
+  Eye,
   File as FileIcon,
   MessageSquareReply,
   MessageSquareText,
@@ -35,6 +36,8 @@ import { RefPreviewCard } from "./ref-preview";
 import { convTime } from "./time";
 import { ActionSheet, type SheetAction } from "@/components/mobile/action-sheet";
 import { ImageViewer } from "@/components/mobile/image-viewer";
+import { isPdfFile, PdfViewer } from "@/components/mobile/pdf-viewer";
+import { useIsMobileApp } from "@/lib/mobile-bridge";
 import { useIsMobileLayout } from "@/components/mobile/use-mobile-layout";
 import { useLongPress } from "@/components/mobile/use-long-press";
 
@@ -111,21 +114,49 @@ function ImageMessage({ img }: { img: ImageContent }) {
 }
 
 function FileMessage({ file }: { file: FileContent }) {
-  return (
-    <a
-      href={`${file.url}?download=1`}
-      download={file.filename}
-      className="flex w-[280px] max-w-[75vw] items-center gap-3 rounded-lg border border-line bg-white p-3 shadow-card transition-shadow hover:shadow-pop"
-    >
+  const mobile = useIsMobileLayout();
+  const app = useIsMobileApp();
+  const [preview, setPreview] = useState(false);
+  // 手机上点 PDF 先在页内预览（顶栏可下载）；电脑与其他类型文件仍直接下载
+  const pdf = (mobile || app) && isPdfFile(file.mimeType, file.filename);
+  const body = (
+    <>
       <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
         <FileIcon className="size-5" />
       </span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-[13.5px] font-medium text-ink">{file.filename}</span>
-        <span className="mt-0.5 block text-xs text-ink-3">{formatFileSize(file.size)}</span>
+        <span className="mt-0.5 block text-xs text-ink-3">
+          {formatFileSize(file.size)}
+          {pdf && " · 点击预览"}
+        </span>
       </span>
-      <Download className="size-4 shrink-0 text-ink-3" />
-    </a>
+      {pdf ? <Eye className="size-4 shrink-0 text-ink-3" /> : <Download className="size-4 shrink-0 text-ink-3" />}
+    </>
+  );
+  const cls =
+    "flex w-[280px] max-w-[75vw] items-center gap-3 rounded-lg border border-line bg-white p-3 text-left shadow-card transition-shadow hover:shadow-pop";
+  if (!pdf) {
+    return (
+      <a href={`${file.url}?download=1`} download={file.filename} className={cls}>
+        {body}
+      </a>
+    );
+  }
+  return (
+    <>
+      <button type="button" onClick={() => setPreview(true)} className={cls}>
+        {body}
+      </button>
+      <PdfViewer
+        open={preview}
+        onOpenChange={setPreview}
+        src={file.url}
+        fileName={file.filename}
+        size={file.size}
+        downloadHref={`${file.url}?download=1`}
+      />
+    </>
   );
 }
 

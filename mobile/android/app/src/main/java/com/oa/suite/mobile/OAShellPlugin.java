@@ -243,6 +243,14 @@ public class OAShellPlugin extends Plugin {
         call.resolve(o);
     }
 
+    /** 页面报告当前登录账号（userId 为 null 表示退出登录），后台推送据此作废旧账号的连接与提醒 */
+    @PluginMethod
+    public void setSessionUser(PluginCall call) {
+        String userId = call.getString("userId");
+        RtService.onWebSession(getContext(), userId == null || userId.isEmpty() ? null : userId);
+        call.resolve();
+    }
+
     @PluginMethod
     public void clearNotifications(PluginCall call) {
         Notifier.clear(getContext(), call.getString("conversationId"));

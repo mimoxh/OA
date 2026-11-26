@@ -46,7 +46,8 @@ public class RtService extends Service {
     private static final String TAG = "OARt";
     private static final int ONGOING_ID = 1;
     private static final long MAX_BACKOFF_MS = 60_000;
-    private static final long UNAUTHORIZED_RETRY_MS = 30_000;
+    /** “登录已失效”提醒占用的通知 tag（与会话 id 不冲突） */
+    private static final String AUTH_TAG = "oa-auth";
 
     // 诊断状态（OAShell.getState / getPushState 读取）
     private static volatile String state = "stopped";
@@ -60,6 +61,7 @@ public class RtService extends Service {
     private static volatile boolean pushCapable = false;
     private static volatile int missedShown = 0;
     private static volatile long lastNotifyAt = 0;
+    private static volatile int tokenRequests = 0;
 
     private static volatile RtService instance;
 
@@ -70,6 +72,11 @@ public class RtService extends Service {
     private int attempt = 0;
     private boolean fetchingToken = false;
     private String meId;
+    /** 当前连接换令牌时用的 Cookie：页面里退出 / 换账号后 Cookie 会变，据此重新确认身份 */
+    private String connectedCookie;
+    /** 每次作废身份时加一，丢弃作废之前发出的令牌请求结果 */
+    private int generation = 0;
+    private final PushSession session = new PushSession();
     private Network lastNetwork;
     private ConnectivityManager.NetworkCallback netCallback;
     /** 会话 → 已提醒过的最大 seq：补拉与实时推送可能重叠（补拉请求发出时连接已建立），按 seq 去重 */
@@ -97,16 +104,81 @@ public class RtService extends Service {
         else stop(c);
     }
 
-    /** App 回到前台或切到后台时调用：服务已在运行且当前未连接（例如刚登录）就立即重连，而不是等退避计时器。 */
+    /**
+     * App 回到前台或切到后台时调用：服务已在运行且当前未连接（例如刚登录）就立即重连，而不是等退避计时器；
+     * 页面里的登录 Cookie 变了（退出、换账号）就断开旧连接重新换令牌，由令牌里的 userId 判断是否换了账号。
+     */
     static void kick() {
         RtService s = instance;
         if (s == null) return;
         s.handler.post(() -> {
-            if (s.ws == null && server != null) {
+            if (server == null) return;
+            String cookie = CookieManager.getInstance().getCookie(server);
+            if (cookie == null || cookie.isEmpty()) {
+                if (s.ws != null || s.meId != null) s.signOut("已退出登录");
+                return;
+            }
+            if (s.ws != null && !cookie.equals(s.connectedCookie)) s.closeSocket();
+            if (s.ws == null) {
                 s.attempt = 0;
                 s.schedule(0);
             }
         });
+    }
+
+    /**
+     * 页面报告当前登录账号（RealtimeProvider 挂载时）或退出登录（userId 为 null，由退出按钮与登录页调用）。
+     * 退出：立即断开后台连接，清掉该服务器的提醒、补拉游标与去重表，之后不再重连，直到再次登录。
+     * 换成另一个账号：同样先清掉旧账号的一切，再用新会话换令牌。
+     */
+    static void onWebSession(Context c, String userId) {
+        RtService s = instance;
+        if (s == null) {
+            if (userId == null) {
+                Notifier.clear(c, null);
+                ServerStore.clearLastSync(c, ServerStore.getServerUrl(c));
+            } else if (shouldRun(c)) {
+                start(c);
+            }
+            return;
+        }
+        s.handler.post(() -> s.applyWebSession(userId));
+    }
+
+    private void applyWebSession(String userId) {
+        if (server == null) return;
+        String cookie = CookieManager.getInstance().getCookie(server);
+        boolean reset = session.onWebSession(userId, cookie);
+        if (userId == null) {
+            signOut("已退出登录");
+            return;
+        }
+        if (reset) resetIdentity();
+        if (ws == null) {
+            attempt = 0;
+            schedule(0);
+        }
+    }
+
+    /** 退出登录：断开并作废旧账号状态，不再重连 */
+    private void signOut(String why) {
+        if (!session.isBlocked()) session.onWebSession(null, CookieManager.getInstance().getCookie(server));
+        resetIdentity();
+        setState("signed_out", why);
+    }
+
+    /** 作废当前账号：断开连接、撤销提醒、清空补拉游标与去重表 */
+    private void resetIdentity() {
+        generation++;
+        handler.removeCallbacks(connectTask);
+        closeSocket();
+        shownSeq.clear();
+        pushCapable = false;
+        attempt = 0;
+        meId = null;
+        connectedCookie = null;
+        Notifier.clear(this, null);
+        ServerStore.clearLastSync(this, server);
     }
 
     static void stop(Context c) {
@@ -126,8 +198,10 @@ public class RtService extends Service {
         o.put("pushCapable", pushCapable);
         o.put("missedShown", missedShown);
         o.put("lastNotifyAt", lastNotifyAt);
+        o.put("tokenRequests", tokenRequests);
         RtService s = instance;
-        o.put("lastSync", s == null ? 0 : ServerStore.getLastSync(s, server));
+        o.put("lastSync", s == null ? 0 : ServerStore.getLastSync(s, server, s.meId));
+        o.put("userId", s == null ? null : s.meId);
         return o;
     }
 
@@ -164,11 +238,16 @@ public class RtService extends Service {
         }
         handler.post(() -> {
             if (!url.equals(server)) {
+                // 切换服务器：旧服务器的连接、提醒、游标、去重表与账号全部作废
+                if (server != null) resetIdentity();
+                session.forget();
                 server = url;
                 closeSocket();
                 shownSeq.clear();
                 pushCapable = false;
                 attempt = 0;
+                meId = null;
+                connectedCookie = null;
             }
             if (ws == null) schedule(0);
         });
@@ -225,13 +304,19 @@ public class RtService extends Service {
     private void connect() {
         final String base = server;
         if (base == null || ws != null || fetchingToken) return;
-        setState("connecting", null);
-        String cookie = CookieManager.getInstance().getCookie(base);
-        if (cookie == null || cookie.isEmpty()) {
-            setState("unauthorized", "WebView 中没有该服务器的登录 Cookie");
-            schedule(UNAUTHORIZED_RETRY_MS);
-            return;
+        final String cookie = CookieManager.getInstance().getCookie(base);
+        switch (session.gate(cookie)) {
+            case SIGNED_OUT:
+                // 不轮询：页面登录后会调用 onWebSession，App 切前后台时 kick 也会重新检查
+                if (meId != null) resetIdentity();
+                setState("signed_out", "WebView 中没有该服务器的登录 Cookie");
+                return;
+            case BLOCKED:
+                return;
+            default:
         }
+        setState("connecting", null);
+        final int gen = generation;
         Request req = new Request.Builder()
             .url(base + "/api/realtime-token")
             .header("Cookie", cookie)
@@ -239,6 +324,7 @@ public class RtService extends Service {
             .header("Accept", "application/json")
             .build();
         fetchingToken = true;
+        tokenRequests++;
         Call tokenCall = http.newCall(req);
         tokenCall.timeout().timeout(20, TimeUnit.SECONDS);
         tokenCall.enqueue(new Callback() {
@@ -246,6 +332,10 @@ public class RtService extends Service {
             public void onFailure(Call call, IOException e) {
                 handler.post(() -> {
                     fetchingToken = false;
+                    if (gen != generation) {
+                        schedule(0);
+                        return;
+                    }
                     setState("disconnected", "获取令牌失败：" + e.getMessage());
                     schedule(nextBackoff());
                 });
@@ -264,17 +354,25 @@ public class RtService extends Service {
                 final String text = body;
                 handler.post(() -> {
                     fetchingToken = false;
-                    onToken(base, code, text);
+                    if (gen != generation) {
+                        // 请求期间退出或换了账号：结果作废，按最新的登录状态重新判断
+                        schedule(0);
+                        return;
+                    }
+                    onToken(base, cookie, code, text);
                 });
             }
         });
     }
 
-    private void onToken(String base, int code, String body) {
+    private void onToken(String base, String cookie, int code, String body) {
         if (!base.equals(server) || ws != null) return;
         if (code == 401) {
-            setState("unauthorized", "未登录或会话已过期（401）");
-            schedule(UNAUTHORIZED_RETRY_MS);
+            // 会话过期或已退出：不再拿同一个 Cookie 重试，提示重新登录；页面登录后 onWebSession / Cookie 变化会解除
+            session.onUnauthorized(cookie);
+            resetIdentity();
+            setState("unauthorized", "登录已失效（401），请打开 App 重新登录");
+            promptRelogin();
             return;
         }
         if (code != 200 || body == null) {
@@ -286,7 +384,11 @@ public class RtService extends Service {
             JSONObject j = new JSONObject(body);
             String token = j.getString("token");
             String url = j.getString("url");
-            meId = jwtUserId(token);
+            String uid = jwtUserId(token);
+            if (session.onTokenUser(uid)) resetIdentity();
+            meId = uid;
+            connectedCookie = cookie;
+            Notifier.clear(this, AUTH_TAG);
             String sep = url.contains("?") ? "&" : "?";
             Request wsReq = new Request.Builder()
                 .url(url + sep + "token=" + URLEncoder.encode(token, StandardCharsets.UTF_8.name()) + "&client=bg")
@@ -298,6 +400,11 @@ public class RtService extends Service {
             setState("disconnected", "令牌响应无效：" + e.getMessage());
             schedule(nextBackoff());
         }
+    }
+
+    private void promptRelogin() {
+        if (AppState.isForeground()) return;
+        Notifier.show(this, AUTH_TAG, "system", "OA 登录已失效", "请打开 App 重新登录，登录后继续接收消息提醒", "/login", 1);
     }
 
     private static String jwtUserId(String token) {
@@ -477,16 +584,17 @@ public class RtService extends Service {
     }
 
     private void advanceSync(long serverTime) {
-        if (serverTime <= 0 || server == null) return;
-        if (serverTime > ServerStore.getLastSync(this, server)) ServerStore.setLastSync(this, server, serverTime);
+        if (serverTime <= 0 || server == null || meId == null) return;
+        if (serverTime > ServerStore.getLastSync(this, server, meId)) ServerStore.setLastSync(this, server, meId, serverTime);
     }
 
     /** 补拉断线期间漏掉的提醒（每个会话一条，带未读条数）；首次连接只记录游标 */
     private void fetchMissed(String base) {
-        if (base == null) return;
+        if (base == null || meId == null) return;
         String cookie = CookieManager.getInstance().getCookie(base);
         if (cookie == null || cookie.isEmpty()) return;
-        long since = ServerStore.getLastSync(this, base);
+        final String user = meId;
+        long since = ServerStore.getLastSync(this, base, user);
         Request req = new Request.Builder()
             .url(base + "/api/push/missed" + (since > 0 ? "?since=" + since : ""))
             .header("Cookie", cookie)
@@ -513,13 +621,14 @@ public class RtService extends Service {
                 }
                 final String text = body;
                 if (code != 200 || text == null) return;
-                handler.post(() -> onMissed(base, text));
+                handler.post(() -> onMissed(base, user, text));
             }
         });
     }
 
-    private void onMissed(String base, String body) {
-        if (!base.equals(server)) return;
+    private void onMissed(String base, String user, String body) {
+        // 补拉期间退出或换了账号：旧账号的提醒一律丢弃
+        if (!base.equals(server) || !user.equals(meId)) return;
         try {
             JSONObject j = new JSONObject(body);
             JSONArray list = j.optJSONArray("notifications");
@@ -552,7 +661,10 @@ public class RtService extends Service {
                 label = "正在连接…";
                 break;
             case "unauthorized":
-                label = "未登录，打开 App 登录后自动连接";
+                label = "登录已失效，请打开 App 重新登录";
+                break;
+            case "signed_out":
+                label = "未登录，打开 App 登录后接收消息提醒";
                 break;
             case "stopped":
                 return;

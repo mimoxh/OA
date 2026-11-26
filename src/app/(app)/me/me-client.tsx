@@ -10,6 +10,7 @@ import {
   getMobilePushState,
   getMobileShellState,
   openMobileLauncher,
+  setMobileSessionUser,
   useIsMobileApp,
   type MobilePushState,
   type MobileShellState,
@@ -98,7 +99,17 @@ export function MeAppSection() {
             当前是 HTTP 连接：消息收发正常，但音视频通话不可用、流量未加密。正式使用请让管理员配置 HTTPS。
           </div>
         )}
-        {inApp && <Item icon={<RefreshCw />} label="切换服务器" onClick={() => openMobileLauncher()} />}
+        {inApp && (
+          <Item
+            icon={<RefreshCw />}
+            label="切换服务器"
+            onClick={() => {
+              // 旧页面在 Activity 重建后还会挂一会儿，先断开它的实时连接，避免旧账号继续在线
+              stopRealtime();
+              openMobileLauncher();
+            }}
+          />
+        )}
       </div>
 
       <div className="mt-3 divide-y divide-line overflow-hidden rounded-xl bg-white">
@@ -131,6 +142,8 @@ export function MeLogout() {
           void import("@/components/call/store").then((m) => m.resetCallStore());
           stopRealtime();
           resetIm();
+          // 先让后台推送断开旧账号（退出后 Cookie 才被删除，之间不能再用它重连）
+          await setMobileSessionUser(null);
           await logout();
         })
       }

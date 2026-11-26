@@ -30,6 +30,7 @@ import { useUnreadCount } from "./use-unread";
 import { resetIm, useTotalUnread } from "@/components/im/store";
 import { stopRealtime } from "@/components/realtime/provider";
 import { setDesktopUnreadBadge } from "@/lib/desktop-bridge";
+import { setMobileSessionUser } from "@/lib/mobile-bridge";
 import { setRailOrder, setRailPin } from "@/app/(app)/work/actions";
 import { closeRecentDoc } from "@/app/(app)/docs/recent-actions";
 import { DOC_META_EVENT, type DocMetaDetail } from "@/components/docs/events";
@@ -313,7 +314,7 @@ export function AppRail({
                   void import("@/components/call/store").then((m) => m.resetCallStore());
                   stopRealtime();
                   resetIm();
-                  void logout();
+                  void setMobileSessionUser(null).then(() => logout());
                 }}
               >
                 退出登录

@@ -111,6 +111,12 @@ public class MainActivity extends BridgeActivity {
 
     /** 切换到指定服务器（或 null 表示回到启动页）并重建 Activity。 */
     void switchTo(String url) {
+        String previous = ServerStore.getServerUrl(this);
+        if (url != null && previous != null && !url.equals(previous)) {
+            // 换服务器：旧服务器账号的提醒与补拉游标作废（后台连接在 RtService.onStartCommand 里随服务器变化重置）
+            Notifier.clear(this, null);
+            ServerStore.clearLastSync(this, previous);
+        }
         if (url != null) {
             ServerStore.setServerUrl(this, url);
             ServerStore.setLauncherRequested(this, false);

@@ -157,6 +157,14 @@ export function showMobileNotification(n: {
   return call("OAShell", "showNotification", n);
 }
 
+/**
+ * 告诉原生后台推送当前登录的账号；null 表示退出登录。
+ * 原生层据此断开旧账号的后台连接、撤销旧提醒、作废补拉游标，换成新会话后再连接。
+ */
+export function setMobileSessionUser(userId: string | null) {
+  return call("OAShell", "setSessionUser", { userId });
+}
+
 export function clearMobileNotifications(conversationId?: string) {
   return call("OAShell", "clearNotifications", conversationId ? { conversationId } : {});
 }

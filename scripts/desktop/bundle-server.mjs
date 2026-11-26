@@ -12,6 +12,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import * as esbuild from "esbuild";
 import { flattenPnpm } from "./flatten-pnpm.mjs";
+import { copyPdfjsAssets } from "./pdfjs-assets.mjs";
 import { generateMigration } from "./migration.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -106,6 +107,7 @@ fs.cpSync(path.join(sqliteSrc, "lib"), path.join(sqliteDst, "lib"), { recursive:
 fs.copyFileSync(path.join(sqliteSrc, "package.json"), path.join(sqliteDst, "package.json"));
 const prebuild = `${process.platform}-${process.arch}.node`;
 fs.copyFileSync(path.join(sqliteSrc, "prebuilds", prebuild), path.join(sqliteDst, "prebuilds", prebuild));
+copyPdfjsAssets(ROOT, APP);
 
 step("编译网关 / 协同 / 实时服务");
 await esbuild.build({
