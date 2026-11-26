@@ -64,6 +64,14 @@
         </provider>
     </application>
 
+    <!-- 白板“拍照”插图：Android 11+ 需要声明才能查询到相机应用。不声明 CAMERA 权限，
+         系统相机通过 ACTION_IMAGE_CAPTURE 拍照无需本应用申请相机权限 -->
+    <queries>
+        <intent>
+            <action android:name="android.media.action.IMAGE_CAPTURE" />
+        </intent>
+    </queries>
+
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />

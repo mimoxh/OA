@@ -196,6 +196,13 @@
 .doc-prose .tableWrapper table {
   margin: 0;
 }
+/* 手机上表格保持可读宽度，在 .tableWrapper 内横向滚动，而不是把每列挤成几个字宽。
+   TipTap 的 TableView 会在 table 上写内联 min-width（列数 × 单元格最小宽度），所以这里需要 !important */
+@media (width < 48rem) {
+  .doc-prose table {
+    min-width: 560px !important;
+  }
+}
 .doc-prose th,
 .doc-prose td {
   border: 1px solid #e9e9e7;

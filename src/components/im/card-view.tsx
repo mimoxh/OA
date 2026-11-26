@@ -79,7 +79,7 @@ export function CardView({ messageId, card }: { messageId: string; card: Card })
                   key={a.key}
                   disabled={pending}
                   onClick={() => act("approve")}
-                  className="h-7 flex-1 rounded-md bg-accent px-3 text-[13px] font-medium text-white hover:bg-accent-hover disabled:opacity-50"
+                  className="h-7 flex-1 rounded-md bg-accent px-3 text-[13px] font-medium text-white hover:bg-accent-hover disabled:opacity-50 pointer-coarse:h-10 pointer-coarse:text-sm"
                 >
                   {a.label}
                 </button>
@@ -88,7 +88,7 @@ export function CardView({ messageId, card }: { messageId: string; card: Card })
                   key={a.key}
                   disabled={pending}
                   onClick={() => setRejectOpen(true)}
-                  className="h-7 flex-1 rounded-md border border-line-strong px-3 text-[13px] text-ink hover:bg-hover disabled:opacity-50"
+                  className="h-7 flex-1 rounded-md border border-line-strong px-3 text-[13px] text-ink hover:bg-hover disabled:opacity-50 pointer-coarse:h-10 pointer-coarse:text-sm"
                 >
                   {a.label}
                 </button>
@@ -98,7 +98,7 @@ export function CardView({ messageId, card }: { messageId: string; card: Card })
               <Link
                 href={card.link}
                 className={cn(
-                  "flex h-7 items-center justify-center gap-1 rounded-md border border-line-strong px-3 text-[13px] text-ink-2 hover:bg-hover",
+                  "flex h-7 items-center justify-center gap-1 rounded-md border border-line-strong px-3 text-[13px] text-ink-2 hover:bg-hover pointer-coarse:h-10 pointer-coarse:text-sm",
                   card.actions?.length ? "" : "flex-1",
                 )}
               >

@@ -4,6 +4,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { ChevronsLeft, ChevronsRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useIsMobileLayout } from "@/components/mobile/use-mobile-layout";
+import { MobileBack } from "@/components/mobile/mobile-back";
 
 const COLLAPSED_KEY = "panel:collapsed";
 
@@ -60,6 +61,7 @@ export function ContextPanel({
       )}
     >
       <div className="flex items-center gap-1 px-3 pb-1 pt-3 max-md:px-4">
+        <MobileBack />
         <div className="min-w-0 flex-1 truncate text-sm font-semibold text-ink max-md:text-lg [&_a]:flex [&_a]:items-center [&_a]:gap-1.5">{title}</div>
         {actions}
         <button

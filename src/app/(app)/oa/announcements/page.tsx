@@ -59,7 +59,7 @@ export default async function AnnouncementsPage({ searchParams }: PageProps<"/oa
         actions={
           editable ? (
             <AnnouncementDialog>
-              <Button variant="primary">
+              <Button variant="primary" className="max-md:hidden">
                 <Plus className="size-3.5" />
                 发布公告
               </Button>
@@ -72,7 +72,7 @@ export default async function AnnouncementsPage({ searchParams }: PageProps<"/oa
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <SearchInput placeholder="搜索公告…" />
           <FilterPills param="category" options={categories.map((c) => ({ value: c, label: c, count: categoryRows.find((r) => r.category === c)?._count._all }))} />
-          <div className="ml-auto">
+          <div className="ml-auto max-md:ml-0">
             <FilterPills param="status" options={[{ value: "unread", label: "仅未读", count: unreadCount }]} />
           </div>
         </div>
@@ -83,15 +83,15 @@ export default async function AnnouncementsPage({ searchParams }: PageProps<"/oa
             {rows.map((a) => {
               const read = a.reads.length > 0;
               return (
-                <Link key={a.id} href={`/oa/announcements/${a.id}`} className="group flex gap-3 px-1 py-3.5 transition-colors hover:bg-sidebar">
+                <Link key={a.id} href={`/oa/announcements/${a.id}`} className="group flex gap-3 px-1 py-3.5 transition-colors hover:bg-sidebar max-md:gap-2 max-md:active:bg-hover">
                   <span className="mt-2 flex w-2 justify-center">{!read && <span className="size-2 rounded-full bg-accent" title="未读" />}</span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       {a.pinned && <Pin className="size-3.5 shrink-0 fill-[#d9730d] text-[#d9730d]" />}
-                      <span className={cn("truncate text-[15px] group-hover:underline", read ? "text-ink" : "font-semibold text-ink")}>{a.title}</span>
+                      <span className={cn("truncate text-[15px] group-hover:underline max-md:min-w-0 max-md:flex-1 max-md:group-hover:no-underline", read ? "text-ink" : "font-semibold text-ink")}>{a.title}</span>
                       <Badge color={CATEGORY_COLOR[a.category] ?? "gray"}>{a.category}</Badge>
                     </div>
-                    <p className="mt-1 line-clamp-1 text-[13px] text-ink-2">{excerpt(a.content)}</p>
+                    <p className="mt-1 line-clamp-1 text-[13px] text-ink-2 max-md:line-clamp-2">{excerpt(a.content)}</p>
                     <div className="mt-1.5 flex items-center gap-3 text-xs text-ink-3">
                       <span className="flex items-center gap-1">
                         <Avatar name={a.author.name} color={a.author.avatarColor} size={16} />

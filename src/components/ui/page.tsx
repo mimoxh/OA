@@ -32,7 +32,7 @@ export function TopBar({ crumbs, actions }: { crumbs: Crumb[]; actions?: ReactNo
 
 /** 页面主体容器 */
 export function Page({ children, wide, className }: { children: ReactNode; wide?: boolean; className?: string }) {
-  return <div className={cn("mx-auto w-full px-6 pb-24 sm:px-12", wide ? "max-w-[1400px]" : "max-w-[1100px]", className)}>{children}</div>;
+  return <div className={cn("mx-auto w-full px-6 pb-24 sm:px-12 max-md:px-4", wide ? "max-w-[1400px]" : "max-w-[1100px]", className)}>{children}</div>;
 }
 
 /** 大标题区（Notion 页面标题） */
@@ -50,16 +50,16 @@ export function PageHeader({
   meta?: ReactNode;
 }) {
   return (
-    <header className="pt-10 pb-6">
-      {icon && <div className="mb-3 text-[44px] leading-none">{icon}</div>}
+    <header className="pt-10 pb-6 max-md:pt-4 max-md:pb-4">
+      {icon && <div className="mb-3 text-[44px] leading-none max-md:mb-2 max-md:text-[32px]">{icon}</div>}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">
-          <h1 className="text-[30px] font-bold leading-tight tracking-tight text-ink">{title}</h1>
+          <h1 className="text-[30px] font-bold leading-tight tracking-tight text-ink max-md:text-[22px] max-md:break-words">{title}</h1>
           {description && <p className="mt-1.5 text-[15px] text-ink-2">{description}</p>}
         </div>
         {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
       </div>
-      {meta && <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">{meta}</div>}
+      {meta && <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm max-md:mt-3 max-md:gap-x-4">{meta}</div>}
     </header>
   );
 }
@@ -125,7 +125,7 @@ export function Properties({ children }: { children: ReactNode }) {
 
 export function Property({ label, icon, children }: { label: ReactNode; icon?: ReactNode; children: ReactNode }) {
   return (
-    <div className="grid min-h-8 grid-cols-[160px_1fr] items-center gap-2">
+    <div className="grid min-h-8 grid-cols-[160px_1fr] items-center gap-2 max-md:grid-cols-[88px_1fr] max-md:items-start max-md:py-1">
       <div className="flex items-center gap-1.5 text-ink-2 [&>svg]:size-4 [&>svg]:text-ink-3">
         {icon}
         {label}

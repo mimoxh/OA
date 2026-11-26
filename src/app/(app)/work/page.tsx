@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { endOfDay, format, isBefore, startOfDay, startOfMonth } from "date-fns";
 import { zhCN } from "date-fns/locale";
-import { ArrowRight, BookOpen, FileText, Inbox, Pin } from "lucide-react";
+import { ArrowRight, BookOpen, FileText, Inbox, Megaphone, Pin, Stamp } from "lucide-react";
 import type { ReactNode } from "react";
 import { db } from "@/lib/db";
 import { can, getEnabledApps, requireUser } from "@/lib/auth/dal";
@@ -16,6 +16,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { Badge, StatusBadge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { RailPinButton } from "./rail-pin-button";
+import { WebFullLink } from "./web-full-link";
 
 function greeting(h: number) {
   if (h < 6) return { text: "夜深了", icon: "🌙" };
@@ -47,6 +48,31 @@ function Block({ title, href, count, children }: { title: string; href?: string;
 
 function Empty({ children }: { children: ReactNode }) {
   return <div className="flex h-full min-h-[140px] items-center justify-center text-[13px] text-ink-3">{children}</div>;
+}
+
+function MobileEntry({ href, icon, color, label, hint, badge }: {
+  href: string;
+  icon: ReactNode;
+  color: string;
+  label: string;
+  hint: string;
+  badge?: number;
+}) {
+  return (
+    <Link href={href} className="flex items-center gap-3 rounded-xl border border-line bg-white p-3 active:bg-sidebar">
+      <span className="flex size-10 shrink-0 items-center justify-center rounded-lg" style={{ backgroundColor: `${color}1f`, color }}>
+        {icon}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-medium text-ink">{label}</span>
+        <span className="block truncate text-xs text-ink-3">{hint}</span>
+      </span>
+      {!!badge && badge > 0 && (
+        <span className="rounded-full bg-danger px-2 py-0.5 text-xs font-medium text-white">{badge > 99 ? "99+" : badge}</span>
+      )}
+      <ArrowRight className="size-4 text-ink-3" />
+    </Link>
+  );
 }
 
 function SectionTitle({ children }: { children: ReactNode }) {
@@ -111,7 +137,7 @@ export default async function WorkPage() {
   const visibleSpace = { OR: [{ visibility: "PUBLIC" as const }, { members: { some: { userId: user.id } } }] };
   const none = <T,>(v: T) => Promise.resolve(v);
 
-  const [approvals, approvalCount, tasks, taskCount, events, docs, announcements, inboxUnread] = await Promise.all([
+  const [approvals, approvalCount, tasks, taskCount, events, docs, announcements, inboxUnread, unreadAnnouncements] = await Promise.all([
     perm.oa
       ? db.approvalInstance.findMany({
           where: approvalTabWhere("todo", user.id),
@@ -167,6 +193,7 @@ export default async function WorkPage() {
         })
       : none([]),
     db.notification.count({ where: { userId: user.id, read: false } }),
+    perm.oa ? db.announcement.count({ where: { reads: { none: { userId: user.id } } } }) : none(0),
   ]);
 
   const monthStart = startOfMonth(now);
@@ -239,6 +266,31 @@ export default async function WorkPage() {
           )}
           <ArrowRight className="size-4 text-ink-3" />
         </Link>
+
+        {/* 手机端第一期的工作入口：审批（只处理）、公告（只读）与 Web 完整版 */}
+        <div className="mt-2 space-y-2 md:hidden" data-mobile-work-entries>
+          {perm.oa && (
+            <>
+              <MobileEntry
+                href="/oa/approvals"
+                icon={<Stamp className="size-5" />}
+                color="#448361"
+                label="审批"
+                hint={approvalCount > 0 ? `${approvalCount} 项待我审批` : "查看并处理审批"}
+                badge={approvalCount}
+              />
+              <MobileEntry
+                href="/oa/announcements"
+                icon={<Megaphone className="size-5" />}
+                color="#d9730d"
+                label="公告"
+                hint={unreadAnnouncements > 0 ? `${unreadAnnouncements} 条未读公告` : "公司动态、制度与通知"}
+                badge={unreadAnnouncements}
+              />
+            </>
+          )}
+          <WebFullLink />
+        </div>
 
         <SectionTitle>应用</SectionTitle>
         <div

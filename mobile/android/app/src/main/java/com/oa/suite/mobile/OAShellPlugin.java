@@ -347,6 +347,25 @@ public class OAShellPlugin extends Plugin {
         });
     }
 
+    /** 用系统浏览器打开（工作台“打开 Web 完整版”），只接受 http/https */
+    @PluginMethod
+    public void openExternal(PluginCall call) {
+        String url = call.getString("url");
+        if (url == null || !(url.startsWith("http://") || url.startsWith("https://"))) {
+            call.reject("只支持 http/https 链接");
+            return;
+        }
+        try {
+            Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+            i.addCategory(Intent.CATEGORY_BROWSABLE);
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getActivity().startActivity(i);
+            call.resolve();
+        } catch (ActivityNotFoundException e) {
+            call.reject("没有可用的浏览器");
+        }
+    }
+
     @PluginMethod
     public void setKeepAlive(PluginCall call) {
         boolean on = Boolean.TRUE.equals(call.getBoolean("enabled", true));

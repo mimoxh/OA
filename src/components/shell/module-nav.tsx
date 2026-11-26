@@ -42,8 +42,10 @@ export function ModuleNav({
                 key={i.href}
                 href={i.href}
                 className={cn(
-                  "flex h-[30px] items-center rounded-md px-2 text-sm text-ink-2 transition-colors hover:bg-active/70",
+                  "flex h-[30px] items-center rounded-md px-2 text-sm text-ink-2 transition-colors hover:bg-active/70 max-md:h-11 max-md:px-3 max-md:text-[15px] max-md:text-ink",
                   active && "bg-active/80 font-medium text-ink",
+                  // 手机上模块首页就是这份列表，指向首页自身的“概览”入口没有意义
+                  i.href === mod.href && "max-md:hidden",
                 )}
               >
                 <span className="truncate">{i.label}</span>

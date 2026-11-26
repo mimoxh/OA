@@ -165,6 +165,11 @@ export async function copyTextNative(text: string): Promise<boolean> {
   return (await call("OAShell", "copyText", { text })) !== null;
 }
 
+/** 用系统浏览器打开链接；不在 App 内或打开失败时返回 false */
+export async function openMobileExternal(url: string): Promise<boolean> {
+  return (await call("OAShell", "openExternal", { url })) !== null;
+}
+
 /** App 退到后台（等同按 Home 键），用于在根页面按返回键 */
 export function minimizeMobileApp() {
   void call("App", "minimizeApp");

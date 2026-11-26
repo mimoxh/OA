@@ -7,6 +7,7 @@ import { ConfirmButton } from "@/components/ui/common";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/input";
 import { useAction } from "@/components/ui/use-action";
+import { cn } from "@/lib/utils";
 import { decideApproval, withdrawMyApproval } from "../actions";
 
 export function DecisionBar({ instanceId, stepName }: { instanceId: string; stepName: string }) {
@@ -27,17 +28,25 @@ export function DecisionBar({ instanceId, stepName }: { instanceId: string; step
   };
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-accent/30 bg-accent-soft px-4 py-3">
-      <div className="text-sm">
+    <div
+      data-decision-bar
+      className={cn(
+        "flex flex-wrap items-center justify-between gap-3 rounded-lg border border-accent/30 bg-accent-soft px-4 py-3",
+        // 手机上固定在屏幕底部，长表单滚动时也能随时同意/驳回；输入评论弹出软键盘时让开，不挡住输入框和发送按钮
+        "max-md:[body:has(textarea:focus)_&]:hidden",
+        "max-md:fixed max-md:inset-x-0 max-md:bottom-0 max-md:z-30 max-md:flex-nowrap max-md:rounded-none max-md:border-x-0 max-md:border-b-0 max-md:bg-white max-md:px-4 max-md:pt-2.5 max-md:pb-[calc(0.625rem+var(--sab))] max-md:shadow-pop",
+      )}
+    >
+      <div className="text-sm max-md:min-w-0 max-md:flex-1">
         <div className="font-medium text-ink">等待你审批</div>
-        <div className="text-[13px] text-ink-2">当前节点：{stepName}</div>
+        <div className="truncate text-[13px] text-ink-2">当前节点：{stepName}</div>
       </div>
       <div className="flex items-center gap-2">
-        <Button variant="danger" size="md" onClick={() => setMode("REJECT")}>
+        <Button variant="danger" size="md" className="max-md:h-10 max-md:px-4" onClick={() => setMode("REJECT")}>
           <X className="size-3.5" />
           驳回
         </Button>
-        <Button variant="primary" size="md" onClick={() => setMode("APPROVE")}>
+        <Button variant="primary" size="md" className="max-md:h-10 max-md:px-5" onClick={() => setMode("APPROVE")}>
           <Check className="size-3.5" />
           同意
         </Button>
@@ -81,6 +90,7 @@ export function WithdrawButton({ instanceId }: { instanceId: string }) {
       description="撤回后审批流程将终止，可以修改后重新发起。"
       confirmText="撤回"
       danger
+      className="pointer-coarse:h-9 pointer-coarse:px-3"
       onConfirm={() => run(() => withdrawMyApproval(instanceId), { success: "已撤回" })}
     >
       <Undo2 className="size-3.5" />

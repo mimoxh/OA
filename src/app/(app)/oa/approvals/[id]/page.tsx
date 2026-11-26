@@ -143,7 +143,7 @@ export default async function ApprovalDetailPage({ params }: PageProps<"/oa/appr
             <ShareToChatButton refType="approval" refId={inst.id} title={inst.title} subtitle={`${inst.flow.name} · ${inst.no}`} />
             {isApplicant && inst.status === "PENDING" && <WithdrawButton instanceId={inst.id} />}
             {canResubmit && (
-              <LinkButton href={`/oa/approvals/new?flow=${inst.flow.key}&from=${inst.id}`}>
+              <LinkButton href={`/oa/approvals/new?flow=${inst.flow.key}&from=${inst.id}`} className="max-md:hidden">
                 <RotateCcw className="size-3.5" />
                 重新发起
               </LinkButton>
@@ -333,6 +333,8 @@ export default async function ApprovalDetailPage({ params }: PageProps<"/oa/appr
             </Card>
           </aside>
         </div>
+        {/* 手机上审批操作栏固定在底部，留出同等高度，避免遮住页面末尾 */}
+        {myTask && <div aria-hidden className="h-[calc(5rem+var(--sab))] md:hidden" />}
       </Page>
     </>
   );

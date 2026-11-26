@@ -48,19 +48,22 @@ export default async function AnnouncementPage({ params }: PageProps<"/oa/announ
         crumbs={[{ label: "OA 办公", href: "/oa" }, { label: "公告通知", href: "/oa/announcements" }, { label: a.title }]}
         actions={
           editable ? (
-            <AnnouncementAdminActions
-              announcement={{ id: a.id, title: a.title, content: a.content, category: a.category, pinned: a.pinned }}
-            />
+            // 手机端公告只读，编辑/删除留在桌面端
+            <span className="contents max-md:hidden">
+              <AnnouncementAdminActions
+                announcement={{ id: a.id, title: a.title, content: a.content, category: a.category, pinned: a.pinned }}
+              />
+            </span>
           ) : undefined
         }
       />
       <Page>
-        <div className="grid grid-cols-1 gap-10 lg:grid-cols-[1fr_260px]">
+        <div className="grid grid-cols-1 gap-10 lg:grid-cols-[1fr_260px] max-md:gap-6">
           <article className="min-w-0 max-w-[720px]">
-            <header className="pt-10 pb-5">
-              <div className="mb-3 text-[44px] leading-none">📢</div>
-              <h1 className="text-[30px] font-bold leading-tight tracking-tight text-ink">{a.title}</h1>
-              <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-ink-2">
+            <header className="pt-10 pb-5 max-md:pt-4 max-md:pb-4">
+              <div className="mb-3 text-[44px] leading-none max-md:mb-2 max-md:text-[32px]">📢</div>
+              <h1 className="text-[30px] font-bold leading-tight tracking-tight text-ink max-md:break-words max-md:text-[22px]">{a.title}</h1>
+              <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-ink-2 max-md:mt-3 max-md:gap-x-3 max-md:text-[13px]">
                 {a.pinned && (
                   <span className="flex items-center gap-1 text-[#d9730d]">
                     <Pin className="size-3.5 fill-current" />

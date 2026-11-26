@@ -49,7 +49,7 @@ export function DialogContent({
           </D.Close>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-2">{children}</div>
-        {footer && <div className="flex items-center justify-end gap-2 border-t border-line px-5 py-3">{footer}</div>}
+        {footer && <div className="flex items-center justify-end gap-2 border-t border-line px-5 py-3 max-md:[&>button]:h-10 max-md:[&>button]:px-4">{footer}</div>}
       </D.Content>
     </D.Portal>
   );
