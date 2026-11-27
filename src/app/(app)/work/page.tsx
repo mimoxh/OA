@@ -331,6 +331,46 @@ export default async function WorkPage() {
           </div>
         )}
 
+        {/* 手机：待办卡片与应用之间是收件箱（手机布局没有侧边栏）、审批、公告入口 */}
+        <div className="mt-4 space-y-2 md:hidden" data-mobile-work-entries>
+          <Link
+            href="/inbox"
+            className="flex items-center gap-3 rounded-xl border border-line bg-white p-3 active:bg-sidebar"
+          >
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
+              <Inbox className="size-5" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-medium text-ink">收件箱</span>
+              <span className="block truncate text-xs text-ink-3">审批、评论、@提及、任务等通知</span>
+            </span>
+            {inboxUnread > 0 && (
+              <span className="rounded-full bg-danger px-2 py-0.5 text-xs font-medium text-white">{inboxUnread > 99 ? "99+" : inboxUnread}</span>
+            )}
+            <ArrowRight className="size-4 text-ink-3" />
+          </Link>
+          {perm.oa && (
+            <>
+              <MobileEntry
+                href="/oa/approvals"
+                icon={<Stamp className="size-5" />}
+                color="#448361"
+                label="审批"
+                hint={approvalCount > 0 ? `${approvalCount} 项待我审批` : "查看并处理审批"}
+                badge={approvalCount}
+              />
+              <MobileEntry
+                href="/oa/announcements"
+                icon={<Megaphone className="size-5" />}
+                color="#d9730d"
+                label="公告"
+                hint={unreadAnnouncements > 0 ? `${unreadAnnouncements} 条未读公告` : "公司动态、制度与通知"}
+                badge={unreadAnnouncements}
+              />
+            </>
+          )}
+        </div>
+
         <SectionTitle className="max-md:mt-6">应用</SectionTitle>
         <div
           className={cn(
@@ -357,45 +397,7 @@ export default async function WorkPage() {
           })}
         </div>
 
-        {/* 手机：应用下面是收件箱（手机布局没有侧边栏）、审批、公告入口与 Web 完整版 */}
-        <Link
-          href="/inbox"
-          className="mt-6 flex items-center gap-3 rounded-xl border border-line bg-white p-3 active:bg-sidebar md:hidden"
-        >
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
-            <Inbox className="size-5" />
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block text-sm font-medium text-ink">收件箱</span>
-            <span className="block truncate text-xs text-ink-3">审批、评论、@提及、任务等通知</span>
-          </span>
-          {inboxUnread > 0 && (
-            <span className="rounded-full bg-danger px-2 py-0.5 text-xs font-medium text-white">{inboxUnread > 99 ? "99+" : inboxUnread}</span>
-          )}
-          <ArrowRight className="size-4 text-ink-3" />
-        </Link>
-
-        <div className="mt-2 space-y-2 md:hidden" data-mobile-work-entries>
-          {perm.oa && (
-            <>
-              <MobileEntry
-                href="/oa/approvals"
-                icon={<Stamp className="size-5" />}
-                color="#448361"
-                label="审批"
-                hint={approvalCount > 0 ? `${approvalCount} 项待我审批` : "查看并处理审批"}
-                badge={approvalCount}
-              />
-              <MobileEntry
-                href="/oa/announcements"
-                icon={<Megaphone className="size-5" />}
-                color="#d9730d"
-                label="公告"
-                hint={unreadAnnouncements > 0 ? `${unreadAnnouncements} 条未读公告` : "公司动态、制度与通知"}
-                badge={unreadAnnouncements}
-              />
-            </>
-          )}
+        <div className="mt-4 md:hidden" data-mobile-web-full>
           <WebFullLink />
         </div>
 
