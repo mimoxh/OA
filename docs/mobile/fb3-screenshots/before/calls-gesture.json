@@ -1,0 +1,377 @@
+[
+ {
+  "name": "03-call-outgoing",
+  "sw": 443,
+  "iw": 443,
+  "sat": 49,
+  "sab": 24,
+  "ih": 986,
+  "items": [
+   {
+    "el": "div 李娜 00:06 1 人 最小化",
+    "top": 0,
+    "bottom": 986,
+    "left": 0,
+    "right": 444,
+    "underStatusBar": true,
+    "underNavBar": true
+   },
+   {
+    "el": "header 李娜 00:06 1 人 最小化",
+    "top": 0,
+    "bottom": 56,
+    "left": 0,
+    "right": 444,
+    "underStatusBar": true,
+    "underNavBar": false
+   },
+   {
+    "el": "button 最小化",
+    "top": 12,
+    "bottom": 44,
+    "left": 344,
+    "right": 424,
+    "underStatusBar": true,
+    "underNavBar": false
+   },
+   {
+    "el": "footer 取消静音 开启视频 共享屏幕 挂",
+    "top": 906,
+    "bottom": 986,
+    "left": 0,
+    "right": 444,
+    "underStatusBar": false,
+    "underNavBar": true
+   },
+   {
+    "el": "button 取消静音",
+    "top": 925,
+    "bottom": 969,
+    "left": 16,
+    "right": 113,
+    "underStatusBar": false,
+    "underNavBar": true
+   },
+   {
+    "el": "button 开启视频",
+    "top": 925,
+    "bottom": 969,
+    "left": 125,
+    "right": 223,
+    "underStatusBar": false,
+    "underNavBar": true
+   },
+   {
+    "el": "button 共享屏幕",
+    "top": 925,
+    "bottom": 969,
+    "left": 235,
+    "right": 332,
+    "underStatusBar": false,
+    "underNavBar": true
+   },
+   {
+    "el": "button 挂断",
+    "top": 925,
+    "bottom": 969,
+    "left": 344,
+    "right": 428,
+    "underStatusBar": false,
+    "underNavBar": true
+   }
+  ]
+ },
+ {
+  "name": "03-call-active",
+  "sw": 443,
+  "iw": 443,
+  "sat": 49,
+  "sab": 24,
+  "ih": 986,
+  "items": [
+   {
+    "el": "div 李娜 00:14 2 人 最小化",
+    "top": 0,
+    "bottom": 986,
+    "left": 0,
+    "right": 444,
+    "underStatusBar": true,
+    "underNavBar": true
+   },
+   {
+    "el": "header 李娜 00:14 2 人 最小化",
+    "top": 0,
+    "bottom": 56,
+    "left": 0,
+    "right": 444,
+    "underStatusBar": true,
+    "underNavBar": false
+   },
+   {
+    "el": "button 最小化",
+    "top": 12,
+    "bottom": 44,
+    "left": 344,
+    "right": 424,
+    "underStatusBar": true,
+    "underNavBar": false
+   },
+   {
+    "el": "footer 取消静音 开启视频 共享屏幕 挂",
+    "top": 906,
+    "bottom": 986,
+    "left": 0,
+    "right": 444,
+    "underStatusBar": false,
+    "underNavBar": true
+   },
+   {
+    "el": "button 取消静音",
+    "top": 925,
+    "bottom": 969,
+    "left": 16,
+    "right": 113,
+    "underStatusBar": false,
+    "underNavBar": true
+   },
+   {
+    "el": "button 开启视频",
+    "top": 925,
+    "bottom": 969,
+    "left": 125,
+    "right": 223,
+    "underStatusBar": false,
+    "underNavBar": true
+   },
+   {
+    "el": "button 共享屏幕",
+    "top": 925,
+    "bottom": 969,
+    "left": 235,
+    "right": 332,
+    "underStatusBar": false,
+    "underNavBar": true
+   },
+   {
+    "el": "button 挂断",
+    "top": 925,
+    "bottom": 969,
+    "left": 344,
+    "right": 428,
+    "underStatusBar": false,
+    "underNavBar": true
+   }
+  ]
+ },
+ {
+  "name": "03-call-minimized",
+  "sw": 443,
+  "iw": 443,
+  "sat": 49,
+  "sab": 24,
+  "ih": 986,
+  "items": [
+   {
+    "el": "div 李娜 00:16 · 2 人",
+    "top": 912,
+    "bottom": 966,
+    "left": 191,
+    "right": 424,
+    "underStatusBar": false,
+    "underNavBar": true
+   },
+   {
+    "el": "button ",
+    "top": 924,
+    "bottom": 954,
+    "left": 295,
+    "right": 325,
+    "underStatusBar": false,
+    "underNavBar": false
+   },
+   {
+    "el": "button ",
+    "top": 924,
+    "bottom": 954,
+    "left": 337,
+    "right": 367,
+    "underStatusBar": false,
+    "underNavBar": false
+   },
+   {
+    "el": "button ",
+    "top": 924,
+    "bottom": 954,
+    "left": 379,
+    "right": 409,
+    "underStatusBar": false,
+    "underNavBar": false
+   }
+  ]
+ },
+ {
+  "name": "03-call-minimized-tabbar",
+  "sw": 443,
+  "iw": 443,
+  "sat": 49,
+  "sab": 24,
+  "ih": 986,
+  "items": [
+   {
+    "el": "div 李娜 00:19 · 2 人",
+    "top": 912,
+    "bottom": 966,
+    "left": 191,
+    "right": 424,
+    "underStatusBar": false,
+    "underNavBar": true
+   },
+   {
+    "el": "button ",
+    "top": 924,
+    "bottom": 954,
+    "left": 295,
+    "right": 325,
+    "underStatusBar": false,
+    "underNavBar": false
+   },
+   {
+    "el": "button ",
+    "top": 924,
+    "bottom": 954,
+    "left": 337,
+    "right": 367,
+    "underStatusBar": false,
+    "underNavBar": false
+   },
+   {
+    "el": "button ",
+    "top": 924,
+    "bottom": 954,
+    "left": 379,
+    "right": 409,
+    "underStatusBar": false,
+    "underNavBar": false
+   }
+  ]
+ },
+ {
+  "name": "03-call-incoming",
+  "sw": 443,
+  "iw": 443,
+  "sat": 49,
+  "sab": 24,
+  "ih": 986,
+  "items": [
+   {
+    "el": "div 李娜 李娜 邀请你加入语音通话 ",
+    "top": 20,
+    "bottom": 149,
+    "left": 94,
+    "right": 424,
+    "underStatusBar": true,
+    "underNavBar": false
+   },
+   {
+    "el": "button 拒绝",
+    "top": 97,
+    "bottom": 133,
+    "left": 251,
+    "right": 323,
+    "underStatusBar": false,
+    "underNavBar": false
+   },
+   {
+    "el": "button 接听",
+    "top": 97,
+    "bottom": 133,
+    "left": 331,
+    "right": 407,
+    "underStatusBar": false,
+    "underNavBar": false
+   }
+  ]
+ },
+ {
+  "name": "03-meeting",
+  "sw": 443,
+  "iw": 443,
+  "sat": 49,
+  "sab": 24,
+  "ih": 986,
+  "items": [
+   {
+    "el": "div 真机测试群 00:06 1 人 ",
+    "top": 0,
+    "bottom": 986,
+    "left": 0,
+    "right": 444,
+    "underStatusBar": true,
+    "underNavBar": true
+   },
+   {
+    "el": "header 真机测试群 00:06 1 人 ",
+    "top": 0,
+    "bottom": 56,
+    "left": 0,
+    "right": 444,
+    "underStatusBar": true,
+    "underNavBar": false
+   },
+   {
+    "el": "button 最小化",
+    "top": 12,
+    "bottom": 44,
+    "left": 344,
+    "right": 424,
+    "underStatusBar": true,
+    "underNavBar": false
+   },
+   {
+    "el": "footer 取消静音 开启视频 共享屏幕 挂",
+    "top": 906,
+    "bottom": 986,
+    "left": 0,
+    "right": 444,
+    "underStatusBar": false,
+    "underNavBar": true
+   },
+   {
+    "el": "button 取消静音",
+    "top": 925,
+    "bottom": 969,
+    "left": 16,
+    "right": 113,
+    "underStatusBar": false,
+    "underNavBar": true
+   },
+   {
+    "el": "button 开启视频",
+    "top": 925,
+    "bottom": 969,
+    "left": 125,
+    "right": 223,
+    "underStatusBar": false,
+    "underNavBar": true
+   },
+   {
+    "el": "button 共享屏幕",
+    "top": 925,
+    "bottom": 969,
+    "left": 235,
+    "right": 332,
+    "underStatusBar": false,
+    "underNavBar": true
+   },
+   {
+    "el": "button 挂断",
+    "top": 925,
+    "bottom": 969,
+    "left": 344,
+    "right": 428,
+    "underStatusBar": false,
+    "underNavBar": true
+   }
+  ]
+ }
+]

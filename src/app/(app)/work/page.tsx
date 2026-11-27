@@ -16,6 +16,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { Badge, StatusBadge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { RailPinButton } from "./rail-pin-button";
+import { TodoDeck } from "./todo-deck";
 import { WebFullLink } from "./web-full-link";
 
 function greeting(h: number) {
@@ -28,7 +29,7 @@ function greeting(h: number) {
 
 function Block({ title, href, count, children }: { title: string; href?: string; count?: number; children: ReactNode }) {
   return (
-    <div className="flex min-h-[220px] flex-col rounded-xl border border-line bg-white">
+    <div className="flex min-h-[220px] flex-col rounded-xl border border-line bg-white max-md:h-full">
       <div className="flex items-center justify-between px-4 pt-3 pb-2">
         <span className="flex items-center gap-1.5 text-[13px] font-semibold text-ink">
           {title}
@@ -75,8 +76,8 @@ function MobileEntry({ href, icon, color, label, hint, badge }: {
   );
 }
 
-function SectionTitle({ children }: { children: ReactNode }) {
-  return <h2 className="mb-3 mt-10 text-center text-xs font-medium text-ink-3">{children}</h2>;
+function SectionTitle({ children, className }: { children: ReactNode; className?: string }) {
+  return <h2 className={cn("mb-3 mt-10 text-center text-xs font-medium text-ink-3", className)}>{children}</h2>;
 }
 
 /** 等宽换行网格：不满一行时居中（CSS grid 做不到最后一行居中） */
@@ -232,6 +233,80 @@ export default async function WorkPage() {
   const modules = NAV_MODULES.filter((m) => enabled.has(m.key as ModuleKey) && can(user, m.perm));
   const todoTotal = approvalCount + taskCount;
   const today = startOfDay(now);
+  const todoBlocks = [
+    perm.oa && (
+      <Block key="approvals" title="待我审批" href="/oa/approvals" count={approvalCount}>
+        {approvals.length === 0 ? (
+          <Empty>🎉 没有待审批事项</Empty>
+        ) : (
+          approvals.map((a) => (
+            <Link key={a.id} href={`/oa/approvals/${a.id}`} className="flex items-center gap-2.5 rounded-md px-2.5 py-1.5 hover:bg-hover">
+              <span className="text-base">{a.flow.icon}</span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[13px] text-ink">{a.title}</span>
+                <span className="flex items-center gap-1 text-[11px] text-ink-3">
+                  <Avatar name={a.applicant.name} color={a.applicant.avatarColor} size={12} />
+                  {a.applicant.name} · {formatRelative(a.createdAt)}
+                </span>
+              </span>
+            </Link>
+          ))
+        )}
+      </Block>
+    ),
+    perm.pms && (
+      <Block key="tasks" title="我的任务" href="/pms/my-tasks" count={taskCount}>
+        {tasks.length === 0 ? (
+          <Empty>没有未完成的任务</Empty>
+        ) : (
+          tasks.map((t) => {
+            const overdue = t.dueDate && isBefore(t.dueDate, today);
+            return (
+              <Link
+                key={t.id}
+                href={`/pms/projects/${t.projectId}?task=${t.id}`}
+                className="flex items-center gap-2.5 rounded-md px-2.5 py-1.5 hover:bg-hover"
+              >
+                <span className="text-base">{t.project.icon}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[13px] text-ink">{t.title}</span>
+                  <span className="flex items-center gap-1.5 text-[11px] text-ink-3">
+                    <span className="truncate">{t.project.name}</span>
+                    {t.dueDate && <span className={cn(overdue && "text-danger")}>{overdue ? "已逾期 · " : ""}{format(t.dueDate, "M月d日")}截止</span>}
+                  </span>
+                </span>
+                <StatusBadge map={TASK_PRIORITY} value={t.priority} />
+              </Link>
+            );
+          })
+        )}
+      </Block>
+    ),
+    perm.oa && (
+      <Block key="events" title="今日日程" href="/oa/calendar?view=week">
+        {events.length === 0 ? (
+          <Empty>今天没有日程安排</Empty>
+        ) : (
+          events.map((e) => (
+            <Link
+              key={e.id}
+              href={`/oa/calendar?date=${format(e.startAt, "yyyy-MM-dd")}&event=${e.id}`}
+              className="flex items-center gap-2.5 rounded-md px-2.5 py-1.5 hover:bg-hover"
+            >
+              <span className="h-7 w-1 shrink-0 rounded-full" style={{ backgroundColor: e.color }} />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[13px] text-ink">{e.title}</span>
+                <span className="block truncate text-[11px] text-ink-3">
+                  {e.allDay ? "全天" : `${format(e.startAt, "HH:mm")} - ${format(e.endAt, "HH:mm")}`}
+                  {e.location ? ` · ${e.location}` : ""}
+                </span>
+              </span>
+            </Link>
+          ))
+        )}
+      </Block>
+    ),
+  ].filter(Boolean);
 
   return (
     <>
@@ -249,50 +324,14 @@ export default async function WorkPage() {
           </p>
         </header>
 
-        {/* 手机布局没有侧边栏，收件箱入口放在工作台顶部 */}
-        <Link
-          href="/inbox"
-          className="mt-5 flex items-center gap-3 rounded-xl border border-line bg-white p-3 active:bg-sidebar md:hidden"
-        >
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
-            <Inbox className="size-5" />
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block text-sm font-medium text-ink">收件箱</span>
-            <span className="block truncate text-xs text-ink-3">审批、评论、@提及、任务等通知</span>
-          </span>
-          {inboxUnread > 0 && (
-            <span className="rounded-full bg-danger px-2 py-0.5 text-xs font-medium text-white">{inboxUnread > 99 ? "99+" : inboxUnread}</span>
-          )}
-          <ArrowRight className="size-4 text-ink-3" />
-        </Link>
+        {/* 手机：待办（审批、任务、日程）放在最上方，左右滑动切换 */}
+        {todoBlocks.length > 0 && (
+          <div className="mt-5 md:hidden" data-mobile-todos>
+            <TodoDeck>{todoBlocks}</TodoDeck>
+          </div>
+        )}
 
-        {/* 手机端第一期的工作入口：审批（只处理）、公告（只读）与 Web 完整版 */}
-        <div className="mt-2 space-y-2 md:hidden" data-mobile-work-entries>
-          {perm.oa && (
-            <>
-              <MobileEntry
-                href="/oa/approvals"
-                icon={<Stamp className="size-5" />}
-                color="#448361"
-                label="审批"
-                hint={approvalCount > 0 ? `${approvalCount} 项待我审批` : "查看并处理审批"}
-                badge={approvalCount}
-              />
-              <MobileEntry
-                href="/oa/announcements"
-                icon={<Megaphone className="size-5" />}
-                color="#d9730d"
-                label="公告"
-                hint={unreadAnnouncements > 0 ? `${unreadAnnouncements} 条未读公告` : "公司动态、制度与通知"}
-                badge={unreadAnnouncements}
-              />
-            </>
-          )}
-          <WebFullLink />
-        </div>
-
-        <SectionTitle>应用</SectionTitle>
+        <SectionTitle className="max-md:mt-6">应用</SectionTitle>
         <div
           className={cn(
             CENTER_ROW,
@@ -318,81 +357,51 @@ export default async function WorkPage() {
           })}
         </div>
 
-        <SectionTitle>待办</SectionTitle>
-        <div className={cn(CENTER_ROW, "*:basis-full md:*:basis-[calc((100%_-_24px)/3)]")}>
+        {/* 手机：应用下面是收件箱（手机布局没有侧边栏）、审批、公告入口与 Web 完整版 */}
+        <Link
+          href="/inbox"
+          className="mt-6 flex items-center gap-3 rounded-xl border border-line bg-white p-3 active:bg-sidebar md:hidden"
+        >
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
+            <Inbox className="size-5" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-medium text-ink">收件箱</span>
+            <span className="block truncate text-xs text-ink-3">审批、评论、@提及、任务等通知</span>
+          </span>
+          {inboxUnread > 0 && (
+            <span className="rounded-full bg-danger px-2 py-0.5 text-xs font-medium text-white">{inboxUnread > 99 ? "99+" : inboxUnread}</span>
+          )}
+          <ArrowRight className="size-4 text-ink-3" />
+        </Link>
+
+        <div className="mt-2 space-y-2 md:hidden" data-mobile-work-entries>
           {perm.oa && (
-            <Block title="待我审批" href="/oa/approvals" count={approvalCount}>
-              {approvals.length === 0 ? (
-                <Empty>🎉 没有待审批事项</Empty>
-              ) : (
-                approvals.map((a) => (
-                  <Link key={a.id} href={`/oa/approvals/${a.id}`} className="flex items-center gap-2.5 rounded-md px-2.5 py-1.5 hover:bg-hover">
-                    <span className="text-base">{a.flow.icon}</span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[13px] text-ink">{a.title}</span>
-                      <span className="flex items-center gap-1 text-[11px] text-ink-3">
-                        <Avatar name={a.applicant.name} color={a.applicant.avatarColor} size={12} />
-                        {a.applicant.name} · {formatRelative(a.createdAt)}
-                      </span>
-                    </span>
-                  </Link>
-                ))
-              )}
-            </Block>
+            <>
+              <MobileEntry
+                href="/oa/approvals"
+                icon={<Stamp className="size-5" />}
+                color="#448361"
+                label="审批"
+                hint={approvalCount > 0 ? `${approvalCount} 项待我审批` : "查看并处理审批"}
+                badge={approvalCount}
+              />
+              <MobileEntry
+                href="/oa/announcements"
+                icon={<Megaphone className="size-5" />}
+                color="#d9730d"
+                label="公告"
+                hint={unreadAnnouncements > 0 ? `${unreadAnnouncements} 条未读公告` : "公司动态、制度与通知"}
+                badge={unreadAnnouncements}
+              />
+            </>
           )}
-          {perm.pms && (
-            <Block title="我的任务" href="/pms/my-tasks" count={taskCount}>
-              {tasks.length === 0 ? (
-                <Empty>没有未完成的任务</Empty>
-              ) : (
-                tasks.map((t) => {
-                  const overdue = t.dueDate && isBefore(t.dueDate, today);
-                  return (
-                    <Link
-                      key={t.id}
-                      href={`/pms/projects/${t.projectId}?task=${t.id}`}
-                      className="flex items-center gap-2.5 rounded-md px-2.5 py-1.5 hover:bg-hover"
-                    >
-                      <span className="text-base">{t.project.icon}</span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[13px] text-ink">{t.title}</span>
-                        <span className="flex items-center gap-1.5 text-[11px] text-ink-3">
-                          <span className="truncate">{t.project.name}</span>
-                          {t.dueDate && <span className={cn(overdue && "text-danger")}>{overdue ? "已逾期 · " : ""}{format(t.dueDate, "M月d日")}截止</span>}
-                        </span>
-                      </span>
-                      <StatusBadge map={TASK_PRIORITY} value={t.priority} />
-                    </Link>
-                  );
-                })
-              )}
-            </Block>
-          )}
-          {perm.oa && (
-            <Block title="今日日程" href="/oa/calendar?view=week">
-              {events.length === 0 ? (
-                <Empty>今天没有日程安排</Empty>
-              ) : (
-                events.map((e) => (
-                  <Link
-                    key={e.id}
-                    href={`/oa/calendar?date=${format(e.startAt, "yyyy-MM-dd")}&event=${e.id}`}
-                    className="flex items-center gap-2.5 rounded-md px-2.5 py-1.5 hover:bg-hover"
-                  >
-                    <span className="h-7 w-1 shrink-0 rounded-full" style={{ backgroundColor: e.color }} />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[13px] text-ink">{e.title}</span>
-                      <span className="block truncate text-[11px] text-ink-3">
-                        {e.allDay ? "全天" : `${format(e.startAt, "HH:mm")} - ${format(e.endAt, "HH:mm")}`}
-                        {e.location ? ` · ${e.location}` : ""}
-                      </span>
-                    </span>
-                  </Link>
-                ))
-              )}
-            </Block>
-          )}
+          <WebFullLink />
         </div>
+
+        {/* 手机上待办已放到页面顶部的横滑卡片里 */}
+        <SectionTitle className="max-md:hidden">待办</SectionTitle>
+        <div className={cn(CENTER_ROW, "*:basis-full md:*:basis-[calc((100%_-_24px)/3)] max-md:hidden")}>{todoBlocks}</div>
 
         {perm.docs && (
           <>
@@ -423,8 +432,9 @@ export default async function WorkPage() {
           </>
         )}
 
-        <SectionTitle>应用概览</SectionTitle>
-        <div className={cn(CENTER_ROW, COLS_2_4)}>
+        {/* 手机工作台不显示应用概览和最新公告（各模块首页有概览，公告有单独入口） */}
+        <SectionTitle className="max-md:hidden">应用概览</SectionTitle>
+        <div className={cn(CENTER_ROW, COLS_2_4, "max-md:hidden")}>
           {perm.docs && (
             <Link href="/docs" className="rounded-xl border border-line bg-white p-4 transition-colors hover:bg-sidebar">
               <div className="flex items-center gap-2 text-sm font-medium text-ink">
@@ -453,8 +463,8 @@ export default async function WorkPage() {
 
         {perm.oa && announcements.length > 0 && (
           <>
-            <SectionTitle>最新公告</SectionTitle>
-            <div className="divide-y divide-line rounded-xl border border-line bg-white">
+            <SectionTitle className="max-md:hidden">最新公告</SectionTitle>
+            <div className="divide-y divide-line rounded-xl border border-line bg-white max-md:hidden">
               {announcements.map((a) => (
                 <Link key={a.id} href={`/oa/announcements/${a.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-sidebar">
                   <span className="flex w-2 justify-center">{!a.reads.length && <span className="size-2 rounded-full bg-accent" />}</span>

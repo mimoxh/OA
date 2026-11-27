@@ -1,10 +1,13 @@
 import Link from "next/link";
-import { ChevronRight, Inbox, Settings, UserRound } from "lucide-react";
+import { ChevronRight, Settings, UserRound } from "lucide-react";
 import type { ReactNode } from "react";
 import { requireUser } from "@/lib/auth/dal";
 import { hasPermission } from "@/lib/permissions";
 import { Avatar } from "@/components/ui/avatar";
 import { MeAppSection, MeLogout } from "./me-client";
+import { meLinks } from "./me-links";
+
+const ICONS = { profile: <UserRound />, admin: <Settings /> };
 
 export const metadata = { title: "我的" };
 
@@ -35,9 +38,9 @@ export default async function MePage() {
         </div>
 
         <div className="mt-3 divide-y divide-line overflow-hidden rounded-xl bg-white">
-          <Row href="/settings/profile" icon={<UserRound />} label="个人资料" />
-          <Row href="/inbox" icon={<Inbox />} label="收件箱" />
-          {isAdmin && <Row href="/settings/members" icon={<Settings />} label="管理后台" />}
+          {meLinks({ isAdmin }).map((l) => (
+            <Row key={l.href} href={l.href} icon={ICONS[l.icon]} label={l.label} />
+          ))}
         </div>
 
         <MeAppSection />

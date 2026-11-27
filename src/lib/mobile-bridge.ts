@@ -181,6 +181,13 @@ export async function openMobileExternal(url: string): Promise<boolean> {
   return (await call("OAShell", "openExternal", { url })) !== null;
 }
 
+/**
+ * 系统栏图标配色（Capacitor SystemBars）：DARK = 浅色图标，给深色全屏界面用；DEFAULT = 跟随系统（App 默认，配白色状态栏底）。
+ */
+export function setMobileSystemBarsStyle(style: "DARK" | "LIGHT" | "DEFAULT") {
+  void call("SystemBars", "setStyle", { style });
+}
+
 /** App 退到后台（等同按 Home 键），用于在根页面按返回键 */
 export function minimizeMobileApp() {
   void call("App", "minimizeApp");
