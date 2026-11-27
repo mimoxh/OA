@@ -134,8 +134,9 @@ function FileMessage({ file }: { file: FileContent }) {
       {pdf ? <Eye className="size-4 shrink-0 text-ink-3" /> : <Download className="size-4 shrink-0 text-ink-3" />}
     </>
   );
+  // 手机上 75vw 比气泡列宽（88% − 头像列）大，窄屏时会盖住右侧自己的头像，所以改为跟随气泡宽度
   const cls =
-    "flex w-[280px] max-w-[75vw] items-center gap-3 rounded-lg border border-line bg-white p-3 text-left shadow-card transition-shadow hover:shadow-pop";
+    "flex w-[280px] max-w-[75vw] items-center gap-3 rounded-lg border border-line bg-white p-3 text-left shadow-card transition-shadow hover:shadow-pop max-md:max-w-full";
   if (!pdf) {
     return (
       <a href={`${file.url}?download=1`} download={file.filename} className={cls}>

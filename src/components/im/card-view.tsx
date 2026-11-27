@@ -43,7 +43,7 @@ export function CardView({ messageId, card }: { messageId: string; card: Card })
     });
 
   return (
-    <div className="w-[320px] max-w-[80vw] overflow-hidden rounded-lg border border-line bg-white shadow-card">
+    <div className="w-[320px] max-w-[80vw] overflow-hidden rounded-lg border border-line bg-white shadow-card max-md:max-w-full">
       <div className="h-1" style={{ backgroundColor: card.status ? STRIP[card.status.color] : "#787774" }} />
       <div className="p-3">
         <div className="flex items-start justify-between gap-2">

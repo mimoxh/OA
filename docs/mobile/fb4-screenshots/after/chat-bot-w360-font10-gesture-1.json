@@ -1,0 +1,102 @@
+{
+ "iw": 360,
+ "ih": 800,
+ "sw": 360,
+ "fontPx": 14,
+ "dpr": 3.387500047683716,
+ "bad": 0,
+ "items": [
+  {
+   "id": "cmwxguy8200el88wroqtjnyj9",
+   "mine": false,
+   "kind": "card",
+   "label": "陈静 提交的「采购订单 PO202611260002（深圳华显电子有限公司）」待",
+   "avatar": null,
+   "avatarCol": {
+    "l": 16,
+    "r": 48,
+    "t": -283,
+    "b": 17.7,
+    "w": 32,
+    "h": 300.8
+   },
+   "content": {
+    "l": 56,
+    "r": 304.8
+   },
+   "fileBox": null,
+   "nameTruncated": null,
+   "overlapPx": -8,
+   "ok": true
+  },
+  {
+   "id": "cmwxguy9n00fm88wrq9fuqkx4",
+   "mine": false,
+   "kind": "card",
+   "label": "陈静 提交的「采购订单 PO202611260003（杭州优选办公家具有限公司）",
+   "avatar": null,
+   "avatarCol": {
+    "l": 16,
+    "r": 48,
+    "t": 19.7,
+    "b": 320.5,
+    "w": 32,
+    "h": 300.8
+   },
+   "content": {
+    "l": 56,
+    "r": 304.8
+   },
+   "fileBox": null,
+   "nameTruncated": null,
+   "overlapPx": -8,
+   "ok": true
+  },
+  {
+   "id": "cmwxguya400fz88wreelvnb9h",
+   "mine": false,
+   "kind": "card",
+   "label": "陈静 提交的「采购订单 PO202611260004（广州晨光耗材供应链有限公司",
+   "avatar": null,
+   "avatarCol": {
+    "l": 16,
+    "r": 48,
+    "t": 322.5,
+    "b": 623.2,
+    "w": 32,
+    "h": 300.8
+   },
+   "content": {
+    "l": 56,
+    "r": 304.8
+   },
+   "fileBox": null,
+   "nameTruncated": null,
+   "overlapPx": -8,
+   "ok": true
+  },
+  {
+   "id": "cmwxguyb200go88wruqa7cq6j",
+   "mine": false,
+   "kind": "card",
+   "label": "陈静 提交的「采购订单 PO202611260005（深圳华显电子有限公司）」待",
+   "avatar": null,
+   "avatarCol": {
+    "l": 16,
+    "r": 48,
+    "t": 625.2,
+    "b": 964.5,
+    "w": 32,
+    "h": 339.2
+   },
+   "content": {
+    "l": 56,
+    "r": 304.8
+   },
+   "fileBox": null,
+   "nameTruncated": null,
+   "overlapPx": -8,
+   "ok": true
+  }
+ ]
+}

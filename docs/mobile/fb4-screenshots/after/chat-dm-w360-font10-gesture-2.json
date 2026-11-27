@@ -1,0 +1,303 @@
+{
+ "iw": 360,
+ "ih": 800,
+ "sw": 360,
+ "fontPx": 14,
+ "dpr": 3.387500047683716,
+ "bad": 0,
+ "items": [
+  {
+   "id": "cmwxgxqu8000ec8wr3h76khaw",
+   "mine": false,
+   "kind": "file",
+   "label": "损坏文件.pdf 39.1 KB · 点击预览",
+   "avatar": null,
+   "avatarCol": {
+    "l": 16,
+    "r": 48,
+    "t": -51.4,
+    "b": 14.4,
+    "w": 32,
+    "h": 65.8
+   },
+   "content": {
+    "l": 56,
+    "r": 304.8
+   },
+   "fileBox": {
+    "l": 56,
+    "r": 304.8,
+    "t": -51.4,
+    "b": 14.4,
+    "w": 248.8,
+    "h": 65.8
+   },
+   "nameTruncated": false,
+   "overlapPx": -8,
+   "ok": true
+  },
+  {
+   "id": "cmwxgxqun000gc8wr6isnc4wx",
+   "mine": false,
+   "kind": "file",
+   "label": "测试文本.txt 91 B",
+   "avatar": null,
+   "avatarCol": {
+    "l": 16,
+    "r": 48,
+    "t": 16.4,
+    "b": 82.1,
+    "w": 32,
+    "h": 65.8
+   },
+   "content": {
+    "l": 56,
+    "r": 304.8
+   },
+   "fileBox": {
+    "l": 56,
+    "r": 304.8,
+    "t": 16.4,
+    "b": 82.1,
+    "w": 248.8,
+    "h": 65.8
+   },
+   "nameTruncated": false,
+   "overlapPx": -8,
+   "ok": true
+  },
+  {
+   "id": "cmwxgxqv5000hc8wrvepvbut4",
+   "mine": false,
+   "kind": "ref",
+   "label": "测试文档：表格和附件 📱 真机测试文档（表格与附件） 云文档 公司知识库",
+   "avatar": null,
+   "avatarCol": {
+    "l": 16,
+    "r": 48,
+    "t": 84.1,
+    "b": 189.5,
+    "w": 32,
+    "h": 105.4
+   },
+   "content": {
+    "l": 56,
+    "r": 304.8
+   },
+   "fileBox": null,
+   "nameTruncated": null,
+   "overlapPx": -8,
+   "ok": true
+  },
+  {
+   "id": "cmwxgxqvg000ic8wr9365vt3g",
+   "mine": false,
+   "kind": "ref",
+   "label": "普通白板（30 个元素） 🎨 真机测试白板（30 个元素） 云文档 公司知识库",
+   "avatar": null,
+   "avatarCol": {
+    "l": 16,
+    "r": 48,
+    "t": 191.5,
+    "b": 296.9,
+    "w": 32,
+    "h": 105.4
+   },
+   "content": {
+    "l": 56,
+    "r": 304.8
+   },
+   "fileBox": null,
+   "nameTruncated": null,
+   "overlapPx": -8,
+   "ok": true
+  },
+  {
+   "id": "cmwxgxqvx000jc8wrfhhobdkx",
+   "mine": false,
+   "kind": "ref",
+   "label": "大白板（接近 1 MB） 🎨 真机测试大白板（接近 1 MB） 云文档 公司知",
+   "avatar": null,
+   "avatarCol": {
+    "l": 16,
+    "r": 48,
+    "t": 298.9,
+    "b": 404.3,
+    "w": 32,
+    "h": 105.4
+   },
+   "content": {
+    "l": 56,
+    "r": 304.8
+   },
+   "fileBox": null,
+   "nameTruncated": null,
+   "overlapPx": -8,
+   "ok": true
+  },
+  {
+   "id": "cmwxhcr3o0007sswrn7r22bxm",
+   "mine": false,
+   "kind": "text",
+   "label": "真机冒烟 冒烟75497",
+   "avatar": {
+    "l": 16,
+    "r": 48,
+    "t": 416.3,
+    "b": 448.3,
+    "w": 32,
+    "h": 32
+   },
+   "avatarCol": {
+    "l": 16,
+    "r": 48,
+    "t": 416.3,
+    "b": 456.8,
+    "w": 32,
+    "h": 40.5
+   },
+   "content": {
+    "l": 56,
+    "r": 208.5
+   },
+   "fileBox": null,
+   "nameTruncated": null,
+   "overlapPx": -8,
+   "ok": true
+  },
+  {
+   "id": "cmwys2em30001b8wriniuza1j",
+   "mine": true,
+   "kind": "file",
+   "label": "合同.pdf 4.5 KB · 点击预览 已读",
+   "avatar": {
+    "l": 312.2,
+    "r": 344.2,
+    "t": 504.8,
+    "b": 536.8,
+    "w": 32,
+    "h": 32
+   },
+   "avatarCol": {
+    "l": 312.2,
+    "r": 344.2,
+    "t": 504.8,
+    "b": 589.1,
+    "w": 32,
+    "h": 84.3
+   },
+   "content": {
+    "l": 55.4,
+    "r": 304.2
+   },
+   "fileBox": {
+    "l": 55.4,
+    "r": 304.2,
+    "t": 504.8,
+    "b": 570.6,
+    "w": 248.8,
+    "h": 65.8
+   },
+   "nameTruncated": false,
+   "overlapPx": -8,
+   "ok": true
+  },
+  {
+   "id": "cmwys2gmm0003b8wrmriht4o6",
+   "mine": true,
+   "kind": "file",
+   "label": "2026年第四季度华东区域销售合同审批材料汇总（含附件与补充说明）最终版.pdf",
+   "avatar": null,
+   "avatarCol": {
+    "l": 312.2,
+    "r": 344.2,
+    "t": 591.1,
+    "b": 675.3,
+    "w": 32,
+    "h": 84.3
+   },
+   "content": {
+    "l": 55.4,
+    "r": 304.2
+   },
+   "fileBox": {
+    "l": 55.4,
+    "r": 304.2,
+    "t": 591.1,
+    "b": 656.8,
+    "w": 248.8,
+    "h": 65.8
+   },
+   "nameTruncated": true,
+   "overlapPx": -8,
+   "ok": true
+  },
+  {
+   "id": "cmwys2io80005b8wr3mqr52s5",
+   "mine": true,
+   "kind": "file",
+   "label": "Q4-2026-East-China-Regional-Sales-Contra",
+   "avatar": null,
+   "avatarCol": {
+    "l": 312.2,
+    "r": 344.2,
+    "t": 677.3,
+    "b": 761.6,
+    "w": 32,
+    "h": 84.3
+   },
+   "content": {
+    "l": 55.4,
+    "r": 304.2
+   },
+   "fileBox": {
+    "l": 55.4,
+    "r": 304.2,
+    "t": 677.3,
+    "b": 743.1,
+    "w": 248.8,
+    "h": 65.8
+   },
+   "nameTruncated": true,
+   "overlapPx": -8,
+   "ok": true
+  },
+  {
+   "id": "cmwys5gba0007b8wrcru770w2",
+   "mine": false,
+   "kind": "file",
+   "label": "关于2026年度华东华南区域渠道合作伙伴返利政策调整及结算流程优化的请示（第三版",
+   "avatar": {
+    "l": 16,
+    "r": 48,
+    "t": 773.6,
+    "b": 805.6,
+    "w": 32,
+    "h": 32
+   },
+   "avatarCol": {
+    "l": 16,
+    "r": 48,
+    "t": 773.6,
+    "b": 839.4,
+    "w": 32,
+    "h": 65.8
+   },
+   "content": {
+    "l": 56,
+    "r": 304.8
+   },
+   "fileBox": {
+    "l": 56,
+    "r": 304.8,
+    "t": 773.6,
+    "b": 839.4,
+    "w": 248.8,
+    "h": 65.8
+   },
+   "nameTruncated": true,
+   "overlapPx": -8,
+   "ok": true
+  }
+ ]
+}
