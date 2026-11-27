@@ -139,7 +139,8 @@ function EventDetail({ event, meId, onClose }: { event: CalEvent; meId: string; 
       }
       footer={
         <>
-          <div className="mr-auto flex items-center gap-2">
+          {/* 手机上回执按钮单独占一行、等宽：和会议群 / 发起会议挤在一行时，字体调大后会在「拒绝」「接受」之间折行 */}
+          <div className={cn("mr-auto flex items-center gap-2", mine && "max-md:w-full")}>
             <BizGroupButton
               bizType="event"
               bizId={event.id}
@@ -149,7 +150,7 @@ function EventDetail({ event, meId, onClose }: { event: CalEvent; meId: string; 
             <StartMeetingButton eventId={event.id} onClose={onClose} />
           </div>
           {mine ? (
-            <>
+            <div className="flex items-center gap-2 max-md:w-full max-md:[&>button]:h-10 max-md:[&>button]:flex-1" data-event-response>
               <Button
                 variant={mine.status === "declined" ? "danger" : "default"}
                 loading={pending}
@@ -166,7 +167,7 @@ function EventDetail({ event, meId, onClose }: { event: CalEvent; meId: string; 
                 <Check className="size-3.5" />
                 接受
               </Button>
-            </>
+            </div>
           ) : (
             <Button onClick={onClose}>关闭</Button>
           )}

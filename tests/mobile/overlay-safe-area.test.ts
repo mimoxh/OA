@@ -15,6 +15,12 @@ describe("全屏浮层的安全区（手机布局）", () => {
     assert.match(src, /fixed bottom-5 right-5[^"]*max-md:bottom-auto[^"]*max-md:top-\[calc\(var\(--sat\)\+6\.75rem\)\]/);
   });
 
+  it("日程详情：手机上「拒绝」「接受」单独一行、等宽，不和会议按钮挤在一起折行", () => {
+    const src = read("src/app/(app)/oa/calendar/event-dialog.tsx");
+    assert.match(src, /mine && "max-md:w-full"/);
+    assert.match(src, /className="[^"]*max-md:w-full max-md:\[&>button\]:h-10 max-md:\[&>button\]:flex-1" data-event-response/);
+  });
+
   it("文档评论面板与数据表记录抽屉", () => {
     assert.match(read("src/components/docs/comments-panel.tsx"), /max-lg:fixed[^"]*max-md:top-0[^"]*max-md:pt-\[var\(--sat\)\] max-md:pb-\[var\(--sab\)\]/);
     const drawer = read("src/components/docs/database/row-drawer.tsx");

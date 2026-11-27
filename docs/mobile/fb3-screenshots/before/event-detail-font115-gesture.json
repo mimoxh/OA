@@ -1,0 +1,59 @@
+{
+ "footer": {
+  "top": 849,
+  "bottom": 962,
+  "h": 113,
+  "sw": 444,
+  "cw": 444
+ },
+ "rows": 3,
+ "btns": [
+  {
+   "text": "创建会议群",
+   "top": 868,
+   "bottom": 896,
+   "left": 20,
+   "right": 136,
+   "w": 116,
+   "h": 28,
+   "textLines": 2,
+   "clipped": false
+  },
+  {
+   "text": "发起会议",
+   "top": 868,
+   "bottom": 896,
+   "left": 144,
+   "right": 245,
+   "w": 101,
+   "h": 28,
+   "textLines": 2,
+   "clipped": false
+  },
+  {
+   "text": "拒绝",
+   "top": 862,
+   "bottom": 902,
+   "left": 340,
+   "right": 424,
+   "w": 83,
+   "h": 40,
+   "textLines": 2,
+   "clipped": false
+  },
+  {
+   "text": "接受",
+   "top": 910,
+   "bottom": 950,
+   "left": 340,
+   "right": 424,
+   "w": 83,
+   "h": 40,
+   "textLines": 2,
+   "clipped": false
+  }
+ ],
+ "sw": 443,
+ "iw": 443,
+ "ih": 986
+}
