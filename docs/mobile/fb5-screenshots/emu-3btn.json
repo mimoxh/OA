@@ -1,0 +1,1228 @@
+{
+ "suffix": "3btn",
+ "previews": [
+  {
+   "name": "01-docx",
+   "file": "采购合同.docx",
+   "kind": "docx",
+   "error": null,
+   "notice": null,
+   "sw": 443,
+   "iw": 443,
+   "sat": 49,
+   "sab": 48,
+   "ih": 986,
+   "blocked": [],
+   "items": [
+    {
+     "el": "button[关闭] ",
+     "top": 50,
+     "bottom": 98,
+     "left": 0,
+     "right": 48,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "a 下载",
+     "top": 58,
+     "bottom": 90,
+     "left": 366,
+     "right": 436,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "div − 100% +",
+     "top": 99,
+     "bottom": 938,
+     "left": 0,
+     "right": 444,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "div − 100% +",
+     "top": 890,
+     "bottom": 926,
+     "left": 308,
+     "right": 432,
+     "underStatusBar": false,
+     "underNavBar": false
+    }
+   ],
+   "back": {
+    "closed": true,
+    "stayed": true
+   }
+  },
+  {
+   "name": "02-xlsx",
+   "file": "销售数据.xlsx",
+   "kind": "sheet",
+   "error": null,
+   "notice": null,
+   "sw": 443,
+   "iw": 443,
+   "sat": 49,
+   "sab": 48,
+   "ih": 986,
+   "blocked": [],
+   "items": [
+    {
+     "el": "button[关闭] ",
+     "top": 50,
+     "bottom": 98,
+     "left": 0,
+     "right": 48,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "a 下载",
+     "top": 58,
+     "bottom": 90,
+     "left": 366,
+     "right": 436,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "div A\tB\tC\tD\tE\tF 1\t20",
+     "top": 99,
+     "bottom": 938,
+     "left": 0,
+     "right": 444,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "div 一季度销售 区域汇总 宽表（40",
+     "top": 894,
+     "bottom": 938,
+     "left": 0,
+     "right": 444,
+     "underStatusBar": false,
+     "underNavBar": false
+    }
+   ]
+  },
+  {
+   "name": "02-xlsx-wide-sheet",
+   "file": "销售数据.xlsx",
+   "kind": "sheet",
+   "error": null,
+   "notice": null,
+   "sw": 443,
+   "iw": 443,
+   "sat": 49,
+   "sab": 48,
+   "ih": 986,
+   "blocked": [],
+   "items": [
+    {
+     "el": "button[关闭] ",
+     "top": 50,
+     "bottom": 98,
+     "left": 0,
+     "right": 48,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "a 下载",
+     "top": 58,
+     "bottom": 90,
+     "left": 366,
+     "right": 436,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "div A\tB\tC\tD\tE\tF\tG\tH\t",
+     "top": 99,
+     "bottom": 938,
+     "left": 0,
+     "right": 444,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "div 一季度销售 区域汇总 宽表（40",
+     "top": 894,
+     "bottom": 938,
+     "left": 0,
+     "right": 444,
+     "underStatusBar": false,
+     "underNavBar": false
+    }
+   ],
+   "back": {
+    "closed": true,
+    "stayed": true
+   }
+  },
+  {
+   "name": "03-xls",
+   "file": "旧版报表.xls",
+   "kind": "sheet",
+   "error": null,
+   "notice": null,
+   "sw": 443,
+   "iw": 443,
+   "sat": 49,
+   "sab": 48,
+   "ih": 986,
+   "blocked": [],
+   "items": [
+    {
+     "el": "button[关闭] ",
+     "top": 50,
+     "bottom": 98,
+     "left": 0,
+     "right": 48,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "a 下载",
+     "top": 58,
+     "bottom": 90,
+     "left": 366,
+     "right": 436,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "div A\tB\tC\tD\tE 1\t部门\t姓",
+     "top": 99,
+     "bottom": 938,
+     "left": 0,
+     "right": 444,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "div 员工名单 部门统计",
+     "top": 894,
+     "bottom": 938,
+     "left": 0,
+     "right": 444,
+     "underStatusBar": false,
+     "underNavBar": false
+    }
+   ],
+   "back": {
+    "closed": true,
+    "stayed": true
+   }
+  },
+  {
+   "name": "04-csv-gbk",
+   "file": "客户名单-GBK.csv",
+   "kind": "sheet",
+   "error": null,
+   "notice": "文本编码：GBK / GB18030",
+   "sw": 443,
+   "iw": 443,
+   "sat": 49,
+   "sab": 48,
+   "ih": 986,
+   "blocked": [],
+   "items": [
+    {
+     "el": "button[关闭] ",
+     "top": 50,
+     "bottom": 98,
+     "left": 0,
+     "right": 48,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "a 下载",
+     "top": 58,
+     "bottom": 90,
+     "left": 366,
+     "right": 436,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "div 文本编码：GBK / GB180",
+     "top": 99,
+     "bottom": 938,
+     "left": 0,
+     "right": 444,
+     "underStatusBar": false,
+     "underNavBar": false
+    }
+   ],
+   "back": {
+    "closed": true,
+    "stayed": true
+   }
+  },
+  {
+   "name": "05-pptx",
+   "file": "产品方案.pptx",
+   "kind": "pptx",
+   "error": null,
+   "notice": null,
+   "sw": 443,
+   "iw": 443,
+   "sat": 49,
+   "sab": 48,
+   "ih": 986,
+   "blocked": [],
+   "items": [
+    {
+     "el": "button[关闭] ",
+     "top": 50,
+     "bottom": 98,
+     "left": 0,
+     "right": 48,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "a 下载",
+     "top": 58,
+     "bottom": 90,
+     "left": 366,
+     "right": 436,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "div 第 1 / 5 页 备注 OA ",
+     "top": 99,
+     "bottom": 938,
+     "left": 0,
+     "right": 444,
+     "underStatusBar": false,
+     "underNavBar": false
+    }
+   ]
+  },
+  {
+   "name": "05-pptx-slide4",
+   "file": "产品方案.pptx",
+   "kind": "pptx",
+   "error": null,
+   "notice": null,
+   "sw": 443,
+   "iw": 443,
+   "sat": 49,
+   "sab": 48,
+   "ih": 986,
+   "blocked": [],
+   "items": [
+    {
+     "el": "button[关闭] ",
+     "top": 50,
+     "bottom": 98,
+     "left": 0,
+     "right": 48,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "a 下载",
+     "top": 58,
+     "bottom": 90,
+     "left": 366,
+     "right": 436,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "div 第 1 / 5 页 备注 第 2",
+     "top": 99,
+     "bottom": 938,
+     "left": 0,
+     "right": 444,
+     "underStatusBar": false,
+     "underNavBar": false
+    }
+   ],
+   "back": {
+    "closed": true,
+    "stayed": true
+   }
+  },
+  {
+   "name": "06-md",
+   "file": "预览说明.md",
+   "kind": "markdown",
+   "error": null,
+   "notice": null,
+   "sw": 443,
+   "iw": 443,
+   "sat": 49,
+   "sab": 48,
+   "ih": 986,
+   "blocked": [],
+   "items": [
+    {
+     "el": "button[关闭] ",
+     "top": 50,
+     "bottom": 98,
+     "left": 0,
+     "right": 48,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "a 下载",
+     "top": 58,
+     "bottom": 90,
+     "left": 366,
+     "right": 436,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "div 预览 源码 UTF-8 文件预览",
+     "top": 99,
+     "bottom": 938,
+     "left": 0,
+     "right": 444,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "div 预览 源码 UTF-8",
+     "top": 99,
+     "bottom": 135,
+     "left": 0,
+     "right": 444,
+     "underStatusBar": false,
+     "underNavBar": false
+    }
+   ],
+   "back": {
+    "closed": true,
+    "stayed": true
+   }
+  },
+  {
+   "name": "07-json",
+   "file": "配置.json",
+   "kind": "json",
+   "error": null,
+   "notice": null,
+   "sw": 443,
+   "iw": 443,
+   "sat": 49,
+   "sab": 48,
+   "ih": 986,
+   "blocked": [],
+   "items": [
+    {
+     "el": "button[关闭] ",
+     "top": 50,
+     "bottom": 98,
+     "left": 0,
+     "right": 48,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "a 下载",
+     "top": 58,
+     "bottom": 90,
+     "left": 366,
+     "right": 436,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "div 格式化 原文 自动换行 UTF-",
+     "top": 99,
+     "bottom": 938,
+     "left": 0,
+     "right": 444,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "div 格式化 原文 自动换行 UTF-",
+     "top": 99,
+     "bottom": 135,
+     "left": 0,
+     "right": 444,
+     "underStatusBar": false,
+     "underNavBar": false
+    }
+   ],
+   "back": {
+    "closed": true,
+    "stayed": true
+   }
+  },
+  {
+   "name": "08-log",
+   "file": "服务日志.log",
+   "kind": "text",
+   "error": null,
+   "notice": "文件较大（3.0 MB），只显示前 1.0 MB。完整内容请下载查看。",
+   "sw": 443,
+   "iw": 443,
+   "sat": 49,
+   "sab": 48,
+   "ih": 986,
+   "blocked": [],
+   "items": [
+    {
+     "el": "button[关闭] ",
+     "top": 50,
+     "bottom": 98,
+     "left": 0,
+     "right": 48,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "a 下载",
+     "top": 58,
+     "bottom": 90,
+     "left": 366,
+     "right": 436,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "div 自动换行 UTF-8 · 9,9",
+     "top": 99,
+     "bottom": 938,
+     "left": 0,
+     "right": 444,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "div 自动换行 UTF-8 · 9,9",
+     "top": 99,
+     "bottom": 135,
+     "left": 0,
+     "right": 444,
+     "underStatusBar": false,
+     "underNavBar": false
+    }
+   ],
+   "back": {
+    "closed": true,
+    "stayed": true
+   }
+  },
+  {
+   "name": "09-code",
+   "file": "示例代码.ts",
+   "kind": "text",
+   "error": null,
+   "notice": null,
+   "sw": 443,
+   "iw": 443,
+   "sat": 49,
+   "sab": 48,
+   "ih": 986,
+   "blocked": [],
+   "items": [
+    {
+     "el": "button[关闭] ",
+     "top": 50,
+     "bottom": 98,
+     "left": 0,
+     "right": 48,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "a 下载",
+     "top": 58,
+     "bottom": 90,
+     "left": 366,
+     "right": 436,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "div 自动换行 UTF-8 · 8 行",
+     "top": 99,
+     "bottom": 938,
+     "left": 0,
+     "right": 444,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "div 自动换行 UTF-8 · 8 行",
+     "top": 99,
+     "bottom": 135,
+     "left": 0,
+     "right": 444,
+     "underStatusBar": false,
+     "underNavBar": false
+    }
+   ],
+   "back": {
+    "closed": true,
+    "stayed": true
+   }
+  },
+  {
+   "name": "10-svg",
+   "file": "矢量图标.svg",
+   "kind": "svg",
+   "error": null,
+   "notice": null,
+   "sw": 443,
+   "iw": 443,
+   "sat": 49,
+   "sab": 48,
+   "ih": 986,
+   "blocked": [],
+   "items": [
+    {
+     "el": "button[关闭] ",
+     "top": 50,
+     "bottom": 98,
+     "left": 0,
+     "right": 48,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "a 下载",
+     "top": 58,
+     "bottom": 90,
+     "left": 366,
+     "right": 436,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "div − 100% +",
+     "top": 98,
+     "bottom": 938,
+     "left": 0,
+     "right": 444,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "div − 100% +",
+     "top": 890,
+     "bottom": 926,
+     "left": 308,
+     "right": 432,
+     "underStatusBar": false,
+     "underNavBar": false
+    }
+   ],
+   "back": {
+    "closed": true,
+    "stayed": true
+   }
+  },
+  {
+   "name": "11-mp4",
+   "file": "演示视频.mp4",
+   "kind": "video",
+   "error": null,
+   "notice": null,
+   "sw": 443,
+   "iw": 443,
+   "sat": 49,
+   "sab": 48,
+   "ih": 986,
+   "blocked": [],
+   "items": [
+    {
+     "el": "button[关闭] ",
+     "top": 50,
+     "bottom": 98,
+     "left": 0,
+     "right": 48,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "a 下载",
+     "top": 58,
+     "bottom": 90,
+     "left": 366,
+     "right": 436,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "div ",
+     "top": 98,
+     "bottom": 938,
+     "left": 0,
+     "right": 444,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "video ",
+     "top": 393,
+     "bottom": 643,
+     "left": 0,
+     "right": 444,
+     "underStatusBar": false,
+     "underNavBar": false
+    }
+   ]
+  },
+  {
+   "name": "11-mp4-seek",
+   "file": "演示视频.mp4",
+   "kind": "video",
+   "error": null,
+   "notice": null,
+   "sw": 443,
+   "iw": 443,
+   "sat": 49,
+   "sab": 48,
+   "ih": 986,
+   "blocked": [],
+   "items": [
+    {
+     "el": "button[关闭] ",
+     "top": 50,
+     "bottom": 98,
+     "left": 0,
+     "right": 48,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "a 下载",
+     "top": 58,
+     "bottom": 90,
+     "left": 366,
+     "right": 436,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "div ",
+     "top": 98,
+     "bottom": 938,
+     "left": 0,
+     "right": 444,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "video ",
+     "top": 393,
+     "bottom": 643,
+     "left": 0,
+     "right": 444,
+     "underStatusBar": false,
+     "underNavBar": false
+    }
+   ],
+   "back": {
+    "closed": true,
+    "stayed": true
+   }
+  },
+  {
+   "name": "12-mp3",
+   "file": "提示音.mp3",
+   "kind": "audio",
+   "error": null,
+   "notice": null,
+   "sw": 443,
+   "iw": 443,
+   "sat": 49,
+   "sab": 48,
+   "ih": 986,
+   "blocked": [],
+   "items": [
+    {
+     "el": "button[关闭] ",
+     "top": 50,
+     "bottom": 98,
+     "left": 0,
+     "right": 48,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "a 下载",
+     "top": 58,
+     "bottom": 90,
+     "left": 366,
+     "right": 436,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "div 提示音.mp3",
+     "top": 98,
+     "bottom": 938,
+     "left": 0,
+     "right": 444,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "audio ",
+     "top": 569,
+     "bottom": 623,
+     "left": 24,
+     "right": 420,
+     "underStatusBar": false,
+     "underNavBar": false
+    }
+   ],
+   "back": {
+    "closed": true,
+    "stayed": true
+   }
+  },
+  {
+   "name": "13-zip",
+   "file": "项目资料.zip",
+   "kind": "zip",
+   "error": null,
+   "notice": null,
+   "sw": 443,
+   "iw": 443,
+   "sat": 49,
+   "sab": 48,
+   "ih": 986,
+   "blocked": [],
+   "items": [
+    {
+     "el": "button[关闭] ",
+     "top": 50,
+     "bottom": 98,
+     "left": 0,
+     "right": 48,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "a 下载",
+     "top": 58,
+     "bottom": 90,
+     "left": 366,
+     "right": 436,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "div 共 7 项（文件 6 个），解压",
+     "top": 99,
+     "bottom": 938,
+     "left": 0,
+     "right": 444,
+     "underStatusBar": false,
+     "underNavBar": false
+    }
+   ],
+   "back": {
+    "closed": true,
+    "stayed": true
+   }
+  },
+  {
+   "name": "14-corrupt-docx",
+   "file": "损坏文件.docx",
+   "kind": "docx",
+   "error": "无法解析该文件 文件已损坏，或者不是有效的Word 文档。可以下载后用其他应用尝试打开。 下载文件",
+   "notice": null,
+   "sw": 443,
+   "iw": 443,
+   "sat": 49,
+   "sab": 48,
+   "ih": 986,
+   "blocked": [],
+   "items": [
+    {
+     "el": "button[关闭] ",
+     "top": 50,
+     "bottom": 98,
+     "left": 0,
+     "right": 48,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "a 下载",
+     "top": 58,
+     "bottom": 90,
+     "left": 366,
+     "right": 436,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "div 无法解析该文件 文件已损坏，或者",
+     "top": 99,
+     "bottom": 938,
+     "left": 0,
+     "right": 444,
+     "underStatusBar": false,
+     "underNavBar": false
+    }
+   ],
+   "back": {
+    "closed": true,
+    "stayed": true
+   }
+  },
+  {
+   "name": "15-doc",
+   "file": "旧版文档.doc",
+   "kind": "unsupported",
+   "error": "暂不支持预览旧版 Word 文档（.doc） 这是 Word 97-2003 的二进制格式，浏览器里无法可靠解析。可以下",
+   "notice": null,
+   "sw": 443,
+   "iw": 443,
+   "sat": 49,
+   "sab": 48,
+   "ih": 986,
+   "blocked": [],
+   "items": [
+    {
+     "el": "button[关闭] ",
+     "top": 50,
+     "bottom": 98,
+     "left": 0,
+     "right": 48,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "a 下载",
+     "top": 58,
+     "bottom": 90,
+     "left": 366,
+     "right": 436,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "div 暂不支持预览旧版 Word 文档",
+     "top": 99,
+     "bottom": 938,
+     "left": 0,
+     "right": 444,
+     "underStatusBar": false,
+     "underNavBar": false
+    }
+   ],
+   "back": {
+    "closed": true,
+    "stayed": true
+   }
+  },
+  {
+   "name": "16-pdf-small",
+   "file": "小文件-3页.pdf",
+   "kind": "pdf",
+   "error": null,
+   "notice": null,
+   "sw": 443,
+   "iw": 443,
+   "sat": 49,
+   "sab": 48,
+   "ih": 986,
+   "blocked": [],
+   "items": [
+    {
+     "el": "button[关闭] ",
+     "top": 50,
+     "bottom": 98,
+     "left": 0,
+     "right": 48,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "a 下载",
+     "top": 58,
+     "bottom": 90,
+     "left": 366,
+     "right": 436,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "div 1 2 3 1 / 3",
+     "top": 98,
+     "bottom": 938,
+     "left": 0,
+     "right": 444,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "div 1 / 3",
+     "top": 898,
+     "bottom": 922,
+     "left": 198,
+     "right": 246,
+     "underStatusBar": false,
+     "underNavBar": false
+    }
+   ],
+   "back": {
+    "closed": true,
+    "stayed": true
+   }
+  },
+  {
+   "name": "17-pdf-big",
+   "file": "大文件-100页.pdf",
+   "kind": "pdf",
+   "error": null,
+   "notice": null,
+   "sw": 443,
+   "iw": 443,
+   "sat": 49,
+   "sab": 48,
+   "ih": 986,
+   "blocked": [],
+   "items": [
+    {
+     "el": "button[关闭] ",
+     "top": 50,
+     "bottom": 98,
+     "left": 0,
+     "right": 48,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "a 下载",
+     "top": 58,
+     "bottom": 90,
+     "left": 366,
+     "right": 436,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "div 1 2 3 4 5 6 7 8 ",
+     "top": 98,
+     "bottom": 938,
+     "left": 0,
+     "right": 444,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "div 1 / 100",
+     "top": 898,
+     "bottom": 922,
+     "left": 191,
+     "right": 253,
+     "underStatusBar": false,
+     "underNavBar": false
+    }
+   ],
+   "back": {
+    "closed": true,
+    "stayed": true
+   }
+  },
+  {
+   "name": "21-doc-png",
+   "file": "示意图.png",
+   "kind": "image",
+   "error": null,
+   "notice": null,
+   "sw": 443,
+   "iw": 443,
+   "sat": 49,
+   "sab": 48,
+   "ih": 986,
+   "blocked": [],
+   "items": [
+    {
+     "el": "button[关闭] ",
+     "top": 50,
+     "bottom": 98,
+     "left": 0,
+     "right": 48,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "a 下载",
+     "top": 58,
+     "bottom": 90,
+     "left": 366,
+     "right": 436,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "div − 100% +",
+     "top": 98,
+     "bottom": 938,
+     "left": 0,
+     "right": 444,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "div − 100% +",
+     "top": 890,
+     "bottom": 926,
+     "left": 308,
+     "right": 432,
+     "underStatusBar": false,
+     "underNavBar": false
+    }
+   ],
+   "back": {
+    "closed": true,
+    "stayed": true
+   }
+  },
+  {
+   "name": "22-doc-xlsx",
+   "file": "销售数据.xlsx",
+   "kind": "sheet",
+   "error": null,
+   "notice": null,
+   "sw": 443,
+   "iw": 443,
+   "sat": 49,
+   "sab": 48,
+   "ih": 986,
+   "blocked": [],
+   "items": [
+    {
+     "el": "button[关闭] ",
+     "top": 50,
+     "bottom": 98,
+     "left": 0,
+     "right": 48,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "a 下载",
+     "top": 58,
+     "bottom": 90,
+     "left": 366,
+     "right": 436,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "div A\tB\tC\tD\tE\tF 1\t20",
+     "top": 99,
+     "bottom": 938,
+     "left": 0,
+     "right": 444,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "div 一季度销售 区域汇总 宽表（40",
+     "top": 894,
+     "bottom": 938,
+     "left": 0,
+     "right": 444,
+     "underStatusBar": false,
+     "underNavBar": false
+    }
+   ],
+   "back": {
+    "closed": true,
+    "stayed": true
+   }
+  },
+  {
+   "name": "23-doc-pdf",
+   "file": "小文件-3页.pdf",
+   "kind": "pdf",
+   "error": null,
+   "notice": null,
+   "sw": 443,
+   "iw": 443,
+   "sat": 49,
+   "sab": 48,
+   "ih": 986,
+   "blocked": [],
+   "items": [
+    {
+     "el": "button[关闭] ",
+     "top": 50,
+     "bottom": 98,
+     "left": 0,
+     "right": 48,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "a 下载",
+     "top": 58,
+     "bottom": 90,
+     "left": 366,
+     "right": 436,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "div 1 2 3 1 / 3",
+     "top": 98,
+     "bottom": 938,
+     "left": 0,
+     "right": 444,
+     "underStatusBar": false,
+     "underNavBar": false
+    },
+    {
+     "el": "div 1 / 3",
+     "top": 898,
+     "bottom": 922,
+     "left": 198,
+     "right": 246,
+     "underStatusBar": false,
+     "underNavBar": false
+    }
+   ],
+   "back": {
+    "closed": true,
+    "stayed": true
+   }
+  }
+ ],
+ "range": {
+  "partial": [
+   206,
+   "bytes 0-99/4040670",
+   "video/mp4",
+   100
+  ],
+  "unsatisfiable": [
+   416,
+   "bytes */4040670"
+  ],
+  "full": [
+   200,
+   "bytes",
+   null
+  ]
+ },
+ "video": {
+  "t": 14.592006,
+  "paused": false,
+  "w": 1280,
+  "h": 720,
+  "buffered": 20
+ }
+}

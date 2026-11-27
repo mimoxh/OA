@@ -19,7 +19,8 @@ export async function uploadAttachment(file: File, documentId: string): Promise<
 }
 
 export function nodeForUpload(att: UploadedAttachment): JSONNode {
-  return att.mediaType.startsWith("image/")
+  // SVG 作为附件卡片插入：下载接口不内联返回 SVG，只能在预览窗口里安全显示
+  return att.mediaType.startsWith("image/") && !att.mediaType.startsWith("image/svg")
     ? { type: "image", attrs: { src: att.url, alt: att.fileName } }
     : { type: "fileAttachment", attrs: { id: att.id, fileName: att.fileName, mediaType: att.mediaType, size: att.size } };
 }

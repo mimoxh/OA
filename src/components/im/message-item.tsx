@@ -10,7 +10,6 @@ import {
   Copy,
   Download,
   Eye,
-  File as FileIcon,
   MessageSquareReply,
   MessageSquareText,
   Pencil,
@@ -36,8 +35,8 @@ import { RefPreviewCard } from "./ref-preview";
 import { convTime } from "./time";
 import { ActionSheet, type SheetAction } from "@/components/mobile/action-sheet";
 import { ImageViewer } from "@/components/mobile/image-viewer";
-import { isPdfFile, PdfViewer } from "@/components/mobile/pdf-viewer";
-import { useIsMobileApp } from "@/lib/mobile-bridge";
+import { FilePreviewDialog, filePreviewMode } from "@/components/file-preview/file-preview-dialog";
+import { FileKindIcon } from "@/components/file-preview/file-kind-icon";
 import { useIsMobileLayout } from "@/components/mobile/use-mobile-layout";
 import { useLongPress } from "@/components/mobile/use-long-press";
 
@@ -114,49 +113,48 @@ function ImageMessage({ img }: { img: ImageContent }) {
 }
 
 function FileMessage({ file }: { file: FileContent }) {
-  const mobile = useIsMobileLayout();
-  const app = useIsMobileApp();
   const [preview, setPreview] = useState(false);
-  // 手机上点 PDF 先在页内预览（顶栏可下载）；电脑与其他类型文件仍直接下载
-  const pdf = (mobile || app) && isPdfFile(file.mimeType, file.filename);
+  // 能预览的文件（PDF、Office、表格、文本、图片、音视频、ZIP）点开页内预览，顶栏可下载；
+  // 旧版 Office、超大文件打开后说明原因并提供下载；未知类型仍直接下载
+  const mode = filePreviewMode({ fileName: file.filename, mimeType: file.mimeType, size: file.size });
+  const open = mode !== "download";
   const body = (
     <>
       <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
-        <FileIcon className="size-5" />
+        <FileKindIcon fileName={file.filename} mimeType={file.mimeType} className="size-5" />
       </span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-[13.5px] font-medium text-ink">{file.filename}</span>
         <span className="mt-0.5 block text-xs text-ink-3">
           {formatFileSize(file.size)}
-          {pdf && " · 点击预览"}
+          {mode === "preview" && " · 点击预览"}
         </span>
       </span>
-      {pdf ? <Eye className="size-4 shrink-0 text-ink-3" /> : <Download className="size-4 shrink-0 text-ink-3" />}
+      {mode === "preview" ? <Eye className="size-4 shrink-0 text-ink-3" /> : <Download className="size-4 shrink-0 text-ink-3" />}
     </>
   );
   // 手机上 75vw 比气泡列宽（88% − 头像列）大，窄屏时会盖住右侧自己的头像，所以改为跟随气泡宽度
   const cls =
     "flex w-[280px] max-w-[75vw] items-center gap-3 rounded-lg border border-line bg-white p-3 text-left shadow-card transition-shadow hover:shadow-pop max-md:max-w-full";
-  if (!pdf) {
+  if (!open) {
     return (
-      <a href={`${file.url}?download=1`} download={file.filename} className={cls}>
+      <a href={`${file.url}?download=1`} download={file.filename} className={cls} data-file-message="download">
         {body}
       </a>
     );
   }
   return (
     <>
-      <button type="button" onClick={() => setPreview(true)} className={cls}>
+      <button type="button" onClick={() => setPreview(true)} className={cls} data-file-message={mode}>
         {body}
       </button>
-      <PdfViewer
-        open={preview}
-        onOpenChange={setPreview}
-        src={file.url}
-        fileName={file.filename}
-        size={file.size}
-        downloadHref={`${file.url}?download=1`}
-      />
+      {preview && (
+        <FilePreviewDialog
+          open
+          onOpenChange={setPreview}
+          file={{ url: file.url, fileName: file.filename, mimeType: file.mimeType, size: file.size, downloadHref: `${file.url}?download=1` }}
+        />
+      )}
     </>
   );
 }

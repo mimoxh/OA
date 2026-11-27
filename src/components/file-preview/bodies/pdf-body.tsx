@@ -1,16 +1,21 @@
 "use client";
 
-import { Dialog as D } from "radix-ui";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Download, FileWarning, X } from "lucide-react";
 import type { PDFDocumentLoadingTask, PDFDocumentProxy, RenderTask } from "pdfjs-dist/legacy/build/pdf.mjs";
+import type { PreviewFailure } from "@/lib/file-preview/sniff";
+import { PreviewError, PreviewLoading, ZoomControls } from "../preview-states";
+import type { PreviewBodyProps } from "../types";
 
 /** pdf.js 的 worker、CMap（中文等非嵌入字体必需）、标准字体与解码器，由 /api/pdfjs 从依赖包里直接提供 */
 const ASSETS = "/api/pdfjs/";
 const MAX_ZOOM = 4;
+/** 电脑上可以缩小到一半（手机上最小就是适应宽度） */
+const MIN_ZOOM_DESKTOP = 0.5;
 const DOUBLE_TAP_ZOOM = 2.5;
 const PAGE_GAP = 8;
 const SIDE_PAD = 8;
+/** 电脑弹窗里适应宽度时的最大页宽，避免整页铺满 1200px 宽 */
+const DESKTOP_FIT_WIDTH = 920;
 /** 单页画布像素上限：放大后按比例降低清晰度，避免大页面把 WebView 内存撑爆 */
 const MAX_CANVAS_PIXELS = 8_000_000;
 /** 可见页前后各保留几页的画布，更远的释放 */
@@ -34,18 +39,12 @@ function loadPdfJs(): Promise<PdfJs> {
   return pdfjsPromise;
 }
 
-type Failure = { title: string; detail: string };
-
 type LoadState =
   | { kind: "loading"; loaded: number; total: number; parsing: boolean }
   | { kind: "ready"; doc: PDFDocumentProxy; ratios: number[] }
-  | { kind: "error"; failure: Failure };
+  | { kind: "error"; failure: PreviewFailure };
 
-export function isPdfFile(mimeType: string | null | undefined, fileName: string | null | undefined) {
-  return (mimeType ?? "").split(";")[0].trim().toLowerCase() === "application/pdf" || /\.pdf$/i.test(fileName ?? "");
-}
-
-function describeError(e: unknown): Failure {
+function describeError(e: unknown): PreviewFailure {
   const err = e as { name?: string; status?: number; message?: string } | null;
   switch (err?.name) {
     case "PasswordException":
@@ -61,11 +60,6 @@ function describeError(e: unknown): Failure {
     default:
       return { title: "预览失败", detail: err?.message ? `无法预览该文件（${err.message}）。可以下载后查看。` : "无法预览该文件，可以下载后查看。" };
   }
-}
-
-function formatBytes(n: number) {
-  if (n < 1024 * 1024) return `${Math.max(0, Math.round(n / 1024))} KB`;
-  return `${(n / 1024 / 1024).toFixed(1)} MB`;
 }
 
 function PdfPage({
@@ -148,26 +142,10 @@ function PdfPage({
 }
 
 /**
- * 手机全屏 PDF 预览（App 与手机浏览器）：pdf.js 渲染，纵向滚动翻页、双指缩放、双击放大 / 还原、页码、下载。
- * 只渲染可见页附近的页面；加密 / 损坏的文件给出说明并提供下载。Android 返回键与 Esc 关闭（Radix Dialog）。
+ * PDF：pdf.js 渲染，纵向滚动翻页、双指缩放、双击放大 / 还原（手机），缩放按钮（电脑），页码。
+ * 只渲染可见页附近的页面；加密 / 损坏的文件给出说明并提供下载。
  */
-export function PdfViewer({
-  open,
-  onOpenChange,
-  src,
-  fileName,
-  size,
-  downloadHref,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  /** PDF 地址（同源，带登录 Cookie） */
-  src: string;
-  fileName: string;
-  /** 已知的文件大小，服务端没给 Content-Length 时用于显示进度 */
-  size?: number;
-  downloadHref: string;
-}) {
+export default function PdfBody({ src, fileName, size, downloadHref, fullscreen }: PreviewBodyProps) {
   const [state, setState] = useState<LoadState>({ kind: "loading", loaded: 0, total: size ?? 0, parsing: false });
   const [zoom, setZoom] = useState(1);
   const [containerWidth, setContainerWidth] = useState(0);
@@ -176,15 +154,16 @@ export function PdfViewer({
   const scroller = useRef<HTMLDivElement | null>(null);
   const content = useRef<HTMLDivElement>(null);
   const pendingScroll = useRef<{ left: number; top: number } | null>(null);
+  const zoomRef = useRef(zoom);
+  const minZoom = fullscreen ? 1 : MIN_ZOOM_DESKTOP;
 
   useEffect(() => {
-    if (!open) return;
+    zoomRef.current = zoom;
+  }, [zoom]);
+
+  useEffect(() => {
     let cancelled = false;
     let task: PDFDocumentLoadingTask | null = null;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setState({ kind: "loading", loaded: 0, total: size ?? 0, parsing: false });
-    setZoom(1);
-    setCurrent(1);
     let lastPct = -1;
     loadPdfJs()
       .then((pdfjs) => {
@@ -220,7 +199,7 @@ export function PdfViewer({
       cancelled = true;
       void (task as PDFDocumentLoadingTask | null)?.destroy();
     };
-  }, [open, src, size]);
+  }, [src, size]);
 
   const setScroller = useCallback((el: HTMLDivElement | null) => {
     scroller.current = el;
@@ -233,7 +212,8 @@ export function PdfViewer({
 
   const doc = state.kind === "ready" ? state.doc : null;
   const ratios = state.kind === "ready" ? state.ratios : null;
-  const pageWidth = Math.max(0, (containerWidth - SIDE_PAD * 2) * zoom);
+  const fitWidth = Math.max(0, containerWidth - SIDE_PAD * 2);
+  const pageWidth = (fullscreen ? fitWidth : Math.min(fitWidth, DESKTOP_FIT_WIDTH)) * zoom;
   const tops = useMemo(() => {
     if (!ratios) return [];
     const out: number[] = [];
@@ -288,6 +268,24 @@ export function PdfViewer({
     measure();
   }, [zoom, measure]);
 
+  /** 以视口内 (cx, cy) 为中心缩放到 next 倍，保持该点下的内容不动 */
+  const zoomAt = useCallback(
+    (next: number, cx: number, cy: number) => {
+      const el = scroller.current;
+      const cur = zoomRef.current;
+      next = Math.min(MAX_ZOOM, Math.max(minZoom, next));
+      if (!el || next === cur) {
+        const c = content.current;
+        if (c) c.style.transform = "";
+        return;
+      }
+      const k = next / cur;
+      pendingScroll.current = { left: Math.max(0, (el.scrollLeft + cx) * k - cx), top: Math.max(0, (el.scrollTop + cy) * k - cy) };
+      setZoom(next);
+    },
+    [minZoom],
+  );
+
   // 双指缩放：手势进行中只对内容做 CSS 缩放，松手后按新倍数重排并重绘，保持手指下的内容不动
   useEffect(() => {
     const el = scroller.current;
@@ -295,20 +293,6 @@ export function PdfViewer({
     let pinch: { dist: number; cx: number; cy: number; fx: number; fy: number; s: number } | null = null;
     let tap: { x: number; y: number; t: number; moved: boolean } | null = null;
     let lastTap = 0;
-    const zoomRef = { value: zoom };
-
-    const commit = (s: number, cx: number, cy: number, fx: number, fy: number) => {
-      const next = Math.min(MAX_ZOOM, Math.max(1, zoomRef.value * s));
-      const k = next / zoomRef.value;
-      pendingScroll.current = { left: Math.max(0, fx * k - cx), top: Math.max(0, fy * k - cy) };
-      if (next === zoomRef.value) {
-        const c = content.current;
-        if (c) c.style.transform = "";
-        pendingScroll.current = null;
-        return;
-      }
-      setZoom(next);
-    };
 
     const point = (t: Touch) => {
       const rect = el.getBoundingClientRect();
@@ -338,7 +322,8 @@ export function PdfViewer({
         const a = point(e.touches[0]);
         const b = point(e.touches[1]);
         const raw = Math.hypot(a.x - b.x, a.y - b.y) / pinch.dist;
-        pinch.s = Math.min(MAX_ZOOM / zoomRef.value, Math.max(1 / zoomRef.value, raw));
+        const z = zoomRef.current;
+        pinch.s = Math.min(MAX_ZOOM / z, Math.max(minZoom / z, raw));
         const c = content.current;
         if (c) {
           c.style.transformOrigin = `${pinch.fx}px ${pinch.fy}px`;
@@ -357,7 +342,7 @@ export function PdfViewer({
         if (e.touches.length < 2) {
           const p = pinch;
           pinch = null;
-          commit(p.s, p.cx, p.cy, p.fx, p.fy);
+          zoomAt(zoomRef.current * p.s, p.cx, p.cy);
         }
         return;
       }
@@ -370,8 +355,7 @@ export function PdfViewer({
       tap = null;
       if (now - lastTap < 300) {
         lastTap = 0;
-        const target = zoomRef.value > 1.05 ? 1 : DOUBLE_TAP_ZOOM;
-        commit(target / zoomRef.value, x, y, el.scrollLeft + x, el.scrollTop + y);
+        zoomAt(zoomRef.current > 1.05 ? 1 : DOUBLE_TAP_ZOOM, x, y);
         return;
       }
       lastTap = now;
@@ -387,100 +371,66 @@ export function PdfViewer({
       el.removeEventListener("touchend", onEnd);
       el.removeEventListener("touchcancel", onEnd);
     };
-  }, [doc, zoom]);
+  }, [doc, zoomAt, minZoom]);
 
   const total = doc?.numPages ?? 0;
   const contentHeight = tops.length ? tops[tops.length - 1] + SIDE_PAD : 0;
 
+  if (state.kind === "loading") {
+    return (
+      <PreviewLoading
+        dark
+        loaded={state.loaded}
+        total={state.total}
+        label={state.parsing ? "正在解析…" : undefined}
+      />
+    );
+  }
+  if (state.kind === "error") {
+    return <PreviewError dark failure={state.failure} downloadHref={downloadHref} fileName={fileName} />;
+  }
   return (
-    <D.Root open={open} onOpenChange={onOpenChange}>
-      <D.Portal>
-        <D.Content className="fixed inset-0 z-[60] flex flex-col bg-[#2b2b2e] focus:outline-none" aria-describedby={undefined}>
-          <div className="flex shrink-0 items-center gap-1 bg-[#1f1f22] pt-[var(--sat)] text-white">
-            <D.Close className="p-3" aria-label="关闭">
-              <X className="size-6" />
-            </D.Close>
-            <D.Title className="min-w-0 flex-1 truncate text-center text-sm text-white/90">{fileName}</D.Title>
-            <a
-              href={downloadHref}
-              download={fileName}
-              className="mr-2 inline-flex h-8 items-center gap-1 rounded-full bg-white/15 px-3 text-[13px] text-white active:bg-white/25"
-            >
-              <Download className="size-4" />
-              下载
-            </a>
-          </div>
-
-          {state.kind === "loading" && (
-            <div className="flex flex-1 flex-col items-center justify-center gap-3 px-10 text-white/85">
-              <div className="h-1.5 w-full max-w-[260px] overflow-hidden rounded-full bg-white/15">
-                <div
-                  className="h-full rounded-full bg-accent transition-[width] duration-150"
-                  style={{ width: state.total ? `${Math.min(100, (state.loaded / state.total) * 100)}%` : "30%" }}
-                />
-              </div>
-              <div className="text-[13px]" data-pdf-progress>
-                {state.parsing
-                  ? "正在解析…"
-                  : state.total
-                    ? `正在加载 ${Math.min(100, Math.floor((state.loaded / state.total) * 100))}%（${formatBytes(state.loaded)} / ${formatBytes(state.total)}）`
-                    : state.loaded
-                      ? `正在加载 ${formatBytes(state.loaded)}`
-                      : "正在加载…"}
-              </div>
-            </div>
-          )}
-
-          {state.kind === "error" && (
-            <div className="flex flex-1 flex-col items-center justify-center gap-3 px-8 text-center text-white" data-pdf-error>
-              <FileWarning className="size-12 text-white/60" />
-              <div className="text-base font-medium">{state.failure.title}</div>
-              <div className="max-w-[300px] text-[13px] leading-relaxed text-white/70">{state.failure.detail}</div>
-              <a
-                href={downloadHref}
-                download={fileName}
-                className="mt-2 inline-flex h-10 items-center gap-1.5 rounded-full bg-accent px-5 text-sm text-white active:opacity-90"
-              >
-                <Download className="size-4" />
-                下载文件
-              </a>
-            </div>
-          )}
-
-          {state.kind === "ready" && (
-            <div className="relative min-h-0 flex-1">
-              <div ref={setScroller} onScroll={measure} className="absolute inset-0 touch-pan-x touch-pan-y overflow-auto overscroll-contain">
-                <div
-                  ref={content}
-                  className="relative"
-                  style={{ width: pageWidth + SIDE_PAD * 2, height: contentHeight, paddingTop: SIDE_PAD }}
-                >
-                  {doc &&
-                    pageWidth > 0 &&
-                    ratios!.map((r, i) => (
-                      <PdfPage
-                        key={i}
-                        doc={doc}
-                        index={i}
-                        width={pageWidth}
-                        height={Math.round(pageWidth * r)}
-                        active={i >= range[0] - RENDER_AHEAD && i <= range[1] + RENDER_AHEAD}
-                        onRatio={onRatio}
-                      />
-                    ))}
-                </div>
-              </div>
-              <div
-                className="pointer-events-none absolute bottom-[calc(var(--sab)+16px)] left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-3 py-1 text-xs text-white tabular-nums"
-                data-pdf-page-indicator
-              >
-                {current} / {total}
-                {zoom > 1.01 && <span className="ml-2 text-white/70">{Math.round(zoom * 100)}%</span>}
-              </div>
-            </div>
-          )}
-        </D.Content>
-      </D.Portal>
-    </D.Root>
+    <>
+      <div ref={setScroller} onScroll={measure} className="absolute inset-0 touch-pan-x touch-pan-y overflow-auto overscroll-contain">
+        <div
+          ref={content}
+          className="relative mx-auto"
+          style={{ width: pageWidth + SIDE_PAD * 2, height: contentHeight, paddingTop: SIDE_PAD }}
+        >
+          {doc &&
+            pageWidth > 0 &&
+            ratios!.map((r, i) => (
+              <PdfPage
+                key={i}
+                doc={doc}
+                index={i}
+                width={pageWidth}
+                height={Math.round(pageWidth * r)}
+                active={i >= range[0] - RENDER_AHEAD && i <= range[1] + RENDER_AHEAD}
+                onRatio={onRatio}
+              />
+            ))}
+        </div>
+      </div>
+      <div className="pointer-events-none absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-2">
+        <div className="rounded-full bg-black/60 px-3 py-1 text-xs text-white tabular-nums" data-pdf-page-indicator>
+          {current} / {total}
+          {fullscreen && zoom > 1.01 && <span className="ml-2 text-white/70">{Math.round(zoom * 100)}%</span>}
+        </div>
+      </div>
+      {!fullscreen && (
+        <ZoomControls
+          dark
+          zoom={zoom}
+          min={minZoom}
+          max={MAX_ZOOM}
+          className="absolute bottom-3 right-4"
+          onZoom={(z) => {
+            const el = scroller.current;
+            zoomAt(z, (el?.clientWidth ?? 0) / 2, (el?.clientHeight ?? 0) / 2);
+          }}
+        />
+      )}
+    </>
   );
 }
