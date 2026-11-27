@@ -31,7 +31,7 @@ import { useAction } from "@/components/ui/use-action";
 import { InlineDate, InlineSelect, InlineText } from "@/components/crm/inline";
 import { formatDate, formatDateTime, formatNumber, formatRelative, toDateInput } from "@/lib/format";
 import { TASK_STATUS } from "@/lib/labels";
-import { asTagColor, isOverdue } from "@/lib/pms/utils";
+import { asTagColor, commentPlaceholder, isOverdue } from "@/lib/pms/utils";
 import { Badge } from "@/components/ui/badge";
 import type { UserOption } from "@/lib/crm/types";
 import { cn } from "@/lib/utils";
@@ -94,6 +94,7 @@ function MentionText({ text, names }: { text: string; names: string[] }) {
 
 function CommentBox({ taskId, members, disabled }: { taskId: string; members: UserOption[]; disabled?: boolean }) {
   const ref = useRef<HTMLTextAreaElement>(null);
+  const mobile = useIsMobileLayout();
   const [value, setValue] = useState("");
   const [mention, setMention] = useState<{ start: number; query: string } | null>(null);
   const [active, setActive] = useState(0);
@@ -132,7 +133,7 @@ function CommentBox({ taskId, members, disabled }: { taskId: string; members: Us
         rows={3}
         value={value}
         disabled={disabled || pending}
-        placeholder="写评论，输入 @ 提及成员，Ctrl + Enter 发送"
+        placeholder={commentPlaceholder(mobile)}
         onChange={(e) => {
           setValue(e.target.value);
           detect(e.target.value, e.target.selectionStart);
@@ -489,15 +490,15 @@ export function TaskDrawer({
               ) : null}
               {canEdit && (
                 <form
-                  className="mb-2 flex items-center gap-2"
+                  className="mb-2 flex items-center gap-2 max-md:flex-wrap"
                   onSubmit={(e) => {
                     e.preventDefault();
                     run(() => addTimeLog(t.id, log), { success: "工时已登记", onSuccess: () => setLog((l) => ({ ...l, hours: "", note: "" })) });
                   }}
                 >
                   <Input type="number" min={0.5} max={24} step={0.5} placeholder="小时" value={log.hours} onChange={(e) => setLog((l) => ({ ...l, hours: e.target.value }))} className="h-7 w-20 text-[13px]" />
-                  <Input type="date" value={log.date} onChange={(e) => setLog((l) => ({ ...l, date: e.target.value }))} className="h-7 w-36 text-[13px]" />
-                  <Input placeholder="工作内容（可选）" value={log.note} onChange={(e) => setLog((l) => ({ ...l, note: e.target.value }))} className="h-7 flex-1 text-[13px]" />
+                  <Input type="date" value={log.date} onChange={(e) => setLog((l) => ({ ...l, date: e.target.value }))} className="h-7 w-36 text-[13px] max-md:w-auto max-md:min-w-0 max-md:flex-1" />
+                  <Input placeholder="工作内容（可选）" value={log.note} onChange={(e) => setLog((l) => ({ ...l, note: e.target.value }))} className="h-7 min-w-0 flex-1 text-[13px] max-md:order-last max-md:basis-full" />
                   <Button type="submit" size="sm" disabled={!log.hours} loading={pending}>
                     登记
                   </Button>

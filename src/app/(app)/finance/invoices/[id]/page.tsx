@@ -100,7 +100,7 @@ export default async function InvoiceDetailPage({ params }: PageProps<"/finance/
             </>
           }
         />
-        <div className="mb-4 grid grid-cols-3 gap-3">
+        <div className="mb-4 grid grid-cols-3 gap-3 max-md:grid-cols-1 max-md:gap-2">
           {[
             ["发票金额", inv.amount, ""],
             [receivable ? "已收金额" : "已付金额", inv.paidAmount, "text-[#448361]"],

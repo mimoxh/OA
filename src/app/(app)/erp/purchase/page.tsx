@@ -12,6 +12,7 @@ import { UserChip } from "@/components/ui/avatar";
 import { FilterPills, SearchInput } from "@/components/ui/common";
 import { EmptyState, Page, PageHeader, TopBar } from "@/components/ui/page";
 import { Table, TBody, TD, TEmpty, TH, THead, TR } from "@/components/ui/table";
+import { MobileCard, MobileList } from "@/components/mobile/mobile-list";
 
 const STATUSES = Object.keys(PURCHASE_STATUS) as PurchaseStatus[];
 
@@ -65,7 +66,32 @@ export default async function PurchaseListPage({ searchParams }: PageProps<"/erp
             action={canEdit && <LinkButton href="/erp/purchase/new" variant="primary">新建采购单</LinkButton>}
           />
         ) : (
-          <Table>
+          <>
+          <MobileList empty="没有符合条件的采购单">
+            {orders.map((o) => {
+              const late = o.expectedDate && o.expectedDate < now && (o.status === "APPROVED" || o.status === "PARTIAL_RECEIVED");
+              return (
+                <MobileCard
+                  key={o.id}
+                  href={`/erp/purchase/${o.id}`}
+                  title={o.supplier.name}
+                  badge={<StatusBadge map={PURCHASE_STATUS} value={o.status} />}
+                  subtitle={`${o.no} · ${o._count.items} 种产品 · ${o.warehouse.name}`}
+                  meta={
+                    <>
+                      <UserChip name={o.createdBy.name} color={o.createdBy.avatarColor} />
+                      <span className={late ? "text-danger" : undefined}>
+                        到货 {formatDate(o.expectedDate)}
+                        {late && " · 逾期"}
+                      </span>
+                    </>
+                  }
+                  aside={formatMoney(o.totalAmount)}
+                />
+              );
+            })}
+          </MobileList>
+          <Table className="max-md:hidden">
             <THead>
               <TR>
                 <TH>单号</TH>
@@ -113,6 +139,7 @@ export default async function PurchaseListPage({ searchParams }: PageProps<"/erp
               })}
             </TBody>
           </Table>
+          </>
         )}
       </Page>
     </>

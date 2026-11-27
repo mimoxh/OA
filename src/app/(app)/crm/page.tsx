@@ -13,6 +13,8 @@ import { formatDateTime, formatMoney, formatRelative } from "@/lib/format";
 import { getActiveUsers } from "@/lib/crm/queries";
 import { FollowUpDialog, FollowUpTimeline } from "@/components/crm/followups";
 import { cn } from "@/lib/utils";
+import { MobileCard, MobileField, MobileList } from "@/components/mobile/mobile-list";
+import { ModuleEntries } from "@/components/mobile/module-entries";
 
 const FUNNEL = ["QUALIFY", "NEEDS", "PROPOSAL", "NEGOTIATION", "WON"] as const;
 const FUNNEL_COLORS = ["#9b9a97", "#337ea9", "#9065b0", "#d9730d", "#448361"];
@@ -81,6 +83,7 @@ export default async function CrmOverviewPage() {
   return (
     <>
       <TopBar
+        mobileTitle="CRM 客户"
         crumbs={[{ label: "CRM 客户", href: "/crm" }, { label: "销售概览" }]}
         actions={
           canEdit && (
@@ -99,6 +102,7 @@ export default async function CrmOverviewPage() {
       />
       <Page wide>
         <PageHeader icon="📈" title="销售概览" description="客户、商机与跟进的整体情况" />
+        <ModuleEntries moduleKey="crm" permissions={user.permissions} />
 
         <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
           <StatCard label="客户总数" value={customerCount} hint="全部客户与线索" icon={<Users />} href="/crm/customers" />
@@ -113,20 +117,23 @@ export default async function CrmOverviewPage() {
             <Card className="p-4">
               <div className="space-y-2.5">
                 {funnel.map((f, i) => (
-                  <Link key={f.stage} href="/crm/opportunities" className="group grid grid-cols-[72px_1fr] items-center gap-3">
-                    <span className="flex items-center gap-1.5 text-[13px] text-ink-2">
+                  <Link key={f.stage} href="/crm/opportunities" className="group grid grid-cols-[72px_1fr] items-center gap-3 max-md:grid-cols-[80px_1fr_auto] max-md:gap-2">
+                    <span className="flex items-center gap-1.5 text-[13px] text-ink-2 max-md:whitespace-nowrap">
                       <Dot color={OPPORTUNITY_STAGE[f.stage].color} />
                       {OPPORTUNITY_STAGE[f.stage].label}
                     </span>
                     <div className="flex items-center justify-center">
                       <div
-                        className="flex h-8 min-w-[30%] items-center justify-between rounded px-3 text-xs text-white transition-opacity group-hover:opacity-90"
+                        className="flex h-8 min-w-[30%] items-center justify-between rounded px-3 text-xs text-white transition-opacity group-hover:opacity-90 max-md:h-5 max-md:min-w-[8%] max-md:[&>span]:hidden"
                         style={{ width: `${Math.max(30, (f.amount / maxAmount) * 100 * (1 - i * 0.04))}%`, backgroundColor: FUNNEL_COLORS[i] }}
                       >
                         <span>{f.count} 个</span>
                         <span className="font-medium tabular-nums">{formatMoney(f.amount)}</span>
                       </div>
                     </div>
+                    <span className="whitespace-nowrap text-right text-xs tabular-nums text-ink-2 md:hidden">
+                      {f.count} 个 · <span className="font-medium text-ink">{formatMoney(f.amount)}</span>
+                    </span>
                   </Link>
                 ))}
               </div>
@@ -159,7 +166,30 @@ export default async function CrmOverviewPage() {
         </div>
 
         <Section title="销售业绩">
-          <Table>
+          <MobileList empty="暂无数据">
+            {perf.map((p) => (
+              <MobileCard
+                key={p.user.id}
+                title={<UserChip name={p.user.name} color={p.user.avatarColor} />}
+                badge={<span className="text-[13px] text-ink-2">赢率 {p.winRate === null ? "—" : `${p.winRate}%`}</span>}
+                meta={
+                  <>
+                    <MobileField label="客户">{p.customers}</MobileField>
+                    <MobileField label="进行中">
+                      {p.activeCount} 个 · {formatMoney(p.activeAmount)}
+                    </MobileField>
+                  </>
+                }
+                aside={<span className="text-[#448361]">{formatMoney(p.wonAmount)}</span>}
+              >
+                <div className="mt-2 flex h-1.5 overflow-hidden rounded-full bg-hover">
+                  <span className="bg-[#448361]" style={{ width: `${(p.wonAmount / maxPerf) * 100}%` }} />
+                  <span className="bg-accent/60" style={{ width: `${(p.activeAmount / maxPerf) * 100}%` }} />
+                </div>
+              </MobileCard>
+            ))}
+          </MobileList>
+          <Table className="max-md:hidden">
             <THead>
               <TR>
                 <TH>负责人</TH>
@@ -193,7 +223,7 @@ export default async function CrmOverviewPage() {
               ))}
             </TBody>
           </Table>
-          <div className="mt-2 flex items-center gap-4 text-xs text-ink-3">
+          <div className="mt-2 flex items-center gap-4 text-xs text-ink-3 max-md:px-1">
             <span className="inline-flex items-center gap-1">
               <span className="size-2 rounded-full bg-[#448361]" />
               赢单

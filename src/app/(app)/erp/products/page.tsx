@@ -13,6 +13,7 @@ import { Table, TBody, TD, TEmpty, TH, THead, TR } from "@/components/ui/table";
 import { ProductDialog } from "@/components/erp/product-dialog";
 import { ActionButton } from "@/components/erp/action-button";
 import { setProductActive } from "@/app/(app)/erp/actions";
+import { MobileCard, MobileField, MobileList } from "@/components/mobile/mobile-list";
 
 export default async function ProductsPage({ searchParams }: PageProps<"/erp/products">) {
   const user = await requireUser();
@@ -75,7 +76,36 @@ export default async function ProductsPage({ searchParams }: PageProps<"/erp/pro
         {total === 0 ? (
           <EmptyState icon="📦" title="还没有产品" description="新建产品后即可用于采购、销售与库存管理" />
         ) : (
-          <Table>
+          <>
+          <MobileList empty="没有符合条件的产品">
+            {products.map((p) => {
+              const s = stockMap.get(p.id);
+              const qty = s?.quantity ?? 0;
+              const avail = qty - (s?.reservedQty ?? 0);
+              const low = p.safetyStock > 0 && qty < p.safetyStock;
+              return (
+                <MobileCard
+                  key={p.id}
+                  href={`/erp/products/${p.id}`}
+                  className={p.active ? undefined : "opacity-60"}
+                  title={p.name}
+                  badge={!p.active ? <Badge>已停用</Badge> : low ? <Badge color="orange">低库存</Badge> : <Badge color="green">在售</Badge>}
+                  subtitle={[p.sku, p.spec, p.category].filter(Boolean).join(" · ")}
+                  meta={
+                    <>
+                      <MobileField label="库存">
+                        <span className={low ? "font-medium text-danger" : undefined}>{formatNumber(qty)}</span>
+                        <span className="text-ink-3"> / 可用 </span>
+                        {formatNumber(avail)} {p.unit}
+                      </MobileField>
+                    </>
+                  }
+                  aside={formatMoney(p.price)}
+                />
+              );
+            })}
+          </MobileList>
+          <Table className="max-md:hidden">
             <THead>
               <TR>
                 <TH>SKU</TH>
@@ -146,6 +176,7 @@ export default async function ProductsPage({ searchParams }: PageProps<"/erp/pro
               })}
             </TBody>
           </Table>
+          </>
         )}
       </Page>
     </>

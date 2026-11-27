@@ -92,7 +92,7 @@ export default async function SupplierDetailPage({ params }: PageProps<"/erp/sup
           <Property label="创建时间">{formatDateTime(supplier.createdAt)}</Property>
         </Properties>
 
-        <div className="mt-6 grid grid-cols-3 gap-3">
+        <div className="mt-6 grid grid-cols-3 gap-3 max-md:grid-cols-1 max-md:gap-2">
           <StatCard label="累计采购额" value={formatMoney(totalPurchase)} hint={`${active.length} 张有效采购单`} />
           <StatCard label="已付款" value={formatMoney(paid)} />
           <StatCard label="应付未付" value={formatMoney(unpaid)} hint={`${openInvoices.length} 张未结清发票`} />

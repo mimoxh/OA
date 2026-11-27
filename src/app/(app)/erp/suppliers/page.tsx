@@ -10,6 +10,7 @@ import { EmptyState, Page, PageHeader, TopBar } from "@/components/ui/page";
 import { Table, TBody, TD, TEmpty, TH, THead, TR } from "@/components/ui/table";
 import { RatingStars } from "@/components/erp/rating-stars";
 import { SupplierDialog } from "@/components/erp/supplier-dialog";
+import { MobileCard, MobileField, MobileList } from "@/components/mobile/mobile-list";
 
 export default async function SuppliersPage({ searchParams }: PageProps<"/erp/suppliers">) {
   const user = await requireUser();
@@ -76,7 +77,31 @@ export default async function SuppliersPage({ searchParams }: PageProps<"/erp/su
         {total === 0 ? (
           <EmptyState icon="🏭" title="还没有供应商" description="新建供应商后即可创建采购订单" />
         ) : (
-          <Table>
+          <>
+          <MobileList empty="没有符合条件的供应商">
+            {suppliers.map((s) => {
+              const ap = apMap.get(s.id) ?? 0;
+              return (
+                <MobileCard
+                  key={s.id}
+                  href={`/erp/suppliers/${s.id}`}
+                  title={s.name}
+                  badge={<RatingStars value={s.rating} />}
+                  subtitle={[s.code, s.contact, s.phone].filter(Boolean).join(" · ")}
+                  meta={
+                    <>
+                      <MobileField label="采购单">{formatNumber(s._count.purchaseOrders)}</MobileField>
+                      <MobileField label="应付">
+                        <span className={ap > 0 ? "text-[#d9730d]" : "text-ink-3"}>{formatMoney(ap)}</span>
+                      </MobileField>
+                    </>
+                  }
+                  aside={formatMoney(poMap.get(s.id) ?? 0)}
+                />
+              );
+            })}
+          </MobileList>
+          <Table className="max-md:hidden">
             <THead>
               <TR>
                 <TH>编码</TH>
@@ -115,6 +140,7 @@ export default async function SuppliersPage({ searchParams }: PageProps<"/erp/su
               })}
             </TBody>
           </Table>
+          </>
         )}
       </Page>
     </>

@@ -36,7 +36,7 @@ export function DateRangeFilter({ className }: { className?: string }) {
   ];
   const input =
     "h-7 rounded-md border border-line-strong bg-white px-2 text-[13px] text-ink focus:border-accent focus:outline-none focus:ring-[3px] focus:ring-accent/15";
-  const mobileInput = "max-md:h-9 max-md:min-w-0 max-md:flex-1 max-md:text-[14px]";
+  const mobileInput = "max-md:h-9 max-md:w-0 max-md:min-w-0 max-md:flex-1 max-md:text-[14px]";
 
   // 桌面：一行排开（分组用 md:contents 拆平）；手机：快捷按钮一行，开始「至」结束 + 查询一行
   return (

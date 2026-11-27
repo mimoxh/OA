@@ -12,6 +12,7 @@ import { UserChip } from "@/components/ui/avatar";
 import { FilterPills, SearchInput } from "@/components/ui/common";
 import { EmptyState, Page, PageHeader, TopBar } from "@/components/ui/page";
 import { Table, TBody, TD, TEmpty, TH, THead, TR } from "@/components/ui/table";
+import { MobileCard, MobileList } from "@/components/mobile/mobile-list";
 
 const STATUSES = Object.keys(SALES_STATUS) as SalesStatus[];
 
@@ -75,7 +76,27 @@ export default async function SalesListPage({ searchParams }: PageProps<"/erp/sa
             action={canEdit && <LinkButton href="/erp/sales/new" variant="primary">新建销售单</LinkButton>}
           />
         ) : (
-          <Table>
+          <>
+          <MobileList empty="没有符合条件的销售订单">
+            {orders.map((o) => (
+              <MobileCard
+                key={o.id}
+                href={`/erp/sales/${o.id}`}
+                title={o.customer.name}
+                badge={<StatusBadge map={SALES_STATUS} value={o.status} />}
+                subtitle={`${o.no} · ${o._count.items} 种产品${o.opportunity ? ` · 商机：${o.opportunity.name}` : ""}`}
+                meta={
+                  <>
+                    <UserChip name={o.createdBy.name} color={o.createdBy.avatarColor} />
+                    <span>{formatDate(o.orderDate)}</span>
+                    <span className="text-ink-3">{o.warehouse.name}</span>
+                  </>
+                }
+                aside={formatMoney(o.totalAmount)}
+              />
+            ))}
+          </MobileList>
+          <Table className="max-md:hidden">
             <THead>
               <TR>
                 <TH>单号</TH>
@@ -119,6 +140,7 @@ export default async function SalesListPage({ searchParams }: PageProps<"/erp/sa
               ))}
             </TBody>
           </Table>
+          </>
         )}
       </Page>
     </>

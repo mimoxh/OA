@@ -12,6 +12,7 @@ import { Table, TBody, TD, TEmpty, TH, THead, TR } from "@/components/ui/table";
 import { AdjustButton, TransferButton } from "@/components/wms/inventory-actions";
 import { ClearFilters, UrlSelect, UrlToggle } from "@/components/wms/url-filters";
 import { cn } from "@/lib/utils";
+import { MobileCard, MobileField, MobileList } from "@/components/mobile/mobile-list";
 
 export default async function InventoryPage({ searchParams }: PageProps<"/wms/inventory">) {
   const user = await requireUser();
@@ -73,7 +74,60 @@ export default async function InventoryPage({ searchParams }: PageProps<"/wms/in
           <UrlToggle param="low" label="只看低库存" />
           <ClearFilters keys={["q", "warehouse", "low"]} />
         </div>
-        <Table>
+        <MobileList empty={q || warehouseId || lowOnly ? "没有符合条件的库存" : "暂无库存记录"}>
+          {list.map((r) => {
+            const low = r.quantity < r.product.safetyStock;
+            const available = r.quantity - r.reservedQty;
+            const row = {
+              productId: r.product.id,
+              productName: r.product.name,
+              sku: r.product.sku,
+              unit: r.product.unit,
+              warehouseId: r.warehouse.id,
+              warehouseName: r.warehouse.name,
+              quantity: r.quantity,
+              reservedQty: r.reservedQty,
+            };
+            return (
+              <MobileCard
+                key={r.id}
+                className={cn(low && "border-tag-red-ink/20 bg-tag-red/25")}
+                title={r.product.name}
+                badge={low ? <Badge color="red">低库存</Badge> : <Badge color="green">正常</Badge>}
+                subtitle={[r.product.sku, r.warehouse.name, r.location?.code].filter(Boolean).join(" · ")}
+                meta={
+                  <>
+                    <MobileField label="可用">{formatNumber(available)}</MobileField>
+                    <MobileField label="预占">{r.reservedQty ? formatNumber(r.reservedQty) : "—"}</MobileField>
+                    <MobileField label="安全">{formatNumber(r.product.safetyStock)}</MobileField>
+                  </>
+                }
+                aside={
+                  <span className={cn(low && "text-danger")}>
+                    {formatNumber(r.quantity)} <span className="text-xs font-normal text-ink-3">{r.product.unit}</span>
+                  </span>
+                }
+              >
+                <div className="mt-2 flex items-center justify-end gap-1 border-t border-line pt-2">
+                  {canEdit && (
+                    <>
+                      <TransferButton row={row} warehouses={warehouses} />
+                      <AdjustButton row={row} />
+                    </>
+                  )}
+                  <Link
+                    href={`/wms/movements?product=${r.product.id}&warehouse=${r.warehouse.id}`}
+                    className="inline-flex h-7 items-center gap-1 rounded px-2 text-[13px] text-ink-2 active:bg-hover"
+                  >
+                    <History className="size-3.5" />
+                    流水
+                  </Link>
+                </div>
+              </MobileCard>
+            );
+          })}
+        </MobileList>
+        <Table className="max-md:hidden">
           <THead>
             <TR>
               <TH>SKU</TH>

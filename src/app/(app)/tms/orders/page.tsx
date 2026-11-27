@@ -13,6 +13,7 @@ import { Table, TBody, TD, TEmpty, TH, THead, TR } from "@/components/ui/table";
 import { NewTransportButton } from "@/components/tms/new-transport";
 import { Pagination } from "@/components/wms/pagination";
 import { UrlToggle } from "@/components/wms/url-filters";
+import { MobileCard, MobileList } from "@/components/mobile/mobile-list";
 
 const PAGE_SIZE = 20;
 
@@ -91,7 +92,33 @@ export default async function TransportOrdersPage({ searchParams }: PageProps<"/
           {me && <UrlToggle param="mine" label="只看我的任务" />}
           <SearchInput placeholder="单号 / 地址 / 客户 / 车牌 / 司机" className="w-64" />
         </div>
-        <Table>
+        <MobileList empty="暂无运输单">
+          {rows.map((o) => (
+            <MobileCard
+              key={o.id}
+              href={`/tms/orders/${o.id}`}
+              title={<span className="block truncate">→ {o.destination}</span>}
+              badge={<StatusBadge map={TRANSPORT_STATUS} value={o.status} />}
+              subtitle={`${o.no} · 自 ${o.origin}`}
+              meta={
+                <>
+                  <span>{[o.consignee, o.customer?.name].filter(Boolean).join(" · ") || "—"}</span>
+                  {(o.vehicle || o.driver) && <span>{[o.vehicle?.plateNo, o.driver?.name].filter(Boolean).join(" · ")}</span>}
+                  {(o.deliveredAt || o.plannedAt) && (
+                    <span className="text-ink-3">{o.deliveredAt ? `签收 ${formatDateTime(o.deliveredAt)}` : `计划 ${formatDateTime(o.plannedAt)}`}</span>
+                  )}
+                </>
+              }
+              aside={
+                <span className="flex flex-col items-end">
+                  <span>{formatNumber(o.weight, 1)} kg</span>
+                  {o.freightCost ? <span className="text-xs font-normal text-ink-3">{formatMoney(o.freightCost)}</span> : null}
+                </span>
+              }
+            />
+          ))}
+        </MobileList>
+        <Table className="max-md:hidden">
           <THead>
             <TR>
               <TH>单号</TH>

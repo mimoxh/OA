@@ -13,6 +13,7 @@ import { Table, TBody, TD, TEmpty, TH, THead, TR } from "@/components/ui/table";
 import { NewInboundButton } from "@/components/wms/inbound-forms";
 import { Pagination } from "@/components/wms/pagination";
 import { UrlSelect } from "@/components/wms/url-filters";
+import { MobileCard, MobileList } from "@/components/mobile/mobile-list";
 
 const PAGE_SIZE = 20;
 
@@ -76,7 +77,37 @@ export default async function InboundListPage({ searchParams }: PageProps<"/wms/
           <UrlSelect param="warehouse" placeholder="全部仓库" options={warehouses.map((w) => ({ value: w.id, label: w.name }))} />
           <SearchInput placeholder="单号 / 采购单 / 供应商" />
         </div>
-        <Table>
+        <MobileList empty="暂无入库单">
+          {rows.map((o) => {
+            const expected = o.items.reduce((s, i) => s + i.expectedQty, 0);
+            const received = o.items.reduce((s, i) => s + i.receivedQty, 0);
+            return (
+              <MobileCard
+                key={o.id}
+                href={`/wms/inbound/${o.id}`}
+                title={o.purchaseOrder ? o.purchaseOrder.supplier.name : o.no}
+                badge={<StatusBadge map={INBOUND_STATUS} value={o.status} />}
+                subtitle={[o.no, o.purchaseOrder?.no, o.warehouse.name].filter(Boolean).join(" · ")}
+                meta={
+                  <>
+                    <StatusBadge map={INBOUND_TYPE} value={o.type} />
+                    <span>{o.receivedAt ? `入库 ${formatDateTime(o.receivedAt)}` : `预计 ${formatDate(o.expectedDate)}`}</span>
+                    <UserChip name={o.createdBy.name} color={o.createdBy.avatarColor} />
+                  </>
+                }
+                aside={
+                  <span className="flex flex-col items-end">
+                    <span>
+                      {o.status === "COMPLETED" ? received : "—"} / {expected}
+                    </span>
+                    <span className="text-xs font-normal text-ink-3">{o.items.length} 项明细</span>
+                  </span>
+                }
+              />
+            );
+          })}
+        </MobileList>
+        <Table className="max-md:hidden">
           <THead>
             <TR>
               <TH>单号</TH>

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { AlertTriangle, ClipboardList, PackageCheck, ShoppingCart, TrendingUp } from "lucide-react";
 import { db } from "@/lib/db";
+import { requireUser } from "@/lib/auth/dal";
 import { formatDate, formatMoney, formatNumber } from "@/lib/format";
 import { PURCHASE_STATUS, SALES_STATUS } from "@/lib/labels";
 import { bucketIndex, lastMonths, round2 } from "@/lib/erp/params";
@@ -9,8 +10,11 @@ import { LinkButton } from "@/components/ui/button";
 import { Card, Page, PageHeader, Section, StatCard, TopBar } from "@/components/ui/page";
 import { Table, TBody, TD, TEmpty, TH, THead, TR } from "@/components/ui/table";
 import { TrendChart } from "@/components/erp/trend-chart";
+import { MobileCard, MobileField, MobileList } from "@/components/mobile/mobile-list";
+import { ModuleEntries } from "@/components/mobile/module-entries";
 
 export default async function ErpOverviewPage() {
+  const user = await requireUser();
   const months = lastMonths(6);
   const from = months[0].start;
   const thisMonth = months[months.length - 1];
@@ -74,7 +78,14 @@ export default async function ErpOverviewPage() {
   return (
     <>
       <TopBar
+        mobileTitle="ERP 企业资源"
         crumbs={[{ label: "ERP 企业资源", href: "/erp" }, { label: "经营概览" }]}
+        mobileActions={
+          <LinkButton href="/erp/sales/new" variant="primary">
+            新建销售单
+          </LinkButton>
+        }
+        mobileMore={<LinkButton href="/erp/purchase/new">新建采购单</LinkButton>}
         actions={
           <>
             <LinkButton href="/erp/purchase/new">新建采购单</LinkButton>
@@ -86,6 +97,7 @@ export default async function ErpOverviewPage() {
       />
       <Page wide>
         <PageHeader icon="🏢" title="经营概览" description={`${thisMonth.start.getFullYear()} 年 ${thisMonth.label}经营数据与库存预警`} />
+        <ModuleEntries moduleKey="erp" permissions={user.permissions} />
 
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <StatCard
@@ -176,7 +188,31 @@ export default async function ErpOverviewPage() {
             }
             actions={<LinkButton href="/wms/inventory" variant="ghost" size="xs">查看库存</LinkButton>}
           >
-            <Table>
+            <MobileList empty="所有产品库存均高于安全库存 👍">
+              {low.slice(0, 6).map(({ p, qty, reserved }) => (
+                <MobileCard
+                  key={p.id}
+                  href={`/erp/products/${p.id}`}
+                  icon={<AlertTriangle className="size-4 text-[#d9730d]" />}
+                  title={p.name}
+                  meta={
+                    <>
+                      <MobileField label="库存">
+                        <span className="text-danger">{formatNumber(qty)}</span>
+                      </MobileField>
+                      <MobileField label="预占">{formatNumber(reserved)}</MobileField>
+                      <MobileField label="安全">{formatNumber(p.safetyStock)}</MobileField>
+                    </>
+                  }
+                  aside={
+                    <span className="text-[13px] font-normal text-ink-2">
+                      缺 <span className="font-medium text-danger">{formatNumber(p.safetyStock - qty)}</span> {p.unit}
+                    </span>
+                  }
+                />
+              ))}
+            </MobileList>
+            <Table className="max-md:hidden">
               <THead>
                 <TR>
                   <TH>产品</TH>
@@ -213,7 +249,19 @@ export default async function ErpOverviewPage() {
 
         <div className="grid grid-cols-1 gap-x-8 lg:grid-cols-2">
           <Section title="最近销售订单" actions={<LinkButton href="/erp/sales" variant="ghost" size="xs">全部</LinkButton>}>
-            <Table>
+            <MobileList empty="暂无销售订单">
+              {recentSales.map((o) => (
+                <MobileCard
+                  key={o.id}
+                  href={`/erp/sales/${o.id}`}
+                  title={o.customer.name}
+                  badge={<StatusBadge map={SALES_STATUS} value={o.status} />}
+                  subtitle={`${o.no} · ${formatDate(o.orderDate, "MM-dd")}`}
+                  aside={formatMoney(o.totalAmount)}
+                />
+              ))}
+            </MobileList>
+            <Table className="max-md:hidden">
               <TBody>
                 {recentSales.length === 0 && <TEmpty colSpan={4}>暂无销售订单</TEmpty>}
                 {recentSales.map((o) => (
@@ -235,7 +283,19 @@ export default async function ErpOverviewPage() {
             </Table>
           </Section>
           <Section title="最近采购订单" actions={<LinkButton href="/erp/purchase" variant="ghost" size="xs">全部</LinkButton>}>
-            <Table>
+            <MobileList empty="暂无采购订单">
+              {recentPurchases.map((o) => (
+                <MobileCard
+                  key={o.id}
+                  href={`/erp/purchase/${o.id}`}
+                  title={o.supplier.name}
+                  badge={<StatusBadge map={PURCHASE_STATUS} value={o.status} />}
+                  subtitle={`${o.no} · ${formatDate(o.createdAt, "MM-dd")}`}
+                  aside={formatMoney(o.totalAmount)}
+                />
+              ))}
+            </MobileList>
+            <Table className="max-md:hidden">
               <TBody>
                 {recentPurchases.length === 0 && <TEmpty colSpan={4}>暂无采购订单</TEmpty>}
                 {recentPurchases.map((o) => (

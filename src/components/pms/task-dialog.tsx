@@ -91,16 +91,16 @@ export function TaskDialog({
         }
       >
         <form
-          className="grid grid-cols-3 gap-3 pb-2"
+          className="grid grid-cols-3 gap-3 pb-2 max-md:grid-cols-2"
           onSubmit={(e) => {
             e.preventDefault();
             submit();
           }}
         >
-          <Field label="标题" required className="col-span-3">
+          <Field label="标题" required className="col-span-3 max-md:col-span-2">
             <Input autoFocus value={form.title} onChange={set("title")} placeholder="要做什么？" />
           </Field>
-          <Field label="描述" className="col-span-3">
+          <Field label="描述" className="col-span-3 max-md:col-span-2">
             <Textarea rows={3} value={form.description} onChange={set("description")} />
           </Field>
           <Field label="状态">

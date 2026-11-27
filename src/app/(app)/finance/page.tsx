@@ -12,6 +12,8 @@ import { LinkButton } from "@/components/ui/button";
 import { Card, Page, PageHeader, Section, StatCard, TopBar } from "@/components/ui/page";
 import { Table, TBody, TD, TEmpty, TH, THead, TR } from "@/components/ui/table";
 import { TrendChart } from "@/components/erp/trend-chart";
+import { MobileCard, MobileList } from "@/components/mobile/mobile-list";
+import { ModuleEntries } from "@/components/mobile/module-entries";
 
 export default async function FinanceOverviewPage() {
   const user = await requireUser();
@@ -59,6 +61,7 @@ export default async function FinanceOverviewPage() {
   return (
     <>
       <TopBar
+        mobileTitle="财务"
         crumbs={[{ label: "财务", href: "/finance" }, { label: "财务概览" }]}
         actions={
           can(user, "finance:edit") && (
@@ -70,6 +73,7 @@ export default async function FinanceOverviewPage() {
       />
       <Page wide>
         <PageHeader icon="💰" title="财务概览" description="资金、往来与本月损益一览，数据实时来自记账凭证与发票" />
+        <ModuleEntries moduleKey="finance" permissions={user.permissions} />
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <StatCard label="银行存款余额" icon={<Landmark />} value={formatMoney(bank)} hint="科目 1002 借方余额" href="/finance/accounts" />
           <StatCard
@@ -120,7 +124,27 @@ export default async function FinanceOverviewPage() {
 
         <div className="grid grid-cols-1 gap-x-8 lg:grid-cols-2">
           <Section title="逾期发票提醒" actions={<LinkButton href="/finance/invoices?status=overdue" variant="ghost" size="xs">全部</LinkButton>}>
-            <Table>
+            <MobileList empty="没有逾期发票 🎉">
+              {overdue.slice(0, 8).map((i) => {
+                const days = Math.floor((now.getTime() - i.dueDate!.getTime()) / 864e5);
+                return (
+                  <MobileCard
+                    key={i.id}
+                    href={`/finance/invoices/${i.id}`}
+                    title={i.customer?.name ?? i.supplier?.name ?? "—"}
+                    badge={<StatusBadge map={INVOICE_TYPE} value={i.type} />}
+                    subtitle={i.no}
+                    meta={
+                      <span className="text-danger">
+                        到期 {formatDate(i.dueDate)} · 逾期 {days} 天
+                      </span>
+                    }
+                    aside={formatMoney(i.amount - i.paidAmount)}
+                  />
+                );
+              })}
+            </MobileList>
+            <Table className="max-md:hidden">
               <THead>
                 <TR>
                   <TH>发票</TH>
@@ -156,7 +180,18 @@ export default async function FinanceOverviewPage() {
             </Table>
           </Section>
           <Section title="最近凭证" actions={<LinkButton href="/finance/vouchers" variant="ghost" size="xs">全部</LinkButton>}>
-            <Table>
+            <MobileList empty="暂无凭证">
+              {recent.map((e) => (
+                <MobileCard
+                  key={e.id}
+                  href={`/finance/vouchers/${e.id}`}
+                  title={e.memo || e.no}
+                  subtitle={`${e.no} · ${formatDate(e.date)}`}
+                  aside={formatMoney(e.lines.reduce((s, l) => s + l.debit, 0))}
+                />
+              ))}
+            </MobileList>
+            <Table className="max-md:hidden">
               <TBody>
                 {recent.length === 0 && <TEmpty colSpan={3}>暂无凭证</TEmpty>}
                 {recent.map((e) => (

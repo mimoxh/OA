@@ -10,7 +10,7 @@ export function isTabRoot(pathname: string) {
   return (TAB_ROOTS as readonly string[]).includes(pathname);
 }
 
-/** 业务模块首页（手机上是模块菜单） */
+/** 业务模块首页（手机上是模块概览 + 子页面入口宫格） */
 const MODULE_ROOTS = ["/oa", "/crm", "/erp", "/finance", "/wms", "/tms", "/pms", "/docs"];
 
 /** 层级不是“去掉最后一段”的页面 */
@@ -36,7 +36,7 @@ function split(href: string): { path: string; params: URLSearchParams } {
 
 /**
  * 可接受的上一级页面，第一个是默认去处。返回 null 表示已是一级页面（App 内退到后台）。
- * 模块下的列表页默认回工作台；如果是从模块菜单进来的，也接受回到模块菜单。
+ * 模块下的列表页默认回工作台；如果是从模块首页的入口进来的，也接受回到模块首页。
  */
 export function parentRoutes(href: string): string[] | null {
   const { path, params } = split(href);

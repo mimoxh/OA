@@ -134,12 +134,12 @@ export function StatCard({
   href?: string;
 }) {
   const body = (
-    <div className="flex h-full flex-col rounded-lg border border-line bg-white p-4 transition-colors hover:bg-sidebar">
+    <div className="flex h-full min-w-0 flex-col rounded-lg border border-line bg-white p-4 transition-colors hover:bg-sidebar max-md:p-3">
       <div className="flex items-center justify-between text-[13px] text-ink-2">
         <span>{label}</span>
         {icon && <span className="text-ink-3 [&>svg]:size-4">{icon}</span>}
       </div>
-      <div className="mt-2 text-2xl font-semibold tabular-nums text-ink">{value}</div>
+      <div className="mt-2 text-2xl font-semibold tabular-nums text-ink max-md:mt-1 max-md:text-xl max-md:[overflow-wrap:anywhere]">{value}</div>
       {hint && <div className="mt-1 text-xs text-ink-3">{hint}</div>}
     </div>
   );

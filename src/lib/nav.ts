@@ -9,7 +9,7 @@ import {
   Warehouse,
   type LucideIcon,
 } from "lucide-react";
-import type { Permission } from "@/lib/permissions";
+import { hasPermission, type Permission } from "@/lib/permissions";
 
 export type NavLink = { href: string; label: string; perm?: Permission };
 export type NavModule = {
@@ -135,6 +135,13 @@ export const NAV_MODULES: NavModule[] = [
     ],
   },
 ];
+
+/** 模块下的子页面（不含模块首页本身），按权限过滤 */
+export function moduleSubPages(moduleKey: string, permissions: readonly string[]): NavLink[] {
+  const mod = NAV_MODULES.find((m) => m.key === moduleKey);
+  if (!mod) return [];
+  return mod.items.filter((i) => i.href !== mod.href && (!i.perm || hasPermission(permissions, i.perm)));
+}
 
 export const PRODUCT_ICON = Package;
 

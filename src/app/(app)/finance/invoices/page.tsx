@@ -10,6 +10,7 @@ import { FilterPills, SearchInput } from "@/components/ui/common";
 import { Page, PageHeader, TopBar } from "@/components/ui/page";
 import { Table, TBody, TD, TEmpty, TH, THead, TR } from "@/components/ui/table";
 import { QueryTabs } from "@/components/finance/query-tabs";
+import { MobileCard, MobileField, MobileList } from "@/components/mobile/mobile-list";
 
 export default async function InvoicesPage({ searchParams }: PageProps<"/finance/invoices">) {
   await requireUser();
@@ -85,7 +86,7 @@ export default async function InvoicesPage({ searchParams }: PageProps<"/finance
               { value: "VOID", label: "已作废" },
             ]}
           />
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 max-md:w-full max-md:flex-col-reverse max-md:items-stretch max-md:gap-2">
             <span className="text-[13px] text-ink-2">
               合计 <span className="font-medium text-ink tabular-nums">{formatMoney(total)}</span>
               <span className="mx-2 text-ink-3">·</span>
@@ -96,7 +97,39 @@ export default async function InvoicesPage({ searchParams }: PageProps<"/finance
             <SearchInput placeholder="搜索发票号、往来单位、单据…" />
           </div>
         </div>
-        <Table>
+        <MobileList empty="没有符合条件的发票">
+          {invoices.map((i) => {
+            const open = i.status === "UNPAID" || i.status === "PARTIAL";
+            const overdue = open && i.dueDate && i.dueDate < now;
+            return (
+              <MobileCard
+                key={i.id}
+                href={`/finance/invoices/${i.id}`}
+                title={i.customer?.name ?? i.supplier?.name ?? "—"}
+                badge={<StatusBadge map={INVOICE_STATUS} value={i.status} />}
+                subtitle={[i.no, i.salesOrder?.no ?? i.purchaseOrder?.no].filter(Boolean).join(" · ")}
+                meta={
+                  <>
+                    <span className={overdue ? "font-medium text-danger" : undefined}>
+                      到期 {formatDate(i.dueDate)}
+                      {overdue && ` · 逾期 ${Math.floor((now.getTime() - i.dueDate!.getTime()) / 864e5)} 天`}
+                    </span>
+                    <MobileField label={receivable ? "已收" : "已付"}>{formatMoney(i.paidAmount)}</MobileField>
+                  </>
+                }
+                aside={
+                  <span className="flex flex-col items-end">
+                    <span>{formatMoney(i.amount)}</span>
+                    {i.status !== "VOID" && i.amount - i.paidAmount > 0 && (
+                      <span className="text-xs font-normal text-ink-3">未结 {formatMoney(i.amount - i.paidAmount)}</span>
+                    )}
+                  </span>
+                }
+              />
+            );
+          })}
+        </MobileList>
+        <Table className="max-md:hidden">
           <THead>
             <TR>
               <TH>发票号</TH>

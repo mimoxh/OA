@@ -126,13 +126,13 @@ export function TaskFilterBar({
   const set = <K extends keyof TaskFilterState>(k: K) => (v: TaskFilterState[K]) => onChange({ ...value, [k]: v });
   return (
     <div className="mb-4 flex flex-wrap items-center gap-2">
-      <label className="relative">
+      <label className="relative max-md:w-full">
         <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-ink-3" />
         <input
           value={value.q}
           onChange={(e) => set("q")(e.target.value)}
           placeholder="搜索任务标题"
-          className="h-8 w-52 rounded-md border border-line bg-white pl-7 pr-2 text-[13px] outline-none placeholder:text-ink-3 focus:border-accent"
+          className="h-8 w-52 rounded-md border max-md:w-full border-line bg-white pl-7 pr-2 text-[13px] outline-none placeholder:text-ink-3 focus:border-accent"
         />
       </label>
       <FilterChip

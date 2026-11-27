@@ -6,6 +6,7 @@ import { formatDateTime, formatNumber } from "@/lib/format";
 import { MOVEMENT_TYPE } from "@/lib/labels";
 import { MOVEMENT_REF_LABEL, movementRefHref } from "@/lib/wms/constants";
 import { cn } from "@/lib/utils";
+import { MobileCard, MobileField, MobileList } from "@/components/mobile/mobile-list";
 
 export type MovementRow = {
   id: string;
@@ -31,7 +32,42 @@ export const movementInclude = {
 export function MovementTable({ rows, hideProduct, hideWarehouse }: { rows: MovementRow[]; hideProduct?: boolean; hideWarehouse?: boolean }) {
   const cols = 8 - (hideProduct ? 1 : 0) - (hideWarehouse ? 1 : 0);
   return (
-    <Table>
+    <>
+    <MobileList empty="暂无库存流水">
+      {rows.map((m) => {
+        const href = movementRefHref(m.refType, m.refId);
+        const ref = m.refNo ?? MOVEMENT_REF_LABEL[m.refType ?? ""];
+        return (
+          <MobileCard
+            key={m.id}
+            title={hideProduct ? (ref ?? formatDateTime(m.createdAt)) : m.product.name}
+            badge={<StatusBadge map={MOVEMENT_TYPE} value={m.type} />}
+            subtitle={[formatDateTime(m.createdAt), !hideProduct && m.product.sku, !hideWarehouse && m.warehouse.name].filter(Boolean).join(" · ")}
+            meta={
+              <>
+                {!hideProduct && ref && (href ? (
+                  <Link href={href} className="text-accent">
+                    {ref}
+                  </Link>
+                ) : (
+                  <span>{ref}</span>
+                ))}
+                <MobileField label="结存">{formatNumber(m.balance)}</MobileField>
+                {m.user && <UserChip name={m.user.name} color={m.user.avatarColor} />}
+                {m.memo && <span className="text-ink-3">{m.memo}</span>}
+              </>
+            }
+            aside={
+              <span className={m.quantity > 0 ? "text-[#448361]" : "text-danger"}>
+                {m.quantity > 0 ? "+" : ""}
+                {formatNumber(m.quantity)}
+              </span>
+            }
+          />
+        );
+      })}
+    </MobileList>
+    <Table className="max-md:hidden">
       <THead>
         <TR>
           <TH>时间</TH>
@@ -89,5 +125,6 @@ export function MovementTable({ rows, hideProduct, hideWarehouse }: { rows: Move
         })}
       </TBody>
     </Table>
+    </>
   );
 }

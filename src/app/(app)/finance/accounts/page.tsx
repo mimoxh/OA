@@ -10,6 +10,7 @@ import { Page, PageHeader, TopBar } from "@/components/ui/page";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { AccountDialog } from "@/components/finance/account-dialog";
 import { DateRangeFilter } from "@/components/finance/date-range-filter";
+import { MobileCard, MobileField, MobileList } from "@/components/mobile/mobile-list";
 
 function Amount({ v }: { v: number }) {
   return <>{v ? formatMoney(v, { symbol: false }) : <span className="text-ink-3">—</span>}</>;
@@ -49,7 +50,54 @@ export default async function AccountsPage({ searchParams }: PageProps<"/finance
             </span>
           </div>
         </div>
-        <Table>
+        <MobileList>
+          {rows.map((r) => {
+            const o = balanceSide(r.opening, r.type);
+            const c = balanceSide(r.closing, r.type);
+            const idle = !r.opening && !r.debit && !r.credit && !r.closing;
+            return (
+              <MobileCard
+                key={r.id}
+                href={`/finance/vouchers?q=${encodeURIComponent(r.name)}`}
+                className={idle ? "opacity-60" : undefined}
+                title={r.name}
+                badge={<StatusBadge map={ACCOUNT_TYPE} value={r.type} />}
+                subtitle={r.code}
+                meta={
+                  <>
+                    <MobileField label="期初">{o.amount ? `${o.side} ${formatMoney(o.amount, { symbol: false })}` : "—"}</MobileField>
+                    <MobileField label="借">{r.debit ? formatMoney(r.debit, { symbol: false }) : "—"}</MobileField>
+                    <MobileField label="贷">{r.credit ? formatMoney(r.credit, { symbol: false }) : "—"}</MobileField>
+                  </>
+                }
+                aside={
+                  <span className="flex flex-col items-end">
+                    <span className="text-xs font-normal text-ink-3">期末{c.amount ? ` · ${c.side}` : ""}</span>
+                    <span>{c.amount ? formatMoney(c.amount, { symbol: false }) : "—"}</span>
+                  </span>
+                }
+              />
+            );
+          })}
+          <li className="rounded-lg border border-line bg-sidebar px-3.5 py-3 text-[13px]">
+            <div className="mb-1 font-semibold text-ink">合计</div>
+            <div className="grid grid-cols-[auto_1fr_1fr] gap-x-3 gap-y-0.5 tabular-nums">
+              <span className="text-ink-3" />
+              <span className="text-right text-ink-3">借方</span>
+              <span className="text-right text-ink-3">贷方</span>
+              <span className="text-ink-3">期初</span>
+              <span className="text-right">{formatMoney(totals.openingDebit, { symbol: false })}</span>
+              <span className="text-right">{formatMoney(totals.openingCredit, { symbol: false })}</span>
+              <span className="text-ink-3">本期</span>
+              <span className={`text-right ${periodOk ? "" : "text-danger"}`}>{formatMoney(totals.debit, { symbol: false })}</span>
+              <span className={`text-right ${periodOk ? "" : "text-danger"}`}>{formatMoney(totals.credit, { symbol: false })}</span>
+              <span className="text-ink-3">期末</span>
+              <span className={`text-right font-medium ${closingOk ? "" : "text-danger"}`}>{formatMoney(totals.closingDebit, { symbol: false })}</span>
+              <span className={`text-right font-medium ${closingOk ? "" : "text-danger"}`}>{formatMoney(totals.closingCredit, { symbol: false })}</span>
+            </div>
+          </li>
+        </MobileList>
+        <Table className="max-md:hidden">
           <THead>
             <TR>
               <TH rowSpan={2}>科目编码</TH>

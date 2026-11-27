@@ -141,7 +141,7 @@ export default async function ContactsPage({ searchParams }: PageProps<"/contact
             </div>
           )}
           {/* overflow-clip 而不是 overflow-hidden：保留圆角裁切，同时不打断手机端字母分组标题的吸顶 */}
-          <div className="mt-4 divide-y divide-line overflow-clip rounded-lg border border-line bg-white max-md:mr-5">
+          <div className="mt-4 divide-y divide-line overflow-clip rounded-lg border border-line bg-white max-md:mr-3">
             {users.length === 0 && bots.length === 0 ? (
               <div className="p-4">
                 <EmptyState icon={<Users />} title="没有找到成员" description="换个搜索词或部门试试。" />
