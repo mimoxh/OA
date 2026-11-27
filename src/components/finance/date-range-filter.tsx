@@ -36,33 +36,43 @@ export function DateRangeFilter({ className }: { className?: string }) {
   ];
   const input =
     "h-7 rounded-md border border-line-strong bg-white px-2 text-[13px] text-ink focus:border-accent focus:outline-none focus:ring-[3px] focus:ring-accent/15";
+  const mobileInput = "max-md:h-9 max-md:min-w-0 max-md:flex-1 max-md:text-[14px]";
 
+  // 桌面：一行排开（分组用 md:contents 拆平）；手机：快捷按钮一行，开始「至」结束 + 查询一行
   return (
-    <div className={cn("flex flex-wrap items-center gap-1.5", className)}>
-      {presets.map(([label, f, t]) => (
+    <div className={cn("flex flex-wrap items-center gap-1.5 max-md:w-full max-md:flex-col max-md:items-stretch max-md:gap-2", className)}>
+      <div className="flex items-center gap-1.5 md:contents">
+        {presets.map(([label, f, t]) => (
+          <button
+            key={label}
+            onClick={() => apply(f, t)}
+            className={cn(
+              "h-7 rounded-full px-2.5 text-[13px] transition-colors max-md:h-8 max-md:px-3",
+              from === f && to === t ? "bg-ink text-white" : "text-ink-2 hover:bg-hover",
+            )}
+          >
+            {label}
+          </button>
+        ))}
         <button
-          key={label}
-          onClick={() => apply(f, t)}
+          onClick={() => apply("", "")}
           className={cn(
-            "h-7 rounded-full px-2.5 text-[13px] transition-colors",
-            from === f && to === t ? "bg-ink text-white" : "text-ink-2 hover:bg-hover",
+            "h-7 rounded-full px-2.5 text-[13px] transition-colors max-md:h-8 max-md:px-3",
+            !from && !to ? "bg-ink text-white" : "text-ink-2 hover:bg-hover",
           )}
         >
-          {label}
+          全部
         </button>
-      ))}
-      <button
-        onClick={() => apply("", "")}
-        className={cn("h-7 rounded-full px-2.5 text-[13px] transition-colors", !from && !to ? "bg-ink text-white" : "text-ink-2 hover:bg-hover")}
-      >
-        全部
-      </button>
-      <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className={input} aria-label="开始日期" />
-      <span className="text-ink-3">—</span>
-      <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className={input} aria-label="结束日期" />
-      <Button size="sm" onClick={() => apply(from, to)}>
-        查询
-      </Button>
+      </div>
+      <div className="flex items-center gap-1.5 md:contents">
+        <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className={cn(input, mobileInput)} aria-label="开始日期" />
+        <span className="text-ink-3 max-md:hidden">—</span>
+        <span className="shrink-0 text-[13px] text-ink-2 md:hidden">至</span>
+        <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className={cn(input, mobileInput)} aria-label="结束日期" />
+        <Button size="sm" onClick={() => apply(from, to)} className="max-md:h-9 max-md:shrink-0">
+          查询
+        </Button>
+      </div>
     </div>
   );
 }

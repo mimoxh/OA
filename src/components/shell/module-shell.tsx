@@ -8,17 +8,19 @@ import { SplitFrame } from "./split-frame";
 export async function ModuleShell({
   moduleKey,
   hideOn,
+  mobileRootContent,
   children,
 }: {
   moduleKey: string;
   hideOn?: string[];
+  mobileRootContent?: boolean;
   children: ReactNode;
 }) {
   const user = await requireUser();
   const mod = NAV_MODULES.find((m) => m.key === moduleKey);
   if (!mod) throw new Error(`未知模块：${moduleKey}`);
   return (
-    <SplitFrame root={mod.href} panel={<ModuleNav moduleKey={mod.key} permissions={user.permissions} hideOn={hideOn} />}>
+    <SplitFrame root={mod.href} mobileRootContent={mobileRootContent} panel={<ModuleNav moduleKey={mod.key} permissions={user.permissions} hideOn={hideOn} />}>
       {children}
     </SplitFrame>
   );

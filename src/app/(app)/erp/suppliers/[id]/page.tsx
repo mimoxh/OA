@@ -36,28 +36,38 @@ export default async function SupplierDetailPage({ params }: PageProps<"/erp/sup
   const paid = round2(supplier.invoices.filter((i) => i.status !== "VOID").reduce((s, i) => s + i.paidAmount, 0));
   const now = new Date();
 
+  const deleteButton = (
+    <ActionButton
+      action={deleteSupplier.bind(null, supplier.id)}
+      success="供应商已删除"
+      redirectTo="/erp/suppliers"
+      danger
+      confirmText="删除"
+      confirm={{ title: `删除「${supplier.name}」？`, description: "只有没有采购单和发票的供应商可以删除，删除后无法恢复。" }}
+    >
+      删除
+    </ActionButton>
+  );
+  const editButton = <SupplierDialog supplier={supplier} trigger={<Button>编辑</Button>} />;
+  const newPurchase = (
+    <LinkButton href={`/erp/purchase/new?supplierId=${supplier.id}`} variant="primary">
+      <Plus className="size-3.5" />
+      新建采购单
+    </LinkButton>
+  );
+
   return (
     <>
       <TopBar
         crumbs={[{ label: "ERP 企业资源", href: "/erp" }, { label: "供应商", href: "/erp/suppliers" }, { label: supplier.name }]}
+        mobileActions={canEdit && newPurchase}
+        mobileMore={canEdit ? <>{editButton}{deleteButton}</> : undefined}
         actions={
           canEdit && (
             <>
-              <ActionButton
-                action={deleteSupplier.bind(null, supplier.id)}
-                success="供应商已删除"
-                redirectTo="/erp/suppliers"
-                danger
-                confirmText="删除"
-                confirm={{ title: `删除「${supplier.name}」？`, description: "只有没有采购单和发票的供应商可以删除，删除后无法恢复。" }}
-              >
-                删除
-              </ActionButton>
-              <SupplierDialog supplier={supplier} trigger={<Button>编辑</Button>} />
-              <LinkButton href={`/erp/purchase/new?supplierId=${supplier.id}`} variant="primary">
-                <Plus className="size-3.5" />
-                新建采购单
-              </LinkButton>
+              {deleteButton}
+              {editButton}
+              {newPurchase}
             </>
           )
         }

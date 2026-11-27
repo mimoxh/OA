@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { toast } from "sonner";
 import {
   openMobileAppSettings,
+  openMobileChannelSettings,
   openMobileVendorSettings,
   requestMobileIgnoreBatteryOptimizations,
   requestMobileNotificationPermission,
@@ -97,6 +98,7 @@ export function KeepAliveGuide() {
     return <p className="mt-4 px-1 text-sm text-ink-2">后台保活设置只在 OA 手机 App 内可用。</p>;
   }
   const vendor = vendorOf(state?.manufacturer ?? "", state?.brand ?? "");
+  const serviceChannel = state?.channels.find((c) => c.key === "service");
   const openVendor = async (kind: "autostart" | "battery") => {
     const r = await openMobileVendorSettings(kind);
     if (r?.opened === "app-details") toast.info("没有找到该机型的专用设置页，已打开应用详情，请按下方步骤设置");
@@ -152,7 +154,15 @@ export function KeepAliveGuide() {
         <Step n={4} title="在最近任务里锁定 OA（可选）">
           打开最近任务列表，长按或下拉 OA 的卡片，选择“锁定”。一键清理后台时不会被关闭。
         </Step>
-        <Step n={5} title="确认连接状态">
+        <Step
+          n={5}
+          title="隐藏常驻通知（可选）"
+          status={serviceChannel && <Tone tone={serviceChannel.enabled ? "off" : "ok"}>{serviceChannel.enabled ? "显示中" : "已隐藏"}</Tone>}
+          action={<Btn onClick={() => void openMobileChannelSettings("service")}>打开“后台连接状态”设置</Btn>}
+        >
+          后台接收运行时，系统要求显示一条“后台连接状态”通知。它已放在最低优先级、不响铃不震动、锁屏不显示；嫌占位置可以在设置页里关闭“允许通知”，后台连接和消息提醒不受影响。
+        </Step>
+        <Step n={6} title="确认连接状态">
           回到“通知”页，连接状态显示“已连接，后台可接收”即可。重启手机后无需打开 App，后台连接会自动恢复。
         </Step>
       </div>

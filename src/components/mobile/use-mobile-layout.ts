@@ -16,8 +16,4 @@ export function useIsMobileLayout(): boolean {
 }
 
 /** 底部标签栏所在的一级页面；其余页面在手机布局下显示返回按钮、隐藏标签栏 */
-export const TAB_ROOTS = ["/messages", "/contacts", "/work", "/me"] as const;
-
-export function isTabRoot(pathname: string) {
-  return (TAB_ROOTS as readonly string[]).includes(pathname);
-}
+export { TAB_ROOTS, isTabRoot } from "./route-parent";

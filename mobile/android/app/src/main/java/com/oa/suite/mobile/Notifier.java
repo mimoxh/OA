@@ -27,7 +27,12 @@ import java.util.Map;
  */
 final class Notifier {
 
-    static final String CH_SERVICE = "oa_keepalive";
+    /**
+     * 前台服务常驻通知用的最低优先级渠道。渠道创建后重要性等属性不能再由 App 修改，
+     * 所以换新 id（旧的 oa_keepalive 在部分 ROM 上会被提升或用户已改过）并删除旧渠道。
+     */
+    static final String CH_SERVICE = "oa_bg_status";
+    private static final String CH_SERVICE_OLD = "oa_keepalive";
     static final String CH_DM = "oa_dm";
     static final String CH_GROUP = "oa_group";
     static final String CH_MENTION = "oa_mention";
@@ -55,7 +60,7 @@ final class Notifier {
         { "group", CH_GROUP, "群聊消息", "群里的新消息（免打扰的群不提醒）" },
         { "mention", CH_MENTION, "@我", "群里有人 @你 或 @所有人" },
         { "system", CH_SYSTEM, "审批与系统通知", "审批助手、项目助手等发来的待办与结果" },
-        { "service", CH_SERVICE, "后台连接", "保持与 OA 服务器的连接，用于接收新消息提醒" },
+        { "service", CH_SERVICE, "后台连接状态", "后台接收运行时的常驻状态提示，可以关闭；关闭后后台接收和消息提醒不受影响" },
     };
 
     static String channelId(String key) {
@@ -79,6 +84,7 @@ final class Notifier {
         NotificationManager nm = c.getSystemService(NotificationManager.class);
         if (nm == null) return;
         if (nm.getNotificationChannel(CH_LEGACY) != null) nm.deleteNotificationChannel(CH_LEGACY);
+        if (nm.getNotificationChannel(CH_SERVICE_OLD) != null) nm.deleteNotificationChannel(CH_SERVICE_OLD);
         for (String[] ch : CHANNELS) {
             if (nm.getNotificationChannel(ch[1]) != null) continue;
             int importance;
@@ -94,7 +100,13 @@ final class Notifier {
             }
             NotificationChannel channel = new NotificationChannel(ch[1], ch[2], importance);
             channel.setDescription(ch[3]);
-            if ("service".equals(ch[0])) channel.setShowBadge(false);
+            if ("service".equals(ch[0])) {
+                channel.setShowBadge(false);
+                channel.setSound(null, null);
+                channel.enableVibration(false);
+                channel.enableLights(false);
+                channel.setLockscreenVisibility(Notification.VISIBILITY_SECRET);
+            }
             nm.createNotificationChannel(channel);
         }
     }
@@ -205,6 +217,10 @@ final class Notifier {
             .setContentText(text)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
+            .setSilent(true)
+            .setShowWhen(false)
+            .setLocalOnly(true)
+            .setVisibility(NotificationCompat.VISIBILITY_SECRET)
             .setPriority(NotificationCompat.PRIORITY_MIN)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setContentIntent(pi)

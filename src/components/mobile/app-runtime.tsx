@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect } from "react";
+import { Suspense, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { installStaleActionGuard } from "@/lib/stale-action";
-import { isMobileApp, minimizeMobileApp, onMobileBackButton } from "@/lib/mobile-bridge";
+import { isMobileApp, onMobileBackButton } from "@/lib/mobile-bridge";
 import { popBackHandler } from "./back-stack";
 import { navigateBack, useTrackNavStack } from "./nav-stack";
-import { isTabRoot } from "./use-mobile-layout";
 
 /** Radix 弹窗、菜单、下拉等浮层：返回键先关闭它们（与按 Esc 等价） */
 function closeTopLayer(): boolean {
@@ -19,26 +18,30 @@ function closeTopLayer(): boolean {
   return true;
 }
 
+function NavStackTracker() {
+  useTrackNavStack();
+  return null;
+}
+
 /** 根布局挂载一次：Server Action 失效兜底，以及 App 内的 Android 返回键 */
 export function AppRuntime() {
   const router = useRouter();
-  useTrackNavStack();
 
   useEffect(() => installStaleActionGuard(), []);
 
   useEffect(() => {
     if (!isMobileApp()) return;
+    // 返回键顺序：浮层 → 页面内全屏层 → 退到上一级页面（一级页面 / 登录页退到后台）
     return onMobileBackButton(() => {
       if (closeTopLayer()) return;
       if (popBackHandler()) return;
-      const path = window.location.pathname;
-      if (path === "/login" || isTabRoot(path)) {
-        minimizeMobileApp();
-        return;
-      }
-      navigateBack(router, path);
+      navigateBack(router);
     });
   }, [router]);
 
-  return null;
+  return (
+    <Suspense fallback={null}>
+      <NavStackTracker />
+    </Suspense>
+  );
 }

@@ -22,8 +22,11 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   };
   return (
     <RealtimeProvider meId={user.id}>
-      <div className={desktop ? "flex h-screen overflow-hidden" : "flex min-h-screen"}>
+      {/* 手机布局 body 已有 padding-top: var(--sat)，外层再占满 100vh 会让整页多出状态栏高度的滚动距离（聊天页底部空白） */}
+      <div className={desktop ? "flex h-screen overflow-hidden" : "flex min-h-screen max-md:min-h-[calc(100dvh-var(--sat))]"}>
         {desktop && <style>{":root{--titlebar-h:40px}"}</style>}
+        {/* 沉浸式状态栏的底色：页面滚动时内容不从状态栏图标下面透出来；全屏浮层（z-40 起）盖在它上面 */}
+        <div aria-hidden className="pointer-events-none fixed inset-x-0 top-0 z-[25] h-[var(--sat)] bg-white md:hidden" />
         <AppRail
           user={shellUser}
           enabledApps={enabledApps}

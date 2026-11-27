@@ -34,7 +34,7 @@ pnpm mobile:build:debug          # 等同于 cd mobile; pnpm exec cap sync andro
 ## 后台推送（M2）
 
 - `RtService`：前台服务常驻一条 `/rt?client=bg` WebSocket（会话 Cookie 换 rt 令牌），只接收服务端算好的 `push.notify` / `push.clear`，不计入在线状态；重连后调 `/api/push/missed` 补拉断线期间的提醒，按会话 seq 去重。
-- `Notifier`：渠道 `oa_dm` / `oa_group` / `oa_mention` / `oa_system`（与 `src/lib/push/types.ts` 的 `PushChannel` 对应）和常驻通知 `oa_keepalive`；同一会话只占一条通知。
+- `Notifier`：渠道 `oa_dm` / `oa_group` / `oa_mention` / `oa_system`（与 `src/lib/push/types.ts` 的 `PushChannel` 对应）和前台服务常驻通知 `oa_bg_status`（“后台连接状态”，IMPORTANCE_MIN、锁屏隐藏、静音，可由用户关闭；升级时删除旧的 `oa_keepalive`）；同一会话只占一条通知。
 - `BootReceiver`：开机（`BOOT_COMPLETED`）和 App 升级（`MY_PACKAGE_REPLACED`）后按设置启动后台服务，不需要打开 App。
 - App 在前台时由页面（`?client=app`）提醒，后台服务不重复提醒；页面切到后台 60 秒后断开自己的连接，只留后台连接。
 - 设置页：Web 的「我的 → 通知」（`/me/notifications`）与厂商引导页（`/me/notifications/guide`），通过 `OAShell` 插件读写原生设置。

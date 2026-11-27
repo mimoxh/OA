@@ -86,7 +86,10 @@
   html[data-tabbar] {
     --tabbar-h: calc(56px + var(--sab));
   }
-  body {
+  /* Radix 弹层的滚动锁（react-remove-scroll-bar）会注入 body[data-scroll-locked] { padding-top: 0 }，
+     打开菜单 / 弹窗时整页会上移一个状态栏高度、底部露出空白；用更高优先级的选择器保住状态栏留白 */
+  body,
+  html body[data-scroll-locked] {
     padding-top: var(--sat);
   }
 }

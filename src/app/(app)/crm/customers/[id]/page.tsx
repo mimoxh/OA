@@ -88,10 +88,49 @@ export default async function CustomerDetailPage({ params, searchParams }: PageP
     />
   );
 
+  const editButton = canEdit && (
+    <CustomerDialog
+      users={users}
+      customerId={c.id}
+      initial={{
+        name: c.name,
+        industry: c.industry ?? "",
+        level: c.level,
+        status: c.status,
+        source: c.source ?? "",
+        phone: c.phone ?? "",
+        email: c.email ?? "",
+        address: c.address ?? "",
+        remark: c.remark ?? "",
+        ownerId: c.ownerId ?? "",
+      }}
+      trigger={
+        <Button size="sm">
+          <Pencil className="size-3.5" />
+          编辑
+        </Button>
+      }
+    />
+  );
+
   return (
     <>
       <TopBar
         crumbs={[{ label: "CRM 客户", href: "/crm" }, { label: "客户", href: "/crm/customers" }, { label: c.name }]}
+        mobileActions={canEdit ? followUpButton : undefined}
+        mobileMore={
+          <>
+            <BizGroupButton bizType="customer" bizId={c.id} existingConversationId={bizGroup?.id} />
+            {canOrder && (
+              <LinkButton href={`/erp/sales/new?customerId=${c.id}`}>
+                <ShoppingCart className="size-3.5" />
+                新建销售订单
+              </LinkButton>
+            )}
+            {editButton}
+            {canEdit && <DeleteCustomerButton id={c.id} name={c.name} />}
+          </>
+        }
         actions={
           <>
             <BizGroupButton bizType="customer" bizId={c.id} existingConversationId={bizGroup?.id} />
@@ -102,30 +141,7 @@ export default async function CustomerDetailPage({ params, searchParams }: PageP
                 新建销售订单
               </LinkButton>
             )}
-            {canEdit && (
-              <CustomerDialog
-                users={users}
-                customerId={c.id}
-                initial={{
-                  name: c.name,
-                  industry: c.industry ?? "",
-                  level: c.level,
-                  status: c.status,
-                  source: c.source ?? "",
-                  phone: c.phone ?? "",
-                  email: c.email ?? "",
-                  address: c.address ?? "",
-                  remark: c.remark ?? "",
-                  ownerId: c.ownerId ?? "",
-                }}
-                trigger={
-                  <Button size="sm">
-                    <Pencil className="size-3.5" />
-                    编辑
-                  </Button>
-                }
-              />
-            )}
+            {editButton}
             {canEdit && <DeleteCustomerButton id={c.id} name={c.name} />}
           </>
         }

@@ -3,17 +3,39 @@ import type { ReactNode } from "react";
 import { ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MobileBack } from "@/components/mobile/mobile-back";
+import { MobileMore } from "@/components/mobile/mobile-more";
 
 export type Crumb = { label: ReactNode; href?: string };
 
-/** 页面顶部细条：面包屑 + 右侧操作（类似 Notion 顶栏） */
-export function TopBar({ crumbs, actions }: { crumbs: Crumb[]; actions?: ReactNode }) {
+/**
+ * 页面顶部细条：面包屑 + 右侧操作（类似 Notion 顶栏）。
+ * 手机布局：
+ * - 只显示一个标题（mobileTitle，默认取最后一级面包屑），上一级由返回键承担；
+ * - mobileActions / mobileMore：传了任一个，手机上就不显示 actions，改为 mobileActions（1–2 个主操作）+「更多」面板（mobileMore）。
+ */
+export function TopBar({
+  crumbs,
+  actions,
+  mobileTitle,
+  mobileActions,
+  mobileMore,
+}: {
+  crumbs: Crumb[];
+  actions?: ReactNode;
+  mobileTitle?: ReactNode;
+  mobileActions?: ReactNode;
+  mobileMore?: ReactNode;
+}) {
+  const mobileOwn = mobileActions != null || mobileMore != null;
+  // 手机上不显示面包屑：上一级由返回键承担，标题默认取最后一级
+  const title = mobileTitle ?? crumbs.at(-1)?.label;
   return (
-    <div className="sticky top-0 z-20 flex h-11 items-center justify-between gap-3 bg-white/90 px-3 backdrop-blur">
+    <div className="sticky top-0 z-20 flex h-11 items-center justify-between gap-3 bg-white/90 px-3 backdrop-blur max-md:top-[var(--sat)]">
       <nav className="flex min-w-0 items-center gap-0.5 text-sm text-ink-2">
         <MobileBack />
+        {title != null && <span className="min-w-0 truncate px-1 text-[17px] font-semibold text-ink md:hidden">{title}</span>}
         {crumbs.map((c, i) => (
-          <span key={i} className="flex min-w-0 items-center gap-0.5">
+          <span key={i} className="flex min-w-0 items-center gap-0.5 max-md:hidden">
             {i > 0 && <ChevronRight className="size-3.5 shrink-0 text-ink-3" />}
             {c.href ? (
               <Link href={c.href} className="truncate rounded px-1.5 py-0.5 hover:bg-hover hover:text-ink">
@@ -25,7 +47,13 @@ export function TopBar({ crumbs, actions }: { crumbs: Crumb[]; actions?: ReactNo
           </span>
         ))}
       </nav>
-      {actions && <div className="flex shrink-0 items-center gap-1.5">{actions}</div>}
+      {actions && <div className={cn("flex shrink-0 items-center gap-1.5", mobileOwn && "max-md:hidden")}>{actions}</div>}
+      {mobileOwn && (
+        <div className="flex shrink-0 items-center gap-1 md:hidden">
+          {mobileActions}
+          {mobileMore != null && <MobileMore>{mobileMore}</MobileMore>}
+        </div>
+      )}
     </div>
   );
 }

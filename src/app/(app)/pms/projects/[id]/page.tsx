@@ -34,6 +34,7 @@ const VIEWS = [
   { key: "overview", label: "统计" },
 ] as const;
 type View = (typeof VIEWS)[number]["key"];
+const TASK_VIEWS: View[] = ["board", "list", "timeline"];
 
 export default async function ProjectPage({ params, searchParams }: PageProps<"/pms/projects/[id]">) {
   // 页面与布局并行渲染，下方 upgradeProject 会写库，所以权限必须在页面里先校验
@@ -192,6 +193,39 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
     <>
       <TopBar
         crumbs={[{ label: "PMS 项目", href: "/pms" }, { label: `${project.icon} ${project.name}` }]}
+        mobileTitle={`${project.icon} ${project.name}`}
+        mobileActions={
+          canEdit && (
+            <TaskDialog
+              projectId={id}
+              members={memberUsers}
+              milestones={milestoneOptions}
+              types={project.taskTypes}
+              trigger={
+                <Button variant="primary" size="sm" aria-label="新建任务">
+                  <Plus className="size-3.5" />
+                  任务
+                </Button>
+              }
+            />
+          )
+        }
+        mobileMore={
+          <>
+            <BizGroupButton bizType="project" bizId={project.id} existingConversationId={bizGroup?.id} />
+            <ShareToChatButton refType="project" refId={project.id} title={project.name} subtitle={project.customer?.name ?? "内部项目"} />
+            <ProjectPinButton projectId={project.id} name={project.name} pinned={user.railPins.includes(`project:${project.id}`)} />
+            <ProjectActions
+              project={header}
+              users={users}
+              customers={customers}
+              canManage={canManage}
+              canDelete={can(user, "pms:edit")}
+              currentUserId={user.id}
+              labeled
+            />
+          </>
+        }
         actions={
           <>
             <BizGroupButton bizType="project" bizId={project.id} existingConversationId={bizGroup?.id} />
@@ -234,7 +268,19 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
         />
         <ProjectProperties project={header} users={users} canManage={canManage} />
 
-        <div className="mt-6 mb-5 flex items-center gap-1 border-b border-line">
+        <div className="mt-6 mb-5 flex items-center gap-1 border-b border-line max-md:mt-4 max-md:mb-3">
+          {/* 手机上看板 / 列表 / 时间线合并为一个「任务」标签（按状态分组的列表） */}
+          <Link
+            href={hrefWith(path, {}, { view: null })}
+            scroll={false}
+            replace
+            className={cn(
+              "relative -mb-px flex h-9 items-center px-2 text-sm transition-colors md:hidden",
+              TASK_VIEWS.includes(view) ? "text-ink after:absolute after:inset-x-1 after:bottom-0 after:h-0.5 after:rounded-full after:bg-ink" : "text-ink-2",
+            )}
+          >
+            任务
+          </Link>
           {VIEWS.map((v) => (
             <Link
               key={v.key}
@@ -243,6 +289,7 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
               className={cn(
                 "relative -mb-px flex h-9 items-center px-2 text-sm transition-colors",
                 view === v.key ? "text-ink after:absolute after:inset-x-1 after:bottom-0 after:h-0.5 after:rounded-full after:bg-ink" : "text-ink-2 hover:text-ink",
+                TASK_VIEWS.includes(v.key) && "max-md:hidden",
               )}
             >
               {v.label}
@@ -250,7 +297,7 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
               {v.key === "members" && <span className="ml-1 rounded bg-hover px-1 text-[11px] text-ink-2">{project.members.length}</span>}
             </Link>
           ))}
-          {!canEdit && <span className="ml-auto text-xs text-ink-3">只读：你不是该项目成员</span>}
+          {!canEdit && <span className="ml-auto text-xs text-ink-3 max-md:hidden">只读：你不是该项目成员</span>}
         </div>
 
         {(view === "board" || view === "list") && (
@@ -267,6 +314,22 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
           />
         )}
         {view === "timeline" && (
+          <div className="md:hidden">
+            <ProjectTasks
+              view="mobile"
+              projectId={id}
+              tasks={boardTasks}
+              members={memberUsers}
+              types={project.taskTypes}
+              milestones={milestoneOptions}
+              canEdit={canEdit}
+              canManage={canManage}
+              meId={user.id}
+            />
+          </div>
+        )}
+        {view === "timeline" && (
+          <div className="max-md:hidden">
           <Timeline
             tasks={top.map((t) => ({ id: t.id, title: t.title, status: t.status, startDate: t.startDate, dueDate: t.dueDate, assignee: t.assignee }))}
             milestones={project.milestones.map((m) => ({ id: m.id, name: m.name, dueDate: m.dueDate, status: m.status }))}
@@ -274,6 +337,7 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
             projectEnd={project.endDate}
             taskHref={taskHref}
           />
+          </div>
         )}
         {view === "milestones" && (
           <Milestones

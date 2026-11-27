@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
-import { AtSign, Bell, BellRing, ChevronRight, ClipboardCheck, MessageCircle, ShieldCheck, Smartphone, Users } from "lucide-react";
+import { AtSign, Bell, BellOff, BellRing, ChevronRight, ClipboardCheck, MessageCircle, ShieldCheck, Smartphone, Users } from "lucide-react";
 import { toast } from "sonner";
 import { getDesktopNotifyState, subscribeDesktopNotify, toggleDesktopNotify } from "@/lib/im/desktop-notify";
 import {
@@ -115,6 +115,7 @@ export function NotificationSettings() {
   };
   const svc = serviceLabel(state);
   const systemBlocked = !!state && state.notifyEnabled && (!state.permissionGranted || !state.notificationsEnabled);
+  const serviceChannel = state?.channels.find((c) => c.key === "service");
 
   return (
     <>
@@ -174,6 +175,21 @@ export function NotificationSettings() {
           label="忽略电池优化"
           value={state ? (state.ignoringBatteryOptimizations ? "已允许" : "未允许") : undefined}
         />
+        <button
+          type="button"
+          onClick={() => void openMobileChannelSettings("service")}
+          className="flex w-full items-start gap-3 px-4 py-3 text-left active:bg-hover"
+        >
+          <span className="mt-0.5 text-ink-2 [&>svg]:size-5">
+            <BellOff />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[15px] text-ink">常驻状态通知</span>
+            <span className="mt-0.5 block text-xs leading-5 text-ink-3">“后台连接状态”类别，可在系统里关闭；关闭后照常接收消息提醒</span>
+          </span>
+          <span className="mt-0.5 shrink-0 text-[13px] text-ink-3">{serviceChannel ? (serviceChannel.enabled ? "显示" : "已隐藏") : ""}</span>
+          <ChevronRight className="mt-1 size-4 shrink-0 text-ink-3" />
+        </button>
         <Link href="/me/notifications/guide" className="flex items-center gap-3 px-4 py-3 active:bg-hover">
           <span className="text-ink-2 [&>svg]:size-5">
             <ShieldCheck />
@@ -184,7 +200,7 @@ export function NotificationSettings() {
         </Link>
       </div>
       <p className="mt-2 px-1 text-xs leading-5 text-ink-3">
-        后台接收会在通知栏常驻一个“后台连接”图标，用来在锁屏和 App 退到后台时接收提醒。部分手机会自动清理后台，请按引导开启自启动并允许后台运行。
+        后台接收运行时，系统要求显示一条“后台连接状态”通知（最低优先级，不响铃、不震动、锁屏不显示）。不想看到它，可以点“常驻状态通知”在系统里关闭这一类别，消息提醒不受影响。部分手机会自动清理后台，请按引导开启自启动并允许后台运行。
       </p>
 
       <div className="mt-4 px-1 text-xs text-ink-3">提醒规则</div>

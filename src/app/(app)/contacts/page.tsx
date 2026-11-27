@@ -8,7 +8,10 @@ import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { SearchInput } from "@/components/ui/common";
 import { EmptyState, Page, TopBar } from "@/components/ui/page";
+import { contactsDeptScope } from "@/lib/contacts";
+import { groupByPinyin, INDEX_LETTERS, letterAnchorId } from "@/lib/pinyin";
 import { cn } from "@/lib/utils";
+import { LetterIndex } from "./letter-index";
 import { MemberCard } from "./member-card";
 
 export const metadata = { title: "通讯录" };
@@ -46,16 +49,8 @@ export default async function ContactsPage({ searchParams }: PageProps<"/contact
   const total = counts.reduce((s, c) => s + c._count._all, 0);
   const flat = flattenDepartments(depts);
 
-  // 选中部门 + 全部下级部门
-  let deptIds: string[] | null = null;
-  if (deptId && depts.some((d) => d.id === deptId)) {
-    deptIds = [deptId];
-    const byParent = new Map<string | null, typeof depts>();
-    for (const d of depts) (byParent.get(d.parentId) ?? byParent.set(d.parentId, []).get(d.parentId)!).push(d);
-    for (let i = 0; i < deptIds.length; i++) {
-      for (const c of byParent.get(deptIds[i]) ?? []) deptIds.push(c.id);
-    }
-  }
+  const scope = contactsDeptScope(depts, deptId);
+  const deptIds = scope?.memberDeptIds ?? null;
 
   const search = q
     ? { OR: [{ name: { contains: q } }, { email: { contains: q } }, { title: { contains: q } }, { phone: { contains: q } }] }
@@ -91,6 +86,9 @@ export default async function ContactsPage({ searchParams }: PageProps<"/contact
     return s ? `/contacts?${s}` : "/contacts";
   };
 
+  const groups = groupByPinyin(users, (u) => u.name);
+  const subDepts = scope ? flat.filter((d) => scope.children.some((c) => c.id === d.id)) : [];
+
   const selectedName = showBotsOnly ? "Webhook 机器人" : deptId ? flat.find((d) => d.id === deptId)?.name ?? "部门" : "全部成员";
 
   return (
@@ -105,7 +103,7 @@ export default async function ContactsPage({ searchParams }: PageProps<"/contact
         </nav>
       </ContextPanel>
       <div className="min-w-0 flex-1">
-        <TopBar crumbs={[{ label: "通讯录" }, { label: selectedName }]} actions={<SearchInput placeholder="搜索姓名、邮箱、职位、电话…" />} />
+        <TopBar mobileTitle="通讯录" crumbs={[{ label: "通讯录" }, { label: selectedName }]} actions={<SearchInput placeholder="搜索姓名、邮箱、职位、电话…" />} />
         <Page wide className="max-md:px-3">
           {/* 手机布局没有左侧部门栏，用横向滚动的部门标签代替 */}
           <div className="-mx-3 flex gap-1.5 overflow-x-auto px-3 pt-1 [scrollbar-width:none] md:hidden">
@@ -131,13 +129,33 @@ export default async function ContactsPage({ searchParams }: PageProps<"/contact
               );
             })}
           </div>
-          <div className="mt-4 divide-y divide-line overflow-hidden rounded-lg border border-line bg-white">
+          {subDepts.length > 0 && (
+            <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[13px] text-ink-3">
+              <span>下级部门</span>
+              {subDepts.map((d) => (
+                <Link key={d.id} href={hrefFor(d.id)} replace className="rounded-md px-1.5 py-0.5 text-accent hover:bg-hover">
+                  {d.name}
+                  <span className="ml-1 text-xs text-ink-3">{countMap.get(d.id) ?? 0}</span>
+                </Link>
+              ))}
+            </div>
+          )}
+          {/* overflow-clip 而不是 overflow-hidden：保留圆角裁切，同时不打断手机端字母分组标题的吸顶 */}
+          <div className="mt-4 divide-y divide-line overflow-clip rounded-lg border border-line bg-white max-md:mr-5">
             {users.length === 0 && bots.length === 0 ? (
               <div className="p-4">
                 <EmptyState icon={<Users />} title="没有找到成员" description="换个搜索词或部门试试。" />
               </div>
             ) : (
-              users.map((u) => (
+              groups.flatMap(({ letter, items }) => [
+                <div
+                  key={`letter-${letter}`}
+                  id={letterAnchorId(letter)}
+                  className="sticky top-[calc(var(--sat)+2.75rem)] z-10 scroll-mt-[calc(var(--sat)+2.75rem)] bg-sidebar px-4 py-1 text-xs font-semibold text-ink-2 md:hidden"
+                >
+                  {letter}
+                </div>,
+                ...items.map((u) => (
                 <MemberCard
                   key={u.id}
                   member={{
@@ -162,7 +180,8 @@ export default async function ContactsPage({ searchParams }: PageProps<"/contact
                     <span className="hidden w-32 truncate text-sm text-ink-2 lg:block">{u.phone ?? "—"}</span>
                   </button>
                 </MemberCard>
-              ))
+                )),
+              ])
             )}
             {bots.map((b) => (
               <MemberCard
@@ -198,6 +217,7 @@ export default async function ContactsPage({ searchParams }: PageProps<"/contact
             ))}
           </div>
         </Page>
+        <LetterIndex letters={INDEX_LETTERS} available={groups.map((g) => g.letter)} />
       </div>
     </div>
   );
