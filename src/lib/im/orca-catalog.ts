@@ -5,6 +5,7 @@ import path from "node:path";
 import { ORCA_AGENT_LABELS } from "@/components/im/orca-agent-icons.generated";
 import {
   AGENT_PRESETS,
+  type CatalogOrigin,
   type OrcaAgent,
   type OrcaCatalog,
   type OrcaEffort,
@@ -87,6 +88,7 @@ function parseModel(raw: unknown): OrcaModel | null {
     efforts,
     // 显式 effortsKnown 优先；声明了非空 efforts 也视为已知
     effortsKnown: typeof raw.effortsKnown === "boolean" ? raw.effortsKnown : efforts.length > 0,
+    defaultEffort: valid(effortField, raw.defaultEffort),
   };
 }
 
@@ -231,7 +233,12 @@ export function parseInstalledAgents(stdout: string): InstalledAgents | null {
   return { agents };
 }
 
-export type CliResult = { status: "ok"; installed: InstalledAgents } | { status: "unavailable" | "error"; error?: string };
+export type CliResult = { status: "ok"; installed: InstalledAgents } | { status: "unavailable" | "error" | "disabled"; error?: string };
+
+/** ORCA_CATALOG_LOCAL=off / 0 / false：不探测本机 Orca（NAS / 容器部署或测试“无本机 CLI”场景） */
+export function localDiscoveryDisabled(env: Env = process.env): boolean {
+  return /^(off|0|false|no|disabled?)$/i.test(env.ORCA_CATALOG_LOCAL?.trim() ?? "");
+}
 
 /** 执行 Orca CLI（ORCA_CLI_PATH 可覆盖可执行文件路径）；不经 shell，超时即放弃 */
 export function runOrcaInstalled(env: Env = process.env, timeoutMs = 5000): Promise<CliResult> {
@@ -255,7 +262,7 @@ export function runOrcaInstalled(env: Env = process.env, timeoutMs = 5000): Prom
  * 合并顺序：Orca 检测到的基座（默认基座在前）→ 仅出现在模型目录中的基座 → 未检测到的静态预设。
  * 预设始终保留：Webhook 机器人可能运行在另一台 Orca 上，本机未安装不代表不可用。
  */
-export function buildOrcaCatalog(cli: CliResult, catalog: CatalogReadResult, now = new Date()): OrcaCatalog {
+export function buildOrcaCatalog(cli: CliResult, catalog: CatalogReadResult, now = new Date(), localHost: string | null = null): OrcaCatalog {
   const installed = cli.status === "ok" ? cli.installed.agents : [];
   const defaultAgent = installed.find((a) => a.isDefault)?.id ?? null;
   const ids = [
@@ -286,28 +293,6 @@ export function buildOrcaCatalog(cli: CliResult, catalog: CatalogReadResult, now
   else if (catalog.status === "unreadable") warnings.push("Orca 模型目录暂时无法读取，模型使用常用预设，可手动输入");
   else if (catalog.status === "invalid") warnings.push("Orca 模型目录格式无法识别，模型使用常用预设，可手动输入");
   const status: OrcaSourceStatus = { cli: cli.status, catalog: catalog.status };
-  return { agents, defaultAgent, status, warnings, fetchedAt: now.toISOString() };
-}
-
-// ---------- 带缓存的入口 ----------
-
-const CACHE_TTL_MS = 60_000;
-let cache: { at: number; value: OrcaCatalog } | null = null;
-let inflight: Promise<OrcaCatalog> | null = null;
-
-/** 结果缓存 60 秒并合并并发请求，避免每次打开下拉都启动子进程；refresh 强制重新发现 */
-export async function getOrcaCatalog({ refresh = false }: { refresh?: boolean } = {}): Promise<OrcaCatalog> {
-  if (!refresh && cache && Date.now() - cache.at < CACHE_TTL_MS) return cache.value;
-  if (inflight) return inflight;
-  inflight = (async () => {
-    const [cli, catalog] = await Promise.all([runOrcaInstalled(), readOrcaModelCatalog(resolveOrcaCatalogPath())]);
-    if (cli.status !== "ok" && cli.error) console.warn(`[orca-catalog] CLI ${cli.status}: ${cli.error}`);
-    if (catalog.status !== "ok" && catalog.status !== "missing") console.warn(`[orca-catalog] 模型目录 ${catalog.status}: ${catalog.error ?? ""}`);
-    const value = buildOrcaCatalog(cli, catalog);
-    cache = { at: Date.now(), value };
-    return value;
-  })().finally(() => {
-    inflight = null;
-  });
-  return inflight;
+  const origin: CatalogOrigin = cli.status === "ok" || catalog.agents.size > 0 ? { kind: "local", host: localHost } : { kind: "preset" };
+  return { agents, defaultAgent, status, origin, customModelCount: 0, warnings, fetchedAt: now.toISOString() };
 }

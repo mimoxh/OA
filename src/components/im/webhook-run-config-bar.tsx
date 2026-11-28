@@ -118,7 +118,7 @@ const POPOVER_FIT = "max-h-(--radix-popover-content-available-height) max-w-[cal
 
 /**
  * 显示在 IM 输入框正上方的 Webhook 运行配置条：选择结果按会话持久化，并在出站 payload.metadata 中生效。
- * 基座 / 模型 / 强度选项来自本机 Orca（模型随基座切换，强度随模型切换），读取失败时使用预设且可手动输入。
+ * 基座 / 模型 / 强度选项来自本机 Orca 或已同步的 Orca 目录（模型随基座切换，强度随模型切换），读取失败时使用预设且可手动输入。
  * 未覆盖时显示机器人默认值（中性色），会话已覆盖的项以柔和强调色胶囊显示。
  */
 export function WebhookRunConfigBar({

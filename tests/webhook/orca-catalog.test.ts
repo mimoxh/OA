@@ -80,6 +80,7 @@ describe("parseCatalogRows", () => {
       isDefault: false,
       efforts: [effort("low"), effort("high")],
       effortsKnown: true,
+      defaultEffort: null,
     });
   });
   it("损坏 / 无模型的最新记录被跳过，回退同一基座的上一条；agent 字段缺失时取 key 前缀", () => {

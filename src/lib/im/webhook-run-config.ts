@@ -11,7 +11,7 @@ export { AGENT_PRESETS, MODEL_SUGGESTIONS } from "./orca-catalog-shared";
  * 以模型目录声明为准，这里只校验格式：小写字母开头，字母、数字、- 与 _，最长 24 个字符。
  */
 export type Effort = string;
-const EFFORT_RE = /^[a-z][a-z0-9_-]{0,23}$/;
+export const EFFORT_RE = /^[a-z][a-z0-9_-]{0,23}$/;
 
 /** 由基座自身配置管理默认模型 / 强度的基座：metadata 留空时不会覆盖其配置 */
 export const SELF_MANAGED_AGENT_HINT: Record<string, string> = {
@@ -26,8 +26,8 @@ export type ConnectorRunDefaults = { defaultAgent: string | null; defaultModel: 
 
 export const EMPTY_RUN_METADATA: RunMetadata = { agent: null, model: null, effort: null };
 
-const AGENT_RE = /^[a-z0-9][a-z0-9._-]*$/;
-const MODEL_RE = /^[A-Za-z0-9][\w.:/@+-]*$/;
+export const AGENT_RE = /^[a-z0-9][a-z0-9._-]*$/;
+export const MODEL_RE = /^[A-Za-z0-9][\w.:/@+-]*$/;
 
 const blank = (lower: boolean) => (v: unknown) => {
   if (typeof v !== "string") return v;

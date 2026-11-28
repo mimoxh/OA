@@ -205,7 +205,7 @@ function RunConfigFields({ form, setForm }: { form: FormState; setForm: (f: Form
       <div className="mb-1 text-xs font-medium text-ink-2">默认运行配置</div>
       <p className="mb-2.5 text-xs text-ink-3">
         随每条出站消息写入 <code>payload.metadata</code>（agent / model / effort）；聊天中可按会话切换，未指定的项由外部 Bot 自行决定。
-        基座、模型与思考强度选项读取自本机 Orca。
+        基座、模型与思考强度选项来自本机 Orca，或运行 Orca 的电脑同步上来的目录（见下方「Orca 模型目录」）。
       </p>
       <div className="grid grid-cols-3 gap-3">
         <Field label={<RunFieldLabel field="agent" />}>

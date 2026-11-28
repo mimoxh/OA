@@ -5,6 +5,7 @@
  *   oa-standalone.mjs                  单端口网关 + 自动 WAL/迁移 + 启动入口
  *   oa-collab.mjs / oa-realtime.mjs    Hocuspocus 协同与 WebSocket 实时服务
  *   migrations/*.sql                   SQLite 迁移脚本
+ *   scripts/orca/sync-catalog.mjs      Orca 目录同步脚本（供设置页一键下载）
  */
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -200,5 +201,10 @@ fs.cpSync(migrationsSrc, path.join(OUT, "migrations"), {
   recursive: true,
   filter: (src) => !src.endsWith(".prisma"),
 });
+
+// /api/im/webhooks/orca-catalog/sync-script 从工作目录（standalone server.js 所在目录）提供下载
+step("复制 Orca 目录同步脚本");
+fs.mkdirSync(path.join(OUT, "scripts/orca"), { recursive: true });
+fs.copyFileSync(path.join(ROOT, "scripts/orca/sync-catalog.mjs"), path.join(OUT, "scripts/orca/sync-catalog.mjs"));
 
 console.log(`\n[docker-bundle] 完成：${path.relative(ROOT, OUT) || OUT}（${(dirSize(OUT) / 1024 / 1024).toFixed(1)} MB）`);
