@@ -1430,3 +1430,51 @@ model WebhookDeliveryLog {
 
   @@index([connectorId, createdAt])
 }
+
+// ───────────────────────────── IM：Orca 模型目录同步 ─────────────────────────────
+
+// 运行 Orca 的电脑推送上来的基座 / 模型 / Effort 目录快照（src/lib/im/orca-catalog-sync.ts）；
+// 每台宿主机一行，同一主机再次同步时整体覆盖
+model OrcaCatalogSnapshot {
+  id          String   @id @default(cuid())
+  // 规范化后的主机标识（小写）
+  sourceHost  String   @unique
+  sourceLabel String?
+  // JSON：{ defaultAgent, agents: [{ id, name, installed, isDefault, modelSource, models, configured }] }
+  payload     String
+  agentCount  Int
+  modelCount  Int
+  // token（同步密钥 / 机器人 Token）| session（设置页导入）| local（本机 Orca 自动记录）
+  syncedVia   String
+  syncedAt    DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// 管理员手动维护的自定义模型：与同步快照合并展示，不会被 Push 同步覆盖
+model OrcaCustomModel {
+  id            String   @id @default(cuid())
+  agent         String
+  modelId       String
+  label         String?
+  // JSON 字符串数组，如 ["low","high"]；空数组表示未声明档位
+  efforts       String   @default("[]")
+  defaultEffort String?
+  createdById   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([agent, modelId])
+}
+
+// Orca 目录同步密钥（单行，id 固定为 default）：SHA-256 用于校验，AES-256-GCM 密文供管理员查看 / 复制
+model OrcaCatalogSyncKey {
+  id          String    @id
+  tokenHash   String
+  tokenPrefix String
+  tokenCipher String
+  createdById String?
+  lastUsedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}

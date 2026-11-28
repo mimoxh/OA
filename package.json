@@ -27,6 +27,7 @@
     "mobile:publish": "node scripts/mobile/publish-apk.mjs",
     "docker:bundle-server": "node scripts/docker/bundle-server.mjs",
     "orca:icons": "node scripts/orca/extract-agent-icons.mjs",
+    "orca:sync-catalog": "node scripts/orca/sync-catalog.mjs",
     "postinstall": "prisma generate"
   },
   "dependencies": {

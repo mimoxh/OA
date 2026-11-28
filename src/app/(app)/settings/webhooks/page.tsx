@@ -5,6 +5,8 @@ import { normalizeTriggerMode, publicBaseUrl, replyEndpoint } from "@/lib/im/web
 import { resolveRunMetadata, type ConnectorRunDefaults } from "@/lib/im/webhook-run-config";
 import { Page, PageHeader, TopBar } from "@/components/ui/page";
 import { NewWebhookBotButton, WebhookBotList, type WebhookBotRow } from "@/components/settings/webhook-bots";
+import { OrcaCatalogPanel } from "@/components/settings/orca-catalog-panel";
+import { getSyncKeyInfo, listCustomModels } from "@/lib/im/orca-catalog-sync";
 
 export const metadata = { title: "Webhook 机器人" };
 
@@ -38,6 +40,14 @@ export default async function WebhooksPage() {
       logs: { orderBy: { createdAt: "desc" }, take: 15 },
     },
   });
+  const [snapshots, customModels, syncKey] = await Promise.all([
+    db.orcaCatalogSnapshot.findMany({
+      orderBy: { syncedAt: "desc" },
+      select: { sourceHost: true, sourceLabel: true, agentCount: true, modelCount: true, syncedAt: true, syncedVia: true },
+    }),
+    listCustomModels(db),
+    getSyncKeyInfo(db),
+  ]);
   const rows: WebhookBotRow[] = connectors.map((c) => ({
     id: c.id,
     botUserId: c.botUserId,
@@ -77,6 +87,21 @@ export default async function WebhooksPage() {
           description={`把外部服务（如 Orca Bot）接入为通讯录联系人：单聊消息、群聊中 @ 它或回复它的消息会 POST 到 Outbound URL，外部服务再通过 Inbound Reply URL 回复。回调地址基于 ${publicBaseUrl()}（OA_PUBLIC_BASE_URL）。`}
         />
         <WebhookBotList bots={rows} />
+        <div className="mt-6">
+          <OrcaCatalogPanel
+            snapshots={snapshots.map((s) => ({
+              host: s.sourceHost,
+              label: s.sourceLabel,
+              agentCount: s.agentCount,
+              modelCount: s.modelCount,
+              syncedAt: s.syncedAt.toISOString(),
+              via: s.syncedVia,
+            }))}
+            customModels={customModels}
+            syncKey={syncKey}
+            fallbackBaseUrl={publicBaseUrl()}
+          />
+        </div>
       </Page>
     </>
   );

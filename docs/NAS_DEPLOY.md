@@ -162,7 +162,8 @@ OA 与 Orca Bot 完全通过 **HTTP Webhook** 双向通信，不强依赖 NAS �
 2. 在 OA「设置 → Webhook 机器人」中，将 Outbound URL 指向局域网内运行 Orca 的电脑地址，确保电脑防火墙放行对应端口且网络双向可达（跨网段可用 Tailscale / ZeroTier）。
 3. **关于 `ORCA_CLI_PATH` / `ORCA_USER_DATA_DIR` / `ORCA_MODEL_CATALOG_PATH`**：
    - 飞牛容器内未安装 Orca 客户端时，**保持留空即可**；
-   - `GET /api/im/webhooks/orca-catalog` 会在找不到 `orca` CLI 或 `agent-model-catalog.db` 时毫秒级优雅降级为内置预设（无报错、无超时阻塞），界面仍支持手动输入任意基座、模型 ID 及 Effort 档位（如 `low` / `high` / `max` / `ultra`）。
+   - `GET /api/im/webhooks/orca-catalog` 会在找不到 `orca` CLI 或 `agent-model-catalog.db` 时毫秒级优雅降级（无报错、无超时阻塞），界面仍支持手动输入任意基座、模型 ID 及 Effort 档位（如 `low` / `high` / `max` / `ultra`）。
+4. **同步 Orca 模型目录**：在「设置 → Webhook 机器人 → Orca 模型目录」生成同步密钥，复制同步命令到运行 Orca 的电脑执行（可放进 Orca 定时自动化），聊天面板即可选择真实的基座、模型与思考强度；也可手动导入快照或添加自定义模型。详见 [orca-catalog-sync.md](orca-catalog-sync.md)。
 
 ---
 

@@ -149,6 +149,8 @@ fs.cpSync(path.join(ROOT, "desktop/migrations"), path.join(APP, "migrations"), {
   recursive: true,
   filter: (src) => !src.endsWith(".prisma"),
 });
+fs.mkdirSync(path.join(APP, "scripts/orca"), { recursive: true });
+fs.copyFileSync(path.join(ROOT, "scripts/orca/sync-catalog.mjs"), path.join(APP, "scripts/orca/sync-catalog.mjs"));
 fs.copyFileSync(process.execPath, path.join(OUT, "node.exe"));
 const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
 fs.writeFileSync(

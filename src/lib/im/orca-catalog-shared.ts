@@ -11,13 +11,17 @@ export type OrcaModel = {
   efforts: OrcaEffort[];
   /** true 表示 Orca 已确认该模型的强度列表（为空即不支持调节强度）；false 表示未知 */
   effortsKnown: boolean;
+  /** 模型声明的默认思考强度（只用于提示） */
+  defaultEffort: string | null;
+  /** 管理员在「Webhook 机器人」设置页手动维护的模型（不会被同步覆盖） */
+  custom?: boolean;
 };
 
 /**
- * 模型列表来源：live / discovered 来自 Orca 本地模型目录（实时探测优先，回退离线发现结果）；
- * null 表示目录中没有该基座，界面使用静态预设并允许手动输入。
+ * 模型列表来源：live / discovered 来自 Orca 模型目录（实时探测优先，回退离线发现结果）；
+ * custom 表示只有手动维护的自定义模型；null 表示目录中没有该基座，界面使用静态预设并允许手动输入。
  */
-export type OrcaModelSource = "live" | "discovered" | null;
+export type OrcaModelSource = "live" | "discovered" | "custom" | null;
 
 export type OrcaAgent = {
   id: string;
@@ -33,20 +37,73 @@ export type OrcaAgent = {
 };
 
 export type OrcaSourceStatus = {
-  /** orca agent installed --json */
-  cli: "ok" | "unavailable" | "error";
+  /** orca agent installed --json；disabled 表示已用 ORCA_CATALOG_LOCAL=off 关闭本机探测 */
+  cli: "ok" | "unavailable" | "error" | "disabled";
   /** agent-model-catalog.db */
   catalog: "ok" | "missing" | "unreadable" | "invalid";
 };
+
+/**
+ * 目录来源（优先级从高到低）：
+ *   local  —— OA 与 Orca 在同一台电脑，实时读取本机 Orca；
+ *   synced —— 读取运行 Orca 的电脑推送到 OA 数据库的快照（NAS / 容器部署）；
+ *   preset —— 既无本机 Orca 也未同步过，使用静态预设。
+ */
+export type CatalogOrigin =
+  | { kind: "local"; host: string | null }
+  | { kind: "synced"; host: string; label: string | null; syncedAt: string; hostCount: number }
+  | { kind: "preset" };
 
 export type OrcaCatalog = {
   agents: OrcaAgent[];
   defaultAgent: string | null;
   status: OrcaSourceStatus;
+  origin: CatalogOrigin;
+  /** 已合并的手动维护模型数量 */
+  customModelCount: number;
   /** 降级说明，界面以提示方式展示 */
   warnings: string[];
   fetchedAt: string;
 };
+
+/** 同步目录超过该时长未更新时提示（毫秒） */
+export const SYNC_STALE_MS = 7 * 24 * 3600_000;
+
+/** 尚未同步、也没有本机 Orca 时的引导文案 */
+export const SYNC_GUIDE = "尚未同步 Orca 模型目录，当前为常用预设：请在「设置 · Webhook 机器人」复制同步命令到运行 Orca 的电脑执行，或手动添加常用模型";
+
+const pad = (n: number) => String(n).padStart(2, "0");
+
+/** 本地时区的 YYYY-MM-DD HH:mm */
+export function formatSyncTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/** 粗粒度相对时间：刚刚 / N 分钟前 / N 小时前 / N 天前 */
+export function relativeTime(iso: string, now: number = Date.now()): string {
+  const diff = now - new Date(iso).getTime();
+  if (!Number.isFinite(diff)) return "";
+  if (diff < 60_000) return "刚刚";
+  if (diff < 3600_000) return `${Math.floor(diff / 60_000)} 分钟前`;
+  if (diff < 86400_000) return `${Math.floor(diff / 3600_000)} 小时前`;
+  return `${Math.floor(diff / 86400_000)} 天前`;
+}
+
+/** 状态行中的目录来源说明，例如「来源：已同步目录（office-pc · 2026-11-28 15:00，3 分钟前）」 */
+export function originText(origin: CatalogOrigin | null | undefined, now: number = Date.now()): string {
+  if (!origin || origin.kind === "preset") return "来源：常用预设（尚未同步 Orca 目录）";
+  if (origin.kind === "local") return "来源：本机 Orca";
+  const who = origin.label && origin.label !== origin.host ? `${origin.label}（${origin.host}）` : origin.host;
+  const more = origin.hostCount > 1 ? ` 等 ${origin.hostCount} 台` : "";
+  return `来源：已同步目录（${who}${more} · ${formatSyncTime(origin.syncedAt)}，${relativeTime(origin.syncedAt, now)}）`;
+}
+
+/** 分组标题：本机 Orca / 已同步 Orca */
+export function originGroupLabel(origin: CatalogOrigin | null | undefined): string {
+  return origin?.kind === "synced" ? "已同步 Orca" : "本机 Orca";
+}
 
 /** 未声明强度列表时的通用选项（与早期版本一致） */
 export const DEFAULT_EFFORT_OPTIONS: OrcaEffort[] = [
@@ -74,7 +131,7 @@ export function findModel(agent: OrcaAgent | null, model: string | null | undefi
 
 export type ModelChoices = {
   /** 可选模型（目录真实模型；目录缺失时为静态预设） */
-  models: { id: string; label: string; description: string | null; isDefault: boolean }[];
+  models: { id: string; label: string; description: string | null; isDefault: boolean; custom?: boolean }[];
   source: OrcaModelSource | "preset";
 };
 

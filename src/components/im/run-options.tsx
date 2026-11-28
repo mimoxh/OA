@@ -10,7 +10,10 @@ import {
   effortChoices,
   filterModels,
   findAgent,
+  findModel,
   modelChoices,
+  originGroupLabel,
+  originText,
   type OrcaAgent,
   type OrcaCatalog,
 } from "@/lib/im/orca-catalog-shared";
@@ -78,7 +81,7 @@ function GroupLabel({ children }: { children: ReactNode }) {
   return <div className="px-2 pb-0.5 pt-1 text-[11px] font-medium text-ink-3">{children}</div>;
 }
 
-/** 底部状态行：目录来源 / 降级说明 + 手动刷新 */
+/** 底部状态行：目录来源（本机 Orca / 已同步快照 + 主机与时间 / 常用预设）、降级说明 + 手动刷新 */
 export function CatalogFooter({
   catalog,
   loading,
@@ -93,16 +96,18 @@ export function CatalogFooter({
   note?: ReactNode;
 }) {
   const warn = error ? `Orca 目录加载失败（${error}），使用预设` : catalog?.warnings[0];
+  const source = catalog ? originText(catalog.origin) : loading ? "正在读取 Orca 目录…" : "来源：常用预设";
+  // 预设来源的引导文案本身已说明来源，不再重复一行
+  const showSource = !error && (!warn || catalog?.origin.kind !== "preset");
   return (
     <div className="mt-1 flex items-start gap-1.5 border-t border-line px-2 pb-0.5 pt-1.5 text-[11px] leading-relaxed text-ink-3">
-      <span className="min-w-0 flex-1">
-        {warn ? (
-          <span className="inline-flex items-start gap-1" title={catalog?.warnings.join("\n")}>
+      <span className="min-w-0 flex-1" data-catalog-origin={catalog?.origin.kind ?? "none"}>
+        {showSource && <span className="block">{note ?? source}</span>}
+        {warn && (
+          <span className="flex items-start gap-1" title={catalog?.warnings.join("\n")}>
             <AlertTriangle className="mt-0.5 size-3 shrink-0 text-amber-500" />
             {warn}
           </span>
-        ) : (
-          (note ?? (catalog ? "来自本机 Orca" : loading ? "正在读取本机 Orca…" : "使用预设"))
         )}
       </span>
       <button
@@ -110,7 +115,7 @@ export function CatalogFooter({
         onClick={onRefresh}
         disabled={loading}
         className="inline-flex size-5 shrink-0 items-center justify-center rounded text-ink-3 transition-colors hover:bg-hover hover:text-ink disabled:opacity-60"
-        title="重新读取本机 Orca 的基座与模型目录"
+        title="重新获取 Orca 基座与模型目录（本机 Orca 或最新同步的快照）"
         aria-label="刷新 Orca 目录"
       >
         <RefreshCw className={cn("size-3", loading && "animate-spin")} />
@@ -144,6 +149,7 @@ export function AgentOptions({
     catalog?.agents ??
     AGENT_PRESETS.map((id) => ({ id, label: ORCA_AGENT_LABELS[id] ?? id, installed: false, isDefault: false, modelSource: null, models: [], configured: null }));
   const detected = agents.filter((a) => a.installed || a.modelSource);
+  const groupLabel = originGroupLabel(catalog?.origin);
   const presets = agents.filter((a) => !a.installed && !a.modelSource);
   const extra = value && !agents.some((a) => a.id === value) ? value : null;
   const item = (a: OrcaAgent, meta?: string) => (
@@ -155,7 +161,7 @@ export function AgentOptions({
     <>
       {detected.length > 0 && (
         <>
-          <GroupLabel>本机 Orca</GroupLabel>
+          <GroupLabel>{groupLabel}</GroupLabel>
           {detected.map((a) => item(a, agentMeta(a)))}
         </>
       )}
@@ -253,6 +259,7 @@ export function ModelOptions({
             title={[m.id, m.description].filter(Boolean).join("\n")}
             meta={
               <span className="inline-flex items-center gap-1">
+                {m.custom && <span className="rounded bg-accent-soft px-1 text-[10px] text-accent-hover">自定义</span>}
                 {m.isDefault && <span className="rounded bg-hover px-1 text-[10px] text-ink-2">默认</span>}
                 {configured === m.id && !m.isDefault && <span className="rounded bg-hover px-1 text-[10px] text-ink-2">Orca 当前</span>}
                 {m.label !== m.id && <span className="truncate font-mono text-[11px]">{m.id}</span>}
@@ -273,9 +280,9 @@ export function ModelOptions({
       <p className="px-2 pt-1 text-[11px] text-ink-3">
         {source === "preset"
           ? agent
-            ? `本机 Orca 未提供 ${a?.label ?? agent} 的模型目录，显示常用模型，可直接输入 ID`
+            ? `Orca 目录中没有 ${a?.label ?? agent} 的模型，显示常用模型，可直接输入 ID`
             : "未指定基座，显示常用模型，可直接输入 ID"
-          : `${a?.label ?? agent} · ${models.length} 个模型（Orca ${source === "live" ? "实时探测" : "模型目录"}）`}
+          : `${a?.label ?? agent} · ${models.length} 个模型（${source === "custom" ? "手动维护" : `Orca ${source === "live" ? "实时探测" : "模型目录"}`}）`}
       </p>
     </>
   );
@@ -299,6 +306,7 @@ export function EffortOptions({
 }) {
   const { efforts, source } = effortChoices(catalog, agent, model);
   const history = value && !efforts.some((e) => e.value === value) ? value : null;
+  const modelDefault = findModel(findAgent(catalog, agent), model)?.defaultEffort;
   return (
     <>
       <RunOption selected={!value} meta={clear.meta} onSelect={() => onSelect(null)}>
@@ -306,7 +314,12 @@ export function EffortOptions({
       </RunOption>
       <RunDivider />
       {efforts.map((e) => (
-        <RunOption key={e.value} selected={value === e.value} meta={e.label !== e.value ? e.label : undefined} onSelect={() => onSelect(e.value)}>
+        <RunOption
+          key={e.value}
+          selected={value === e.value}
+          meta={[e.label !== e.value ? e.label : null, e.value === modelDefault ? "模型默认" : null].filter(Boolean).join(" · ") || undefined}
+          onSelect={() => onSelect(e.value)}
+        >
           {e.value}
         </RunOption>
       ))}

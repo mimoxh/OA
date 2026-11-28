@@ -217,6 +217,48 @@ describe("SQLite migrate：空库初始化、WAL、增量备份与 CLI 已有库
     }
   });
 
+  it("已迁移到上一版本的数据卷（_oa_migrations 登记到 0004）：只补齐 Orca 目录表，业务数据不变且再次执行幂等", () => {
+    const dir = mkTmp("oa-mig-orca-catalog-");
+    try {
+      const dbFile = path.join(dir, "oa.db");
+      const backupDir = path.join(dir, "backups");
+      const files = fs
+        .readdirSync(MIGRATIONS_DIR)
+        .filter((f) => /^\d{4}_.+\.sql$/.test(f))
+        .sort();
+      const idx = files.findIndex((f) => fs.readFileSync(path.join(MIGRATIONS_DIR, f), "utf8").includes('CREATE TABLE "OrcaCatalogSnapshot"'));
+      assert.ok(idx > 0, "应有创建 Orca 目录表的迁移");
+
+      // 上一版本镜像只带 0001..0004：用这些文件建库并写入业务数据
+      const oldDir = path.join(dir, "old-migrations");
+      fs.mkdirSync(oldDir);
+      for (const f of files.slice(0, idx)) fs.copyFileSync(path.join(MIGRATIONS_DIR, f), path.join(oldDir, f));
+      assert.deepEqual(migrate(dbFile, oldDir, backupDir), files.slice(0, idx));
+      const seed = new Database(dbFile);
+      seed.prepare("INSERT INTO Role (id, key, name) VALUES ('r1', 'member', '成员')").run();
+      seed.close();
+
+      const applied = migrate(dbFile, MIGRATIONS_DIR, backupDir);
+      assert.deepEqual(applied, files.slice(idx));
+      assert.equal(fs.readdirSync(backupDir).filter((f) => f.endsWith(".db")).length, 1);
+      assert.deepEqual(migrate(dbFile, MIGRATIONS_DIR, backupDir), []);
+
+      const check = new Database(dbFile, { readonly: true });
+      try {
+        assert.equal(check.prepare("SELECT name FROM Role WHERE id = 'r1'").pluck().get(), "成员");
+        const tables = check
+          .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'Orca%' ORDER BY name")
+          .pluck()
+          .all();
+        assert.deepEqual(tables, ["OrcaCatalogSnapshot", "OrcaCatalogSyncKey", "OrcaCustomModel"]);
+      } finally {
+        check.close();
+      }
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("遇到结构不匹配的陌生 SQLite 库时拒绝执行以保护数据", () => {
     const dir = mkTmp("oa-mig-unknown-");
     try {
