@@ -65,7 +65,7 @@ export function OpportunityBoard({
 
   return (
     <>
-      <div className="-mx-6 overflow-x-auto px-6 pb-4 sm:-mx-12 sm:px-12">
+      <div className="-mx-6 overflow-x-auto px-6 pb-4 max-md:-mx-4 max-md:snap-x max-md:snap-mandatory max-md:scroll-px-4 max-md:px-4 sm:-mx-12 sm:px-12">
         <div className="flex min-w-max gap-3">
           {STAGES.map((stage) => {
             const cards = list.filter((o) => o.stage === stage);
@@ -95,7 +95,7 @@ export function OpportunityBoard({
                   else move(id, stage);
                 }}
                 className={cn(
-                  "flex w-[264px] shrink-0 flex-col rounded-lg bg-sidebar p-2 transition-colors",
+                  "flex w-[264px] shrink-0 flex-col rounded-lg bg-sidebar p-2 transition-colors max-md:snap-start",
                   overStage === stage && "bg-accent-soft ring-2 ring-accent/30",
                 )}
               >

@@ -11,6 +11,7 @@ import { useAction } from "@/components/ui/use-action";
 import { PROJECT_MEMBER_ROLE } from "@/lib/pms/utils";
 import type { UserOption } from "@/lib/crm/types";
 import { addProjectMember, removeProjectMember, updateProjectMember } from "@/app/(app)/pms/actions";
+import { MobileCard, MobileField, MobileList } from "@/components/mobile/mobile-list";
 
 export type MemberRow = {
   id: string;
@@ -43,7 +44,7 @@ export function Members({
       {canManage && (
         <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-line bg-sidebar p-3">
           <UserPlus className="size-4 text-ink-3" />
-          <Select value={userId} onChange={(e) => setUserId(e.target.value)} className="h-7 w-48 text-[13px]">
+          <Select value={userId} onChange={(e) => setUserId(e.target.value)} className="h-7 w-48 text-[13px] max-md:h-9 max-md:min-w-0 max-md:flex-1">
             <option value="">选择要添加的成员</option>
             {candidates.map((u) => (
               <option key={u.id} value={u.id}>
@@ -51,7 +52,7 @@ export function Members({
               </option>
             ))}
           </Select>
-          <Select value={role} onChange={(e) => setRole(e.target.value)} className="h-7 w-28 text-[13px]">
+          <Select value={role} onChange={(e) => setRole(e.target.value)} className="h-7 w-28 text-[13px] max-md:h-9 max-md:w-24">
             <option value="member">成员</option>
             <option value="viewer">观察者</option>
             <option value="owner">负责人</option>
@@ -65,10 +66,50 @@ export function Members({
           >
             添加
           </Button>
-          <span className="ml-auto text-xs text-ink-3">成员可编辑任务；观察者只读</span>
+          <span className="ml-auto text-xs text-ink-3 max-md:ml-0 max-md:basis-full">成员可编辑任务；观察者只读</span>
         </div>
       )}
-      <Table>
+      <MobileList>
+        {members.map((m) => (
+          <MobileCard
+            key={m.id}
+            icon={<Avatar name={m.user.name} color={m.user.avatarColor} size={26} />}
+            title={m.user.name}
+            subtitle={m.user.title ?? m.user.email}
+            badge={
+              canManage && m.user.id !== ownerId ? (
+                <>
+                  <Select
+                    value={m.role}
+                    aria-label={`${m.user.name} 的角色`}
+                    onChange={(e) => run(() => updateProjectMember(m.id, e.target.value), { success: "角色已更新" })}
+                    className="h-8 w-24 text-[13px]"
+                  >
+                    {Object.entries(PROJECT_MEMBER_ROLE).map(([k, v]) => (
+                      <option key={k} value={k}>
+                        {v}
+                      </option>
+                    ))}
+                  </Select>
+                  <IconButton aria-label="移除成员" onClick={() => run(() => removeProjectMember(m.id), { success: "已移除成员" })}>
+                    <Trash2 className="size-4" />
+                  </IconButton>
+                </>
+              ) : (
+                <Badge color={m.role === "owner" ? "orange" : m.role === "viewer" ? "gray" : "blue"}>{PROJECT_MEMBER_ROLE[m.role] ?? m.role}</Badge>
+              )
+            }
+            meta={
+              <>
+                <MobileField label="进行中">{m.open}</MobileField>
+                <MobileField label="已完成">{m.done}</MobileField>
+              </>
+            }
+            aside={`${m.hours} h`}
+          />
+        ))}
+      </MobileList>
+      <Table className="max-md:hidden">
         <THead>
           <TR>
             <TH>成员</TH>

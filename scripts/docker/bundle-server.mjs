@@ -12,6 +12,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import * as esbuild from "esbuild";
 import { flattenPnpm } from "../desktop/flatten-pnpm.mjs";
+import { copyPdfjsAssets } from "../desktop/pdfjs-assets.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const DIST_DIR = ".next-docker";
@@ -159,6 +160,7 @@ removeMaps(path.join(OUT, DIST_DIR));
 
 // 补齐顶层 better-sqlite3 运行时（供迁移引擎与 orca-catalog 只读探测加载）
 copyBetterSqliteRuntime(OUT);
+copyPdfjsAssets(ROOT, OUT);
 
 step("编译单端口网关 / 协同 / 实时服务");
 await esbuild.build({

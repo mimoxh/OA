@@ -5,6 +5,7 @@ import { Trash2 } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { Button, IconButton } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/input";
+import { useIsMobileLayout } from "@/components/mobile/use-mobile-layout";
 import { useAction } from "@/components/ui/use-action";
 import { formatDateTime, formatRelative } from "@/lib/format";
 import { addApprovalComment, deleteApprovalComment } from "../actions";
@@ -28,6 +29,7 @@ export function ApprovalComments({
   canModerate: boolean;
 }) {
   const { run, pending } = useAction();
+  const mobile = useIsMobileLayout();
   const [content, setContent] = useState("");
 
   const submit = () => {
@@ -51,7 +53,7 @@ export function ApprovalComments({
                 {(c.author.id === me.id || canModerate) && (
                   <IconButton
                     aria-label="删除评论"
-                    className="opacity-0 group-hover:opacity-100"
+                    className="opacity-0 group-hover:opacity-100 pointer-coarse:size-8 pointer-coarse:opacity-100"
                     onClick={() => run(() => deleteApprovalComment(c.id), { success: "评论已删除" })}
                   >
                     <Trash2 className="size-3.5" />
@@ -71,13 +73,13 @@ export function ApprovalComments({
             value={content}
             maxLength={2000}
             onChange={(e) => setContent(e.target.value)}
-            placeholder="添加评论… （Ctrl + Enter 发送）"
+            placeholder={mobile ? "添加评论…" : "添加评论… （Ctrl + Enter 发送）"}
             onKeyDown={(e) => {
               if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) submit();
             }}
           />
           <div className="mt-2 flex justify-end">
-            <Button variant="primary" loading={pending} disabled={!content.trim()} onClick={submit}>
+            <Button variant="primary" loading={pending} disabled={!content.trim()} onClick={submit} className="max-md:h-9 max-md:px-4">
               发送
             </Button>
           </div>

@@ -19,6 +19,7 @@ import { BizGroupButton } from "@/components/im/biz-group-button";
 import { openBizGroup } from "@/app/(app)/messages/actions";
 import { startOrJoinConversationCall } from "@/components/call/store";
 import { cn } from "@/lib/utils";
+import { useIsMobileLayout } from "@/components/mobile/use-mobile-layout";
 import { deleteEvent, respondEvent, saveEvent } from "./actions";
 
 export type CalEvent = {
@@ -45,6 +46,10 @@ export function eventTimeText(start: Date, end: Date, allDay: boolean) {
   if (allDay) return sameDay ? `${day(start)} · 全天` : `${day(start)} - ${day(end)} · 全天`;
   return sameDay ? `${day(start)} ${format(start, "HH:mm")} - ${format(end, "HH:mm")}` : `${day(start)} ${format(start, "HH:mm")} - ${day(end)} ${format(end, "HH:mm")}`;
 }
+
+/** 手机上日程弹窗全屏显示：表单项多，居中小窗要来回滚动，底部按钮也会挤成两行 */
+const MOBILE_FULL =
+  "max-md:inset-0 max-md:left-0 max-md:top-0 max-md:max-h-none max-md:w-full max-md:translate-x-0 max-md:rounded-none max-md:pt-[var(--sat)] max-md:pb-[var(--sab)] max-md:[&>div:last-child]:flex-wrap";
 
 const dt = (d: Date) => format(d, "yyyy-MM-dd'T'HH:mm");
 const dd = (d: Date) => format(d, "yyyy-MM-dd");
@@ -125,6 +130,7 @@ function EventDetail({ event, meId, onClose }: { event: CalEvent; meId: string; 
   return (
     <DialogContent
       size="md"
+      className={MOBILE_FULL}
       title={
         <span className="flex items-center gap-2">
           <span className="size-3 shrink-0 rounded" style={{ backgroundColor: event.color }} />
@@ -133,7 +139,8 @@ function EventDetail({ event, meId, onClose }: { event: CalEvent; meId: string; 
       }
       footer={
         <>
-          <div className="mr-auto flex items-center gap-2">
+          {/* 手机上回执按钮单独占一行、等宽：和会议群 / 发起会议挤在一行时，字体调大后会在「拒绝」「接受」之间折行 */}
+          <div className={cn("mr-auto flex items-center gap-2", mine && "max-md:w-full")}>
             <BizGroupButton
               bizType="event"
               bizId={event.id}
@@ -143,7 +150,7 @@ function EventDetail({ event, meId, onClose }: { event: CalEvent; meId: string; 
             <StartMeetingButton eventId={event.id} onClose={onClose} />
           </div>
           {mine ? (
-            <>
+            <div className="flex items-center gap-2 max-md:w-full max-md:[&>button]:h-10 max-md:[&>button]:flex-1" data-event-response>
               <Button
                 variant={mine.status === "declined" ? "danger" : "default"}
                 loading={pending}
@@ -160,7 +167,7 @@ function EventDetail({ event, meId, onClose }: { event: CalEvent; meId: string; 
                 <Check className="size-3.5" />
                 接受
               </Button>
-            </>
+            </div>
           ) : (
             <Button onClick={onClose}>关闭</Button>
           )}
@@ -215,6 +222,7 @@ function EditForm({
   onClose: () => void;
 }) {
   const { run, pending } = useAction();
+  const mobile = useIsMobileLayout();
   const [init] = useState(() =>
     event
       ? { start: new Date(event.startAt), end: new Date(event.endAt), allDay: event.allDay }
@@ -262,6 +270,7 @@ function EditForm({
   return (
     <DialogContent
       size="md"
+      className={MOBILE_FULL}
       title={event ? "编辑日程" : "新建日程"}
       footer={
         <>
@@ -302,14 +311,15 @@ function EditForm({
         }}
       >
         <Input
-          autoFocus
+          // 手机上自动聚焦会立即弹出键盘挡住表单
+          autoFocus={!mobile}
           value={title}
           maxLength={100}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="添加标题"
           className="h-10 border-transparent px-1 text-lg font-semibold hover:border-line-strong"
         />
-        <div className="grid grid-cols-[1fr_1fr] gap-2">
+        <div className="grid grid-cols-[1fr_1fr] gap-2 max-md:grid-cols-1">
           <Field label="开始">
             <Input type={allDay ? "date" : "datetime-local"} value={start} onChange={(e) => setStart(e.target.value)} />
           </Field>

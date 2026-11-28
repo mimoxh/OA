@@ -1,4 +1,4 @@
-import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
+import { mkdir, open, readFile, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { StorageDriver, StorageObject } from "./types";
 
@@ -37,6 +37,32 @@ export class LocalStorageDriver implements StorageDriver {
     } catch (e) {
       if ((e as NodeJS.ErrnoException)?.code === "ENOENT") return null;
       throw e;
+    }
+  }
+
+  async readRange(key: string, range: (size: number) => { start: number; end: number } | null) {
+    const target = this.resolveSafe(key);
+    let fh;
+    try {
+      fh = await open(target, "r");
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException)?.code === "ENOENT") return null;
+      throw e;
+    }
+    try {
+      const { size } = await fh.stat();
+      const r = range(size);
+      if (!r) return { size, data: null };
+      const data = new Uint8Array(r.end - r.start + 1);
+      let off = 0;
+      while (off < data.length) {
+        const { bytesRead } = await fh.read(data, off, data.length - off, r.start + off);
+        if (!bytesRead) break;
+        off += bytesRead;
+      }
+      return { size, data: off < data.length ? data.subarray(0, off) : data };
+    } finally {
+      await fh.close();
     }
   }
 

@@ -16,6 +16,7 @@ import { UrlSelect } from "@/components/crm/url-select";
 import { OpportunityBoard } from "@/components/crm/opportunity-board";
 import { OpportunityDialog } from "@/components/crm/opportunity-dialog";
 import { ViewSwitch, hrefWith } from "@/components/crm/view-switch";
+import { MobileCard, MobileField, MobileList } from "@/components/mobile/mobile-list";
 
 const str = (v: string | string[] | undefined) => (typeof v === "string" ? v : "");
 
@@ -92,7 +93,33 @@ export default async function OpportunitiesPage({ searchParams }: PageProps<"/cr
         {view === "board" ? (
           <OpportunityBoard items={rows} canEdit={canEdit} customers={customers} users={users} currentUserId={user.id} />
         ) : (
-          <Table>
+          <>
+          <MobileList empty="没有符合条件的商机">
+            {rows.map((o) => (
+              <MobileCard
+                key={o.id}
+                href={`/crm/opportunities/${o.id}`}
+                title={o.name}
+                badge={<StatusBadge map={OPPORTUNITY_STAGE} value={o.stage} />}
+                subtitle={o.customer.name}
+                meta={
+                  <>
+                    <UserChip name={o.owner?.name} color={o.owner?.avatarColor} />
+                    <MobileField label="预计">{formatDate(o.expectedCloseDate)}</MobileField>
+                    <span className="text-ink-3">赢率 {o.probability}%</span>
+                  </>
+                }
+                aside={formatMoney(o.amount)}
+              />
+            ))}
+            {rows.length > 0 && (
+              <li className="flex items-center justify-between px-1 pt-1 text-[13px] text-ink-2">
+                <span>合计 {rows.length} 个</span>
+                <span className="font-semibold tabular-nums text-ink">{formatMoney(rows.reduce((s, o) => s + o.amount, 0))}</span>
+              </li>
+            )}
+          </MobileList>
+          <Table className="max-md:hidden">
             <THead>
               <TR>
                 <TH>商机</TH>
@@ -144,6 +171,7 @@ export default async function OpportunitiesPage({ searchParams }: PageProps<"/cr
               </tfoot>
             )}
           </Table>
+          </>
         )}
       </Page>
     </>

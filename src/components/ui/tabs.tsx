@@ -20,7 +20,8 @@ export function TabsNav({ items, className }: { items: TabItem[]; className?: st
   }
 
   return (
-    <div className={cn("flex items-center gap-1 border-b border-line", className)}>
+    // 手机上标签多时横向滚动，不把每个标签挤成逐字换行
+    <div className={cn("flex items-center gap-1 border-b border-line max-md:overflow-x-auto max-md:[scrollbar-width:none]", className)}>
       {items.map((item) => {
         const active = isActive(item);
         return (
@@ -28,7 +29,7 @@ export function TabsNav({ items, className }: { items: TabItem[]; className?: st
             key={item.href}
             href={item.href}
             className={cn(
-              "relative -mb-px flex h-9 items-center gap-1.5 px-2 text-sm transition-colors",
+              "relative -mb-px flex h-9 items-center gap-1.5 px-2 text-sm transition-colors max-md:shrink-0 max-md:whitespace-nowrap",
               active ? "text-ink after:absolute after:inset-x-1 after:bottom-0 after:h-0.5 after:rounded-full after:bg-ink" : "text-ink-2 hover:text-ink",
             )}
           >

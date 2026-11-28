@@ -13,6 +13,7 @@ import { FilterPills, SearchInput } from "@/components/ui/common";
 import { Page, PageHeader, TopBar } from "@/components/ui/page";
 import { Table, TBody, TD, TEmpty, TH, THead, TR } from "@/components/ui/table";
 import { DateRangeFilter } from "@/components/finance/date-range-filter";
+import { MobileCard, MobileList } from "@/components/mobile/mobile-list";
 
 export default async function VouchersPage({ searchParams }: PageProps<"/finance/vouchers">) {
   const user = await requireUser();
@@ -75,7 +76,28 @@ export default async function VouchersPage({ searchParams }: PageProps<"/finance
             共 {entries.length} 张，借方合计 <span className="font-medium tabular-nums text-ink">{formatMoney(total)}</span>
           </span>
         </div>
-        <Table>
+        <MobileList empty="没有符合条件的凭证">
+          {entries.map((e) => {
+            const m = sourceMeta(e.sourceType);
+            const accounts = [...new Set(e.lines.map((l) => l.account.name))];
+            return (
+              <MobileCard
+                key={e.id}
+                href={`/finance/vouchers/${e.id}`}
+                title={e.memo || e.no}
+                badge={<Badge color={m.color}>{m.label}</Badge>}
+                subtitle={`${e.no} · ${formatDate(e.date)}`}
+                meta={
+                  <>
+                    <span className="text-ink-3">{accounts.join("、")}</span>
+                  </>
+                }
+                aside={formatMoney(e.lines.reduce((s, l) => s + l.debit, 0))}
+              />
+            );
+          })}
+        </MobileList>
+        <Table className="max-md:hidden">
           <THead>
             <TR>
               <TH>凭证号</TH>

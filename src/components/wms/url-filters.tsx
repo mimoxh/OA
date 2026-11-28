@@ -51,9 +51,14 @@ export function UrlSelect({
 export function UrlDate({ param, label }: { param: string; label: ReactNode }) {
   const { params, set } = useParamSetter();
   return (
-    <label className="flex items-center gap-1 text-[13px] text-ink-2">
+    <label className="flex items-center gap-1 text-[13px] text-ink-2 max-md:min-w-0 max-md:flex-1">
       {label}
-      <input type="date" value={params.get(param) ?? ""} onChange={(e) => set(param, e.target.value)} className={cn(control, "w-36")} />
+      <input
+        type="date"
+        value={params.get(param) ?? ""}
+        onChange={(e) => set(param, e.target.value)}
+        className={cn(control, "w-36 max-md:h-9 max-md:w-auto max-md:min-w-0 max-md:flex-1")}
+      />
     </label>
   );
 }

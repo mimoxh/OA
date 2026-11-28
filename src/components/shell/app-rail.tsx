@@ -30,11 +30,13 @@ import { useUnreadCount } from "./use-unread";
 import { resetIm, useTotalUnread } from "@/components/im/store";
 import { stopRealtime } from "@/components/realtime/provider";
 import { setDesktopUnreadBadge } from "@/lib/desktop-bridge";
+import { setMobileSessionUser } from "@/lib/mobile-bridge";
 import { setRailOrder, setRailPin } from "@/app/(app)/work/actions";
 import { closeRecentDoc } from "@/app/(app)/docs/recent-actions";
 import { DOC_META_EVENT, type DocMetaDetail } from "@/components/docs/events";
 import type { RailProject, RailRecentDoc } from "@/lib/shell/rail";
 import { RECENT_DOC_EVENT } from "./rail-events";
+import { MobileTabBar } from "@/components/mobile/mobile-tab-bar";
 
 export type ShellUser = {
   id: string;
@@ -279,106 +281,109 @@ export function AppRail({
     });
   };
   return (
-    <aside data-tauri-drag-region className="sticky top-0 flex h-screen w-16 shrink-0 flex-col items-center border-r border-line bg-sidebar">
-      <div className="pt-2">
-        <Menu>
-          <MenuTrigger asChild>
-            <button className="rounded-full hover:ring-2 hover:ring-line-strong" aria-label="账户">
-              <Avatar name={user.name} color={user.avatarColor} size={32} />
-            </button>
-          </MenuTrigger>
-          <MenuContent className="w-64" side="right" align="start">
-            <div className="flex items-center gap-2.5 px-2 py-2">
-              <Avatar name={user.name} color={user.avatarColor} size={32} />
-              <div className="min-w-0">
-                <div className="truncate text-sm font-medium">{user.name}</div>
-                <div className="truncate text-xs text-ink-3">{user.email}</div>
+    <>
+    <MobileTabBar imUnread={imUnread} inboxUnread={unread} />
+      <aside data-tauri-drag-region className="sticky top-0 flex h-screen w-16 shrink-0 flex-col items-center border-r border-line bg-sidebar max-md:hidden">
+        <div className="pt-2">
+          <Menu>
+            <MenuTrigger asChild>
+              <button className="rounded-full hover:ring-2 hover:ring-line-strong" aria-label="账户">
+                <Avatar name={user.name} color={user.avatarColor} size={32} />
+              </button>
+            </MenuTrigger>
+            <MenuContent className="w-64" side="right" align="start">
+              <div className="flex items-center gap-2.5 px-2 py-2">
+                <Avatar name={user.name} color={user.avatarColor} size={32} />
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-medium">{user.name}</div>
+                  <div className="truncate text-xs text-ink-3">{user.email}</div>
+                </div>
               </div>
-            </div>
-            <MenuLabel>{user.roleName}</MenuLabel>
-            <MenuSeparator />
-            <MenuItem icon={<UserRound />} asChild>
-              <Link href="/settings/profile">个人资料</Link>
-            </MenuItem>
-            <MenuItem icon={<Settings />} asChild>
-              <Link href={settingsHref}>设置</Link>
-            </MenuItem>
-            <MenuSeparator />
-            <MenuItem
-              icon={<LogOut />}
-              onSelect={() => {
-                void import("@/components/call/store").then((m) => m.resetCallStore());
-                stopRealtime();
-                resetIm();
-                void logout();
-              }}
-            >
-              退出登录
-            </MenuItem>
-          </MenuContent>
-        </Menu>
-      </div>
+              <MenuLabel>{user.roleName}</MenuLabel>
+              <MenuSeparator />
+              <MenuItem icon={<UserRound />} asChild>
+                <Link href="/settings/profile">个人资料</Link>
+              </MenuItem>
+              <MenuItem icon={<Settings />} asChild>
+                <Link href={settingsHref}>设置</Link>
+              </MenuItem>
+              <MenuSeparator />
+              <MenuItem
+                icon={<LogOut />}
+                onSelect={() => {
+                  void import("@/components/call/store").then((m) => m.resetCallStore());
+                  stopRealtime();
+                  resetIm();
+                  void setMobileSessionUser(null).then(() => logout());
+                }}
+              >
+                退出登录
+              </MenuItem>
+            </MenuContent>
+          </Menu>
+        </div>
 
-      <nav className="mt-1 flex min-h-0 w-full flex-1 flex-col items-center gap-0.5 overflow-y-auto px-1.5 [scrollbar-width:none]">
-        {entries.map((e) => {
-          const item = <RailItem href={e.href} icon={e.icon} label={e.label} active={e.active} badge={e.badge} />;
-          const indicator = drop?.id === e.id && dragId !== e.id;
-          return (
-            <div
-              key={e.id}
-              title={e.title}
-              draggable
-              onDragStart={(ev) => {
-                ev.dataTransfer.setData("text/plain", e.id);
-                ev.dataTransfer.effectAllowed = "move";
-                setDragId(e.id);
-              }}
-              onDragOver={(ev) => {
-                if (!dragId) return;
-                ev.preventDefault();
-                ev.dataTransfer.dropEffect = "move";
-                const r = ev.currentTarget.getBoundingClientRect();
-                const before = ev.clientY < r.top + r.height / 2;
-                if (drop?.id !== e.id || drop.before !== before) setDrop({ id: e.id, before });
-              }}
-              onDrop={(ev) => {
-                ev.preventDefault();
-                dropOn(e.id, drop?.id === e.id ? drop.before : true);
-              }}
-              onDragEnd={finishDrag}
-              className={cn("relative w-full", dragId === e.id && "opacity-40")}
-            >
-              {indicator && <span className={cn("absolute inset-x-2 h-0.5 rounded-full bg-accent", drop.before ? "-top-px" : "-bottom-px")} />}
-              {e.pinKey ? <PinnedMenu pinKey={e.pinKey}>{item}</PinnedMenu> : item}
+        <nav className="mt-1 flex min-h-0 w-full flex-1 flex-col items-center gap-0.5 overflow-y-auto px-1.5 [scrollbar-width:none]">
+          {entries.map((e) => {
+            const item = <RailItem href={e.href} icon={e.icon} label={e.label} active={e.active} badge={e.badge} />;
+            const indicator = drop?.id === e.id && dragId !== e.id;
+            return (
+              <div
+                key={e.id}
+                title={e.title}
+                draggable
+                onDragStart={(ev) => {
+                  ev.dataTransfer.setData("text/plain", e.id);
+                  ev.dataTransfer.effectAllowed = "move";
+                  setDragId(e.id);
+                }}
+                onDragOver={(ev) => {
+                  if (!dragId) return;
+                  ev.preventDefault();
+                  ev.dataTransfer.dropEffect = "move";
+                  const r = ev.currentTarget.getBoundingClientRect();
+                  const before = ev.clientY < r.top + r.height / 2;
+                  if (drop?.id !== e.id || drop.before !== before) setDrop({ id: e.id, before });
+                }}
+                onDrop={(ev) => {
+                  ev.preventDefault();
+                  dropOn(e.id, drop?.id === e.id ? drop.before : true);
+                }}
+                onDragEnd={finishDrag}
+                className={cn("relative w-full", dragId === e.id && "opacity-40")}
+              >
+                {indicator && <span className={cn("absolute inset-x-2 h-0.5 rounded-full bg-accent", drop.before ? "-top-px" : "-bottom-px")} />}
+                {e.pinKey ? <PinnedMenu pinKey={e.pinKey}>{item}</PinnedMenu> : item}
+              </div>
+            );
+          })}
+          {docs.length > 0 && <div className="my-1 h-px w-8 shrink-0 bg-line" />}
+          {docs.map((d) => (
+            <div key={d.id} className="group/doc relative w-full" title={d.title || "无标题"}>
+              <RailItem
+                href={`/docs/${d.id}`}
+                icon={<span className="text-[18px] leading-none">{docIcon(d)}</span>}
+                label={d.title || "无标题"}
+                active={pathname === `/docs/${d.id}`}
+              />
+              <button
+                type="button"
+                aria-label={`关闭「${d.title || "无标题"}」`}
+                title="关闭"
+                onClick={() => closeDoc(d.id)}
+                className="absolute right-1 top-0.5 hidden size-4 items-center justify-center rounded-full bg-white text-ink-3 shadow-sm ring-1 ring-line hover:text-ink group-hover/doc:flex [&>svg]:size-3"
+              >
+                <X />
+              </button>
             </div>
-          );
-        })}
-        {docs.length > 0 && <div className="my-1 h-px w-8 shrink-0 bg-line" />}
-        {docs.map((d) => (
-          <div key={d.id} className="group/doc relative w-full" title={d.title || "无标题"}>
-            <RailItem
-              href={`/docs/${d.id}`}
-              icon={<span className="text-[18px] leading-none">{docIcon(d)}</span>}
-              label={d.title || "无标题"}
-              active={pathname === `/docs/${d.id}`}
-            />
-            <button
-              type="button"
-              aria-label={`关闭「${d.title || "无标题"}」`}
-              title="关闭"
-              onClick={() => closeDoc(d.id)}
-              className="absolute right-1 top-0.5 hidden size-4 items-center justify-center rounded-full bg-white text-ink-3 shadow-sm ring-1 ring-line hover:text-ink group-hover/doc:flex [&>svg]:size-3"
-            >
-              <X />
-            </button>
-          </div>
-        ))}
-      </nav>
+          ))}
+        </nav>
 
-      <div className="flex w-full flex-col items-center gap-0.5 px-1.5 pb-2">
-        <RailItem icon={<Search />} label="搜索" onClick={() => openCommandPalette()} />
-        <RailItem href={settingsHref} icon={<Settings />} label="设置" active={pathname.startsWith("/settings")} />
-      </div>
-    </aside>
+        <div className="flex w-full flex-col items-center gap-0.5 px-1.5 pb-2">
+          <RailItem icon={<Search />} label="搜索" onClick={() => openCommandPalette()} />
+          <RailItem href={settingsHref} icon={<Settings />} label="设置" active={pathname.startsWith("/settings")} />
+        </div>
+      </aside>
+    </>
   );
 }

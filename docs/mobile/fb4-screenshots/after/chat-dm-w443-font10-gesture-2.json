@@ -1,0 +1,289 @@
+{
+ "iw": 443,
+ "ih": 986,
+ "sw": 443,
+ "fontPx": 14,
+ "dpr": 2.75,
+ "bad": 0,
+ "items": [
+  {
+   "id": "cmwxgxqrp0006c8wrwx0n846g",
+   "mine": false,
+   "kind": "text",
+   "label": "下面是真机测试文件：3 页小 PDF、100 页大 PDF、加密 PDF（密码 ",
+   "avatar": {
+    "l": 16,
+    "r": 48,
+    "t": 154,
+    "b": 186,
+    "w": 32,
+    "h": 32
+   },
+   "avatarCol": {
+    "l": 16,
+    "r": 48,
+    "t": 154,
+    "b": 239.7,
+    "w": 32,
+    "h": 85.7
+   },
+   "content": {
+    "l": 56,
+    "r": 378.2
+   },
+   "fileBox": null,
+   "nameTruncated": null,
+   "overlapPx": -8,
+   "ok": true
+  },
+  {
+   "id": "cmwxgxqs70008c8wr667oian5",
+   "mine": false,
+   "kind": "file",
+   "label": "小文件-3页.pdf 4.5 KB · 点击预览",
+   "avatar": null,
+   "avatarCol": {
+    "l": 16,
+    "r": 48,
+    "t": 241.7,
+    "b": 307.2,
+    "w": 32,
+    "h": 65.5
+   },
+   "content": {
+    "l": 56,
+    "r": 336
+   },
+   "fileBox": {
+    "l": 56,
+    "r": 336,
+    "t": 241.7,
+    "b": 307.2,
+    "w": 280,
+    "h": 65.5
+   },
+   "nameTruncated": false,
+   "overlapPx": -8,
+   "ok": true
+  },
+  {
+   "id": "cmwxgxqte000ac8wrqtl3sikw",
+   "mine": false,
+   "kind": "file",
+   "label": "大文件-100页.pdf 18.4 MB · 点击预览",
+   "avatar": null,
+   "avatarCol": {
+    "l": 16,
+    "r": 48,
+    "t": 309.2,
+    "b": 374.6,
+    "w": 32,
+    "h": 65.5
+   },
+   "content": {
+    "l": 56,
+    "r": 336
+   },
+   "fileBox": {
+    "l": 56,
+    "r": 336,
+    "t": 309.2,
+    "b": 374.6,
+    "w": 280,
+    "h": 65.5
+   },
+   "nameTruncated": false,
+   "overlapPx": -8,
+   "ok": true
+  },
+  {
+   "id": "cmwxgxqtr000cc8wr5w05yc1a",
+   "mine": false,
+   "kind": "file",
+   "label": "加密文件.pdf 3.5 KB · 点击预览",
+   "avatar": null,
+   "avatarCol": {
+    "l": 16,
+    "r": 48,
+    "t": 376.6,
+    "b": 442.1,
+    "w": 32,
+    "h": 65.5
+   },
+   "content": {
+    "l": 56,
+    "r": 336
+   },
+   "fileBox": {
+    "l": 56,
+    "r": 336,
+    "t": 376.6,
+    "b": 442.1,
+    "w": 280,
+    "h": 65.5
+   },
+   "nameTruncated": false,
+   "overlapPx": -8,
+   "ok": true
+  },
+  {
+   "id": "cmwxgxqu8000ec8wr3h76khaw",
+   "mine": false,
+   "kind": "file",
+   "label": "损坏文件.pdf 39.1 KB · 点击预览",
+   "avatar": null,
+   "avatarCol": {
+    "l": 16,
+    "r": 48,
+    "t": 444.1,
+    "b": 509.5,
+    "w": 32,
+    "h": 65.5
+   },
+   "content": {
+    "l": 56,
+    "r": 336
+   },
+   "fileBox": {
+    "l": 56,
+    "r": 336,
+    "t": 444.1,
+    "b": 509.5,
+    "w": 280,
+    "h": 65.5
+   },
+   "nameTruncated": false,
+   "overlapPx": -8,
+   "ok": true
+  },
+  {
+   "id": "cmwxgxqun000gc8wr6isnc4wx",
+   "mine": false,
+   "kind": "file",
+   "label": "测试文本.txt 91 B",
+   "avatar": null,
+   "avatarCol": {
+    "l": 16,
+    "r": 48,
+    "t": 511.5,
+    "b": 577,
+    "w": 32,
+    "h": 65.5
+   },
+   "content": {
+    "l": 56,
+    "r": 336
+   },
+   "fileBox": {
+    "l": 56,
+    "r": 336,
+    "t": 511.5,
+    "b": 577,
+    "w": 280,
+    "h": 65.5
+   },
+   "nameTruncated": false,
+   "overlapPx": -8,
+   "ok": true
+  },
+  {
+   "id": "cmwxgxqv5000hc8wrvepvbut4",
+   "mine": false,
+   "kind": "ref",
+   "label": "测试文档：表格和附件 📱 真机测试文档（表格与附件） 云文档 公司知识库",
+   "avatar": null,
+   "avatarCol": {
+    "l": 16,
+    "r": 48,
+    "t": 579,
+    "b": 683.8,
+    "w": 32,
+    "h": 104.8
+   },
+   "content": {
+    "l": 56,
+    "r": 378.2
+   },
+   "fileBox": null,
+   "nameTruncated": null,
+   "overlapPx": -8,
+   "ok": true
+  },
+  {
+   "id": "cmwxgxqvg000ic8wr9365vt3g",
+   "mine": false,
+   "kind": "ref",
+   "label": "普通白板（30 个元素） 🎨 真机测试白板（30 个元素） 云文档 公司知识库",
+   "avatar": null,
+   "avatarCol": {
+    "l": 16,
+    "r": 48,
+    "t": 685.8,
+    "b": 790.5,
+    "w": 32,
+    "h": 104.8
+   },
+   "content": {
+    "l": 56,
+    "r": 378.2
+   },
+   "fileBox": null,
+   "nameTruncated": null,
+   "overlapPx": -8,
+   "ok": true
+  },
+  {
+   "id": "cmwxgxqvx000jc8wrfhhobdkx",
+   "mine": false,
+   "kind": "ref",
+   "label": "大白板（接近 1 MB） 🎨 真机测试大白板（接近 1 MB） 云文档 公司知",
+   "avatar": null,
+   "avatarCol": {
+    "l": 16,
+    "r": 48,
+    "t": 792.5,
+    "b": 897.3,
+    "w": 32,
+    "h": 104.8
+   },
+   "content": {
+    "l": 56,
+    "r": 378.2
+   },
+   "fileBox": null,
+   "nameTruncated": null,
+   "overlapPx": -8,
+   "ok": true
+  },
+  {
+   "id": "cmwxhcr3o0007sswrn7r22bxm",
+   "mine": false,
+   "kind": "text",
+   "label": "真机冒烟 冒烟75497",
+   "avatar": {
+    "l": 16,
+    "r": 48,
+    "t": 909.3,
+    "b": 941.3,
+    "w": 32,
+    "h": 32
+   },
+   "avatarCol": {
+    "l": 16,
+    "r": 48,
+    "t": 909.3,
+    "b": 949.5,
+    "w": 32,
+    "h": 40.2
+   },
+   "content": {
+    "l": 56,
+    "r": 208.3
+   },
+   "fileBox": null,
+   "nameTruncated": null,
+   "overlapPx": -8,
+   "ok": true
+  }
+ ]
+}

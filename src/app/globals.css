@@ -63,9 +63,35 @@
    桌面端内容区是独立滚动容器（起点在标题栏下方），因此内容里的 sticky 元素用 top-0，top-app 只给 fixed 元素用。 */
 @utility h-app {
   height: calc(100vh - var(--titlebar-h, 0px));
+  @media (width < 48rem) {
+    height: calc(100dvh - var(--sat) - var(--tabbar-h));
+  }
 }
 @utility min-h-app {
   min-height: calc(100vh - var(--titlebar-h, 0px));
+  @media (width < 48rem) {
+    min-height: calc(100dvh - var(--sat) - var(--tabbar-h));
+  }
+}
+
+/* 手机布局（< md）：安全区与底部标签栏。
+   Android App 的 WebView < 140 时由原生层给整个 WebView 让出系统栏，此时这些值都是 0；
+   WebView ≥ 140 时 Capacitor SystemBars 注入 --safe-area-inset-*；iOS / 全面屏浏览器走 env()。 */
+:root {
+  --sat: max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px));
+  --sab: max(env(safe-area-inset-bottom, 0px), var(--safe-area-inset-bottom, 0px));
+  --tabbar-h: 0px;
+}
+@media (width < 48rem) {
+  html[data-tabbar] {
+    --tabbar-h: calc(56px + var(--sab));
+  }
+  /* Radix 弹层的滚动锁（react-remove-scroll-bar）会注入 body[data-scroll-locked] { padding-top: 0 }，
+     打开菜单 / 弹窗时整页会上移一个状态栏高度、底部露出空白；用更高优先级的选择器保住状态栏留白 */
+  body,
+  html body[data-scroll-locked] {
+    padding-top: var(--sat);
+  }
 }
 @utility top-app {
   top: var(--titlebar-h, 0px);

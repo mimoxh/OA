@@ -67,8 +67,11 @@ export default async function MovementsPage({ searchParams }: PageProps<"/wms/mo
           <UrlSelect param="product" placeholder="全部产品" options={products.map((p) => ({ value: p.id, label: `${p.sku} · ${p.name}` }))} />
           <UrlSelect param="warehouse" placeholder="全部仓库" options={warehouses.map((w) => ({ value: w.id, label: w.name }))} />
           <UrlSelect param="type" placeholder="全部类型" options={Object.entries(MOVEMENT_TYPE).map(([value, m]) => ({ value, label: m.label }))} />
-          <UrlDate param="from" label="从" />
-          <UrlDate param="to" label="至" />
+          {/* 手机上起止日期占一整行，不被拆到两行 */}
+          <div className="flex items-center gap-2 md:contents max-md:w-full">
+            <UrlDate param="from" label="从" />
+            <UrlDate param="to" label="至" />
+          </div>
           <ClearFilters keys={["product", "warehouse", "type", "from", "to"]} />
         </div>
         <MovementTable rows={rows} />

@@ -1,0 +1,326 @@
+{
+ "iw": 443,
+ "ih": 986,
+ "sw": 443,
+ "fontPx": 18.2,
+ "dpr": 2.75,
+ "bad": 0,
+ "items": [
+  {
+   "id": "cmwxgxqte000ac8wrqtl3sikw",
+   "mine": false,
+   "kind": "file",
+   "label": "大文件-100页.pdf 18.4 MB · 点击预览",
+   "avatar": null,
+   "avatarCol": {
+    "l": 16,
+    "r": 48,
+    "t": -27.7,
+    "b": 49.1,
+    "w": 32,
+    "h": 76.8
+   },
+   "content": {
+    "l": 56,
+    "r": 336
+   },
+   "fileBox": {
+    "l": 56,
+    "r": 336,
+    "t": -27.7,
+    "b": 49.1,
+    "w": 280,
+    "h": 76.8
+   },
+   "nameTruncated": false,
+   "overlapPx": -8,
+   "ok": true
+  },
+  {
+   "id": "cmwxgxqtr000cc8wr5w05yc1a",
+   "mine": false,
+   "kind": "file",
+   "label": "加密文件.pdf 3.5 KB · 点击预览",
+   "avatar": null,
+   "avatarCol": {
+    "l": 16,
+    "r": 48,
+    "t": 51.1,
+    "b": 127.8,
+    "w": 32,
+    "h": 76.8
+   },
+   "content": {
+    "l": 56,
+    "r": 336
+   },
+   "fileBox": {
+    "l": 56,
+    "r": 336,
+    "t": 51.1,
+    "b": 127.8,
+    "w": 280,
+    "h": 76.8
+   },
+   "nameTruncated": false,
+   "overlapPx": -8,
+   "ok": true
+  },
+  {
+   "id": "cmwxgxqu8000ec8wr3h76khaw",
+   "mine": false,
+   "kind": "file",
+   "label": "损坏文件.pdf 39.1 KB · 点击预览",
+   "avatar": null,
+   "avatarCol": {
+    "l": 16,
+    "r": 48,
+    "t": 129.8,
+    "b": 206.6,
+    "w": 32,
+    "h": 76.8
+   },
+   "content": {
+    "l": 56,
+    "r": 336
+   },
+   "fileBox": {
+    "l": 56,
+    "r": 336,
+    "t": 129.8,
+    "b": 206.6,
+    "w": 280,
+    "h": 76.8
+   },
+   "nameTruncated": false,
+   "overlapPx": -8,
+   "ok": true
+  },
+  {
+   "id": "cmwxgxqun000gc8wr6isnc4wx",
+   "mine": false,
+   "kind": "file",
+   "label": "测试文本.txt 91 B",
+   "avatar": null,
+   "avatarCol": {
+    "l": 16,
+    "r": 48,
+    "t": 208.6,
+    "b": 285.4,
+    "w": 32,
+    "h": 76.8
+   },
+   "content": {
+    "l": 56,
+    "r": 336
+   },
+   "fileBox": {
+    "l": 56,
+    "r": 336,
+    "t": 208.6,
+    "b": 285.4,
+    "w": 280,
+    "h": 76.8
+   },
+   "nameTruncated": false,
+   "overlapPx": -8,
+   "ok": true
+  },
+  {
+   "id": "cmwxgxqv5000hc8wrvepvbut4",
+   "mine": false,
+   "kind": "ref",
+   "label": "测试文档：表格和附件 📱 真机测试文档（表格与附件） 云文档 公司知识库",
+   "avatar": null,
+   "avatarCol": {
+    "l": 16,
+    "r": 48,
+    "t": 287.4,
+    "b": 410.1,
+    "w": 32,
+    "h": 122.7
+   },
+   "content": {
+    "l": 56,
+    "r": 378.2
+   },
+   "fileBox": null,
+   "nameTruncated": null,
+   "overlapPx": -8,
+   "ok": true
+  },
+  {
+   "id": "cmwxgxqvg000ic8wr9365vt3g",
+   "mine": false,
+   "kind": "ref",
+   "label": "普通白板（30 个元素） 🎨 真机测试白板（30 个元素） 云文档 公司知识库",
+   "avatar": null,
+   "avatarCol": {
+    "l": 16,
+    "r": 48,
+    "t": 412.1,
+    "b": 534.8,
+    "w": 32,
+    "h": 122.7
+   },
+   "content": {
+    "l": 56,
+    "r": 378.2
+   },
+   "fileBox": null,
+   "nameTruncated": null,
+   "overlapPx": -8,
+   "ok": true
+  },
+  {
+   "id": "cmwxgxqvx000jc8wrfhhobdkx",
+   "mine": false,
+   "kind": "ref",
+   "label": "大白板（接近 1 MB） 🎨 真机测试大白板（接近 1 MB） 云文档 公司知",
+   "avatar": null,
+   "avatarCol": {
+    "l": 16,
+    "r": 48,
+    "t": 536.8,
+    "b": 659.6,
+    "w": 32,
+    "h": 122.7
+   },
+   "content": {
+    "l": 56,
+    "r": 378.2
+   },
+   "fileBox": null,
+   "nameTruncated": null,
+   "overlapPx": -8,
+   "ok": true
+  },
+  {
+   "id": "cmwxhcr3o0007sswrn7r22bxm",
+   "mine": false,
+   "kind": "text",
+   "label": "真机冒烟 冒烟75497",
+   "avatar": {
+    "l": 16,
+    "r": 48,
+    "t": 671.6,
+    "b": 703.6,
+    "w": 32,
+    "h": 32
+   },
+   "avatarCol": {
+    "l": 16,
+    "r": 48,
+    "t": 671.6,
+    "b": 718.6,
+    "w": 32,
+    "h": 47
+   },
+   "content": {
+    "l": 56,
+    "r": 246.3
+   },
+   "fileBox": null,
+   "nameTruncated": null,
+   "overlapPx": -8,
+   "ok": true
+  },
+  {
+   "id": "cmwys2em30001b8wriniuza1j",
+   "mine": true,
+   "kind": "file",
+   "label": "合同.pdf 4.5 KB · 点击预览 已读",
+   "avatar": {
+    "l": 395.6,
+    "r": 427.6,
+    "t": 771.4,
+    "b": 803.4,
+    "w": 32,
+    "h": 32
+   },
+   "avatarCol": {
+    "l": 395.6,
+    "r": 427.6,
+    "t": 771.4,
+    "b": 871.6,
+    "w": 32,
+    "h": 100.2
+   },
+   "content": {
+    "l": 107.6,
+    "r": 387.6
+   },
+   "fileBox": {
+    "l": 107.6,
+    "r": 387.6,
+    "t": 771.4,
+    "b": 848.2,
+    "w": 280,
+    "h": 76.8
+   },
+   "nameTruncated": false,
+   "overlapPx": -8,
+   "ok": true
+  },
+  {
+   "id": "cmwys2gmm0003b8wrmriht4o6",
+   "mine": true,
+   "kind": "file",
+   "label": "2026年第四季度华东区域销售合同审批材料汇总（含附件与补充说明）最终版.pdf",
+   "avatar": null,
+   "avatarCol": {
+    "l": 395.6,
+    "r": 427.6,
+    "t": 873.6,
+    "b": 973.8,
+    "w": 32,
+    "h": 100.2
+   },
+   "content": {
+    "l": 107.6,
+    "r": 387.6
+   },
+   "fileBox": {
+    "l": 107.6,
+    "r": 387.6,
+    "t": 873.6,
+    "b": 950.4,
+    "w": 280,
+    "h": 76.8
+   },
+   "nameTruncated": true,
+   "overlapPx": -8,
+   "ok": true
+  },
+  {
+   "id": "cmwys2io80005b8wr3mqr52s5",
+   "mine": true,
+   "kind": "file",
+   "label": "Q4-2026-East-China-Regional-Sales-Contra",
+   "avatar": null,
+   "avatarCol": {
+    "l": 395.6,
+    "r": 427.6,
+    "t": 975.8,
+    "b": 1076.1,
+    "w": 32,
+    "h": 100.2
+   },
+   "content": {
+    "l": 107.6,
+    "r": 387.6
+   },
+   "fileBox": {
+    "l": 107.6,
+    "r": 387.6,
+    "t": 975.8,
+    "b": 1052.6,
+    "w": 280,
+    "h": 76.8
+   },
+   "nameTruncated": true,
+   "overlapPx": -8,
+   "ok": true
+  }
+ ]
+}

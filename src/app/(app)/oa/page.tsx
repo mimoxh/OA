@@ -12,6 +12,7 @@ import { Card, Page, PageHeader, Section, StatCard, TopBar } from "@/components/
 import { LinkButton } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
+import { ModuleEntries } from "@/components/mobile/module-entries";
 
 function MoreLink({ href, children = "查看全部" }: { href: string; children?: string }) {
   return (
@@ -61,6 +62,7 @@ export default async function OaHomePage() {
   return (
     <>
       <TopBar
+        mobileTitle="OA 办公"
         crumbs={[{ label: "OA 办公" }, { label: "工作台" }]}
         actions={
           <LinkButton href="/oa/approvals/new" variant="primary">
@@ -71,6 +73,7 @@ export default async function OaHomePage() {
       />
       <Page wide>
         <PageHeader icon="🗂️" title="OA 工作台" description="审批、公告与日程，一处掌握" />
+        <ModuleEntries moduleKey="oa" permissions={user.permissions} />
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <StatCard label="待我审批" value={todoCount} icon={<ClipboardCheck />} href="/oa/approvals" hint={todoCount ? "请尽快处理" : "全部处理完毕"} />
           <StatCard label="我发起的进行中" value={mineCount} icon={<Send />} href="/oa/approvals?tab=mine&status=PENDING" />

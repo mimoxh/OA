@@ -11,6 +11,7 @@ import { FilterPills, SearchInput } from "@/components/ui/common";
 import { Page, PageHeader, TopBar } from "@/components/ui/page";
 import { Table, TBody, TD, TEmpty, TH, THead, TR } from "@/components/ui/table";
 import { DriverDialog, DriverRowActions } from "@/components/tms/master-forms";
+import { MobileCard, MobileField, MobileList } from "@/components/mobile/mobile-list";
 
 export default async function DriversPage({ searchParams }: PageProps<"/tms/drivers">) {
   const user = await requireUser();
@@ -65,7 +66,45 @@ export default async function DriversPage({ searchParams }: PageProps<"/tms/driv
           <div className="flex-1" />
           <SearchInput placeholder="姓名 / 电话 / 驾驶证号" />
         </div>
-        <Table>
+        <MobileList empty="暂无司机">
+          {drivers.map((d) => (
+            <MobileCard
+              key={d.id}
+              title={d.name}
+              badge={
+                <>
+                  <StatusBadge map={DRIVER_STATUS} value={d.status} />
+                  {canEdit && (
+                    <DriverRowActions
+                      driver={{ id: d.id, name: d.name, phone: d.phone, licenseNo: d.licenseNo, status: d.status, userId: d.userId }}
+                      users={users}
+                    />
+                  )}
+                </>
+              }
+              subtitle={[d.phone, d.licenseNo].filter(Boolean).join(" · ")}
+              meta={
+                <>
+                  {d.user ? <UserChip name={d.user.name} color={d.user.avatarColor} /> : <span className="text-ink-3">未关联账号</span>}
+                  <MobileField label="历史运输单">{d._count.orders}</MobileField>
+                </>
+              }
+            >
+              {d.orders.length > 0 && (
+                <div className="mt-2 space-y-1 border-t border-line pt-2">
+                  {d.orders.map((o) => (
+                    <Link key={o.id} href={`/tms/orders/${o.id}`} className="flex min-w-0 items-center gap-1.5 text-[13px]">
+                      <StatusBadge map={TRANSPORT_STATUS} value={o.status} />
+                      <span className="shrink-0 tabular-nums text-accent">{o.no}</span>
+                      {o.vehicle && <span className="truncate text-xs text-ink-3">{o.vehicle.plateNo}</span>}
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </MobileCard>
+          ))}
+        </MobileList>
+        <Table className="max-md:hidden">
           <THead>
             <TR>
               <TH>姓名</TH>

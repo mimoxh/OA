@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import type { UserLite } from "@/lib/im/types";
+import { setMobileSystemBarsStyle } from "@/lib/mobile-bridge";
 import { cn } from "@/lib/utils";
 import {
   acceptIncomingCall,
@@ -179,6 +180,14 @@ export function CallOverlay({ me }: { me: UserLite }) {
 
   useRingtone(Boolean(incoming && !active));
 
+  // 完整通话界面是深色全屏：手机 App 里把状态栏 / 导航栏图标切成浅色，退出时恢复
+  const fullView = Boolean(active && !active.minimized);
+  useEffect(() => {
+    if (!fullView) return;
+    setMobileSystemBarsStyle("DARK");
+    return () => setMobileSystemBarsStyle("DEFAULT");
+  }, [fullView]);
+
   useEffect(() => {
     if (!callId) return;
     const t = setInterval(() => setNowMs(Date.now()), 1000);
@@ -192,7 +201,7 @@ export function CallOverlay({ me }: { me: UserLite }) {
     const isGroup = incoming.conversationType === "GROUP";
     const kindLabel = incoming.kind === "audio" ? "语音" : "视频";
     return (
-      <div className="fixed right-5 top-[calc(var(--titlebar-h,0px)+1.25rem)] z-50 w-[330px] overflow-hidden rounded-2xl border border-white/10 bg-[#1c2028] p-4 text-white shadow-2xl animate-pop-in">
+      <div className="fixed right-5 top-[calc(var(--titlebar-h,0px)+1.25rem)] z-50 w-[330px] overflow-hidden max-md:inset-x-3 max-md:top-[calc(var(--sat)+0.75rem)] max-md:w-auto rounded-2xl border border-white/10 bg-[#1c2028] p-4 text-white shadow-2xl animate-pop-in">
         <div className="flex items-center gap-3">
           <div className="relative">
             <Avatar name={incoming.initiator.name} color={incoming.initiator.avatarColor} size={44} />
@@ -250,7 +259,8 @@ export function CallOverlay({ me }: { me: UserLite }) {
     return (
       <>
         <HiddenRemoteAudio active={active} />
-        <div className="fixed bottom-5 right-5 z-50 flex items-center gap-3 rounded-2xl border border-white/10 bg-[#1c2028] px-3.5 py-2.5 text-white shadow-2xl">
+        {/* 手机上放在顶栏和会话页「通话进行中」横条下方：底部有标签栏、输入框和系统导航栏 */}
+        <div className="fixed bottom-5 right-5 z-50 flex items-center gap-3 rounded-2xl max-md:bottom-auto max-md:right-3 max-md:top-[calc(var(--sat)+6.75rem)] border border-white/10 bg-[#1c2028] px-3.5 py-2.5 text-white shadow-2xl">
           <span className="size-2.5 animate-pulse rounded-full bg-emerald-400" />
           <div className="min-w-0 max-w-[180px]">
             <div className="truncate text-xs font-medium">{active.call.conversationName}</div>
@@ -342,7 +352,7 @@ export function CallOverlay({ me }: { me: UserLite }) {
           : "grid-cols-2 lg:grid-cols-3";
 
   return (
-    <div className="fixed inset-x-0 bottom-0 top-app z-50 flex flex-col bg-[#14171f] text-white">
+    <div className="fixed inset-x-0 bottom-0 top-app z-50 flex flex-col bg-[#14171f] text-white max-md:top-0 max-md:pt-[var(--sat)]">
       {/* 顶栏 */}
       <header className="flex h-14 shrink-0 items-center justify-between border-b border-white/10 px-5">
         <div className="flex min-w-0 items-center gap-3">
@@ -387,7 +397,7 @@ export function CallOverlay({ me }: { me: UserLite }) {
       </main>
 
       {/* 底部控制栏 */}
-      <footer className="flex h-20 shrink-0 items-center justify-center gap-3 border-t border-white/10 bg-[#1a1e28]/90 px-4">
+      <footer className="flex h-20 shrink-0 items-center justify-center gap-3 border-t border-white/10 bg-[#1a1e28]/90 px-4 max-md:h-auto max-md:flex-wrap max-md:gap-2 max-md:px-3 max-md:pt-3 max-md:pb-[calc(var(--sab)+0.75rem)]">
         <button
           type="button"
           onClick={() => void toggleMic()}

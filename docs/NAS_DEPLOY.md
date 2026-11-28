@@ -127,6 +127,8 @@ docker compose -f docker-compose.nas.yml --env-file .env.nas up -d --build
   2. **透传 `X-Forwarded-Proto` 与 `X-Forwarded-Host`**（容器内置网关已保留上游转发头，使服务端自动签发 `wss://` 地址）；
   3. **最大请求体调至至少 `60m`**（匹配 `next.config.ts` 的 `proxyClientMaxBodySize: "60mb"`，否则大附件上传和 50 MB 文档 ZIP 导入会触发 `413`）；
   4. **代理读写超时建议 `>= 300s`**（避免空闲长连接被反代提前断开）。
+- **手机 App** 的 release 包只信任系统 CA，必须使用公共 CA 证书（如 Let's Encrypt 自动续期），内网场景可用 DNS-01 验证，详见 `docs/mobile/deployment.md`。
+- **手机 App 下载页** `/download/android`：在 `.env.nas` 设置 `OA_MOBILE_DIR`（宿主机目录，只读挂载到容器 `/data/mobile`），用 `pnpm mobile:publish --dir <该目录>` 发布安装包，见 `docs/mobile/BUILD.md` §5。不设置时使用 `./nas-data/mobile`，目录为空时下载页显示「管理员还没有发布 Android 安装包」。
 
 Nginx / NPM 高级配置参考片段：
 

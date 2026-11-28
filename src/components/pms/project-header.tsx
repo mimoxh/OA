@@ -69,7 +69,7 @@ export function ProjectProperties({
         </Link>
       </Property>
       <Property label="进度" icon={<BarChart3 />}>
-        <span className="flex w-72 items-center gap-2">
+        <span className="flex w-72 max-w-full items-center gap-2">
           <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-hover">
             <span className="block h-full rounded-full bg-[#448361]" style={{ width: `${pct}%` }} />
           </span>
@@ -120,6 +120,7 @@ export function ProjectActions({
   canManage,
   canDelete,
   currentUserId,
+  labeled,
 }: {
   project: HeaderProject;
   users: UserOption[];
@@ -127,6 +128,8 @@ export function ProjectActions({
   canManage: boolean;
   canDelete: boolean;
   currentUserId: string;
+  /** 删除按钮带文字（手机「更多」面板里整行显示） */
+  labeled?: boolean;
 }) {
   const router = useRouter();
   const { run } = useAction();
@@ -156,6 +159,7 @@ export function ProjectActions({
           onConfirm={() => run(() => deleteProject(p.id), { success: "项目已删除", refresh: false, onSuccess: () => router.push("/pms") })}
         >
           <Trash2 className="size-3.5" />
+          {labeled && "删除项目"}
         </ConfirmButton>
       )}
     </>

@@ -1,0 +1,98 @@
+[
+ {
+  "name": "04-doc-comments",
+  "sat": 49,
+  "sab": 48,
+  "ih": 986,
+  "items": [
+   {
+    "el": "aside 评论  还没有评论，选中文字或直",
+    "top": 0,
+    "bottom": 936,
+    "left": 0,
+    "right": 444,
+    "underStatusBar": true,
+    "underNavBar": false
+   },
+   {
+    "el": "span 评论",
+    "top": 10,
+    "bottom": 29,
+    "left": 13,
+    "right": 39,
+    "underStatusBar": true,
+    "underNavBar": false
+   },
+   {
+    "el": "button ",
+    "top": 8,
+    "bottom": 32,
+    "left": 408,
+    "right": 432,
+    "underStatusBar": true,
+    "underNavBar": false
+   },
+   {
+    "el": "textarea ",
+    "top": 52,
+    "bottom": 133,
+    "left": 13,
+    "right": 432,
+    "underStatusBar": false,
+    "underNavBar": false
+   }
+  ]
+ },
+ {
+  "name": "04-chat-search",
+  "sat": 49,
+  "sab": 48,
+  "ih": 986,
+  "items": [
+   {
+    "el": "div 查找聊天记录",
+    "top": 66,
+    "bottom": 89,
+    "left": 16,
+    "right": 128,
+    "underStatusBar": false,
+    "underNavBar": false
+   },
+   {
+    "el": "button[关闭搜索] ",
+    "top": 64,
+    "bottom": 92,
+    "left": 400,
+    "right": 428,
+    "underStatusBar": false,
+    "underNavBar": false
+   },
+   {
+    "el": "input ",
+    "top": 116,
+    "bottom": 148,
+    "left": 12,
+    "right": 432,
+    "underStatusBar": false,
+    "underNavBar": false
+   }
+  ]
+ },
+ {
+  "name": "04-pdf-viewer",
+  "sat": 49,
+  "sab": 48,
+  "ih": 986,
+  "items": [
+   {
+    "el": "button[关闭] ",
+    "top": 50,
+    "bottom": 98,
+    "left": 0,
+    "right": 48,
+    "underStatusBar": false,
+    "underNavBar": false
+   }
+  ]
+ }
+]

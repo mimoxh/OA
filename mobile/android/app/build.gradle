@@ -1,0 +1,139 @@
+import groovy.json.JsonSlurper
+
+apply plugin: 'com.android.application'
+
+/*
+ * 版本号与 Web 统一维护（规则见 docs/mobile/BUILD.md、src/lib/mobile-version.ts）：
+ * versionName = 根目录 package.json 的 version（X.Y.Z，Y、Z 不超过 99），versionCode = X*10000 + Y*100 + Z。
+ * -PoaVersionName=0.0.9 只用于构建测试升级流程的旧版本包，正式发版不要用。
+ */
+def oaVersion = { ->
+    def name = (project.findProperty('oaVersionName') ?: new JsonSlurper().parse(file('../../../package.json')).version).toString()
+    def m = name =~ /^(\d{1,4})\.(\d{1,2})\.(\d{1,2})$/
+    if (!m.matches()) throw new GradleException("版本号必须是 X.Y.Z 且 Y、Z 不超过 99：${name}")
+    return [name: name, code: (m.group(1) as int) * 10000 + (m.group(2) as int) * 100 + (m.group(3) as int)]
+}()
+
+/*
+ * release 签名：只读取本机的 keystore.properties，密钥和密码都不入库。查找顺序：
+ *   1. 环境变量 OA_KEYSTORE_PROPERTIES 指定的文件
+ *   2. mobile/android/keystore.properties（已加入 .gitignore）
+ *   3. %USERPROFILE%/.oa-mobile/keystore.properties
+ * 密码也可以用环境变量 OA_KEYSTORE_PASSWORD / OA_KEY_PASSWORD 提供（不写进文件）。
+ */
+def releaseSigning = { ->
+    def envPath = System.getenv('OA_KEYSTORE_PROPERTIES')
+    def candidates = envPath ? [new File(envPath)] : [
+        rootProject.file('keystore.properties'),
+        new File(System.getProperty('user.home'), '.oa-mobile/keystore.properties'),
+    ]
+    def f = candidates.find { it.isFile() }
+    if (f == null) {
+        if (envPath) throw new GradleException("OA_KEYSTORE_PROPERTIES 指向的文件不存在：${envPath}")
+        return null
+    }
+    def p = new Properties()
+    f.withInputStream { p.load(it) }
+    def storeFile = new File(p.getProperty('storeFile', ''))
+    if (!storeFile.isAbsolute()) storeFile = new File(f.parentFile, p.getProperty('storeFile', ''))
+    return [
+        source: f,
+        storeFile: storeFile,
+        storeType: p.getProperty('storeType', 'PKCS12'),
+        storePassword: System.getenv('OA_KEYSTORE_PASSWORD') ?: p.getProperty('storePassword'),
+        keyAlias: p.getProperty('keyAlias'),
+        keyPassword: System.getenv('OA_KEY_PASSWORD') ?: p.getProperty('keyPassword') ?: System.getenv('OA_KEYSTORE_PASSWORD') ?: p.getProperty('storePassword'),
+    ]
+}()
+
+android {
+    namespace = "com.oa.suite.mobile"
+    compileSdk = rootProject.ext.compileSdkVersion
+    defaultConfig {
+        applicationId "com.oa.suite.mobile"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode oaVersion.code
+        versionName oaVersion.name
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        aaptOptions {
+             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
+             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
+            ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+    buildFeatures {
+        buildConfig = true
+    }
+    // 本机 HTTPS 联调：存在 mobile/.devcerts/res（自签 CA + 网络安全配置，不入库）时，debug 包改用它
+    def devCertRes = file('../../.devcerts/res')
+    if (devCertRes.exists()) {
+        sourceSets.debug.res.srcDirs = [devCertRes]
+    }
+    signingConfigs {
+        if (releaseSigning != null) {
+            release {
+                storeFile releaseSigning.storeFile
+                storeType releaseSigning.storeType
+                storePassword releaseSigning.storePassword
+                keyAlias releaseSigning.keyAlias
+                keyPassword releaseSigning.keyPassword
+                // 最低 Android 8.0（API 26）都支持 v2，不需要 v1（JAR 签名）；v3 支持以后轮换密钥
+                enableV1Signing false
+                enableV2Signing true
+                enableV3Signing true
+            }
+        }
+    }
+    buildTypes {
+        release {
+            // R8 压缩 / 混淆第三方库；本应用代码、Capacitor 插件与 JS 桥接的保留规则见 proguard-rules.pro
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            if (releaseSigning != null) signingConfig signingConfigs.release
+        }
+    }
+}
+
+// 没有签名配置时不产出未签名的 release 包，直接报错
+gradle.taskGraph.whenReady { graph ->
+    def wantsRelease = graph.allTasks.any { it.project == project && it.name ==~ /(assemble|bundle|package)Release/ }
+    if (wantsRelease && releaseSigning == null) {
+        throw new GradleException("未找到 release 签名配置：请按 docs/mobile/BUILD.md 准备 %USERPROFILE%/.oa-mobile/keystore.properties，或设置 OA_KEYSTORE_PROPERTIES")
+    }
+    if (wantsRelease && !releaseSigning.storeFile.isFile()) {
+        throw new GradleException("签名密钥文件不存在：${releaseSigning.storeFile}（配置来自 ${releaseSigning.source}）")
+    }
+}
+
+repositories {
+    flatDir{
+        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation project(':capacitor-android')
+    implementation "androidx.core:core:$androidxCoreVersion"
+    implementation "com.squareup.okhttp3:okhttp:4.12.0"
+    testImplementation "junit:junit:$junitVersion"
+    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    implementation project(':capacitor-cordova-android-plugins')
+}
+
+apply from: 'capacitor.build.gradle'
+
+try {
+    def servicesJSON = file('google-services.json')
+    if (servicesJSON.text) {
+        apply plugin: 'com.google.gms.google-services'
+    }
+} catch(Exception e) {
+    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}

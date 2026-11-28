@@ -1,0 +1,4 @@
+inbox.png: 11 px (y 58-120, x 36-40)
+me.png: 17082 px (y 58-394, x 36-1026)
+work-bottom.png: 0 px (y 99999--1, x 99999--1)
+work.png: 11 px (y 58-120, x 36-40)

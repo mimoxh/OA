@@ -1,0 +1,402 @@
+{
+ "phase": "after",
+ "js": {
+  "chat": {
+   "count": 23,
+   "kb": 459,
+   "names": [
+    "04ibi8un5d60h.js",
+    "2wwfmcd8ss3tn.js",
+    "3ocqvfzq4lri9.js",
+    "0xj0nh4zi79c2.js",
+    "0l80_mr65x76u.js",
+    "turbopack-077hmtqrhcoji.js",
+    "40w9fxlrvwipq.js",
+    "3i1f04k8jr2jg.js",
+    "0cyr-l_gmwni7.js",
+    "0j8iekc126xy-.js",
+    "385p-wjv65mt6.js",
+    "026gonyxpz6hz.js",
+    "3tait2rukoti7.js",
+    "3i6_2-gha5wyb.js",
+    "223f8cs0mvz7n.js",
+    "0iz-y8wrwwcz4.js",
+    "3mq8tgnog1fq4.js",
+    "0nfrnf-_lyn9y.js",
+    "21m1--n3babsf.js",
+    "0v2azr_sc6_vz.js",
+    "0o8ga01pz1n01.js",
+    "3vt1d2izy06ah.js",
+    "3l6fxzkj0qt-2.js"
+   ]
+  },
+  "doc": {
+   "count": 24,
+   "kb": 588,
+   "names": [
+    "04ibi8un5d60h.js",
+    "2wwfmcd8ss3tn.js",
+    "3ocqvfzq4lri9.js",
+    "0xj0nh4zi79c2.js",
+    "0l80_mr65x76u.js",
+    "turbopack-077hmtqrhcoji.js",
+    "40w9fxlrvwipq.js",
+    "3i1f04k8jr2jg.js",
+    "0cyr-l_gmwni7.js",
+    "0j8iekc126xy-.js",
+    "385p-wjv65mt6.js",
+    "026gonyxpz6hz.js",
+    "3tait2rukoti7.js",
+    "3i6_2-gha5wyb.js",
+    "223f8cs0mvz7n.js",
+    "41cfph54stpfi.js",
+    "00y19exb79sks.js",
+    "2bl0x05bg9b-r.js",
+    "0xix-zru1cj_i.js",
+    "0nfrnf-_lyn9y.js",
+    "3vt1d2izy06ah.js",
+    "1_9ctcekl4yvr.js",
+    "24qxn5h0gcvt1.js",
+    "0o8ga01pz1n01.js"
+   ]
+  }
+ },
+ "previews": [
+  {
+   "name": "旧版文档.doc",
+   "state": "ok",
+   "kind": "unsupported",
+   "box": [
+    120,
+    24,
+    1200,
+    852
+   ],
+   "download": true,
+   "error": "暂不支持预览旧版 Word 文档（.doc）\n这是 Word 97-2003 的二进制格式，浏览器里无法可靠解析。可以下载后用 Office / WPS 打开，",
+   "notice": null,
+   "sw": 1440,
+   "newJs": 0
+  },
+  {
+   "name": "损坏文件.docx",
+   "state": "ok",
+   "kind": "docx",
+   "box": [
+    120,
+    24,
+    1200,
+    852
+   ],
+   "download": true,
+   "error": "无法解析该文件\n文件已损坏，或者不是有效的Word 文档。可以下载后用其他应用尝试打开。\n下载文件",
+   "notice": null,
+   "sw": 1440,
+   "newJs": 3
+  },
+  {
+   "name": "项目资料.zip",
+   "state": "ok",
+   "kind": "zip",
+   "box": [
+    120,
+    24,
+    1200,
+    852
+   ],
+   "download": true,
+   "error": null,
+   "notice": null,
+   "sw": 1440,
+   "newJs": 1
+  },
+  {
+   "name": "提示音.mp3",
+   "state": "ok",
+   "kind": "audio",
+   "box": [
+    120,
+    24,
+    1200,
+    852
+   ],
+   "download": true,
+   "error": null,
+   "notice": null,
+   "sw": 1440,
+   "newJs": 1
+  },
+  {
+   "name": "演示视频.mp4",
+   "state": "ok",
+   "kind": "video",
+   "box": [
+    120,
+    24,
+    1200,
+    852
+   ],
+   "download": true,
+   "error": null,
+   "notice": null,
+   "sw": 1440,
+   "newJs": 0
+  },
+  {
+   "name": "矢量图标.svg",
+   "state": "ok",
+   "kind": "svg",
+   "box": [
+    120,
+    24,
+    1200,
+    852
+   ],
+   "download": true,
+   "error": null,
+   "notice": null,
+   "sw": 1440,
+   "newJs": 1
+  },
+  {
+   "name": "部署配置.yaml",
+   "state": "ok",
+   "kind": "text",
+   "box": [
+    120,
+    24,
+    1200,
+    852
+   ],
+   "download": true,
+   "error": null,
+   "notice": null,
+   "sw": 1440,
+   "newJs": 1
+  },
+  {
+   "name": "示例代码.ts",
+   "state": "ok",
+   "kind": "text",
+   "box": [
+    120,
+    24,
+    1200,
+    852
+   ],
+   "download": true,
+   "error": null,
+   "notice": null,
+   "sw": 1440,
+   "newJs": 0
+  },
+  {
+   "name": "服务日志.log",
+   "state": "ok",
+   "kind": "text",
+   "box": [
+    120,
+    24,
+    1200,
+    852
+   ],
+   "download": true,
+   "error": null,
+   "notice": "文件较大（3.0 MB），只显示前 1.0 MB。完整内容请下载查看。",
+   "sw": 1440,
+   "newJs": 0
+  },
+  {
+   "name": "配置.json",
+   "state": "ok",
+   "kind": "json",
+   "box": [
+    120,
+    24,
+    1200,
+    852
+   ],
+   "download": true,
+   "error": null,
+   "notice": null,
+   "sw": 1440,
+   "newJs": 0
+  },
+  {
+   "name": "预览说明.md",
+   "state": "ok",
+   "kind": "markdown",
+   "box": [
+    120,
+    24,
+    1200,
+    852
+   ],
+   "download": true,
+   "error": null,
+   "notice": null,
+   "sw": 1440,
+   "newJs": 0
+  },
+  {
+   "name": "产品方案.pptx",
+   "state": "ok",
+   "kind": "pptx",
+   "box": [
+    120,
+    24,
+    1200,
+    852
+   ],
+   "download": true,
+   "error": null,
+   "notice": null,
+   "sw": 1440,
+   "newJs": 2
+  },
+  {
+   "name": "客户名单-GBK.csv",
+   "state": "ok",
+   "kind": "sheet",
+   "box": [
+    120,
+    24,
+    1200,
+    852
+   ],
+   "download": true,
+   "error": null,
+   "notice": "文本编码：GBK / GB18030",
+   "sw": 1440,
+   "newJs": 2
+  },
+  {
+   "name": "旧版报表.xls",
+   "state": "ok",
+   "kind": "sheet",
+   "box": [
+    120,
+    24,
+    1200,
+    852
+   ],
+   "download": true,
+   "error": null,
+   "notice": null,
+   "sw": 1440,
+   "newJs": 1
+  },
+  {
+   "name": "销售数据.xlsx",
+   "state": "ok",
+   "kind": "sheet",
+   "box": [
+    120,
+    24,
+    1200,
+    852
+   ],
+   "download": true,
+   "error": null,
+   "notice": null,
+   "sw": 1440,
+   "newJs": 0
+  },
+  {
+   "name": "采购合同.docx",
+   "state": "ok",
+   "kind": "docx",
+   "box": [
+    120,
+    24,
+    1200,
+    852
+   ],
+   "download": true,
+   "error": null,
+   "notice": null,
+   "sw": 1440,
+   "newJs": 0
+  },
+  {
+   "name": "测试文本.txt",
+   "state": "ok",
+   "kind": "text",
+   "box": [
+    120,
+    24,
+    1200,
+    852
+   ],
+   "download": true,
+   "error": null,
+   "notice": null,
+   "sw": 1440,
+   "newJs": 0
+  },
+  {
+   "name": "损坏文件.pdf",
+   "state": "ok",
+   "kind": "pdf",
+   "box": [
+    120,
+    24,
+    1200,
+    852
+   ],
+   "download": true,
+   "error": "无法解析该文件\n文件已损坏或不是有效的 PDF。可以下载后用其他应用尝试打开。\n下载文件",
+   "notice": null,
+   "sw": 1440,
+   "newJs": 2
+  },
+  {
+   "name": "加密文件.pdf",
+   "state": "ok",
+   "kind": "pdf",
+   "box": [
+    120,
+    24,
+    1200,
+    852
+   ],
+   "download": true,
+   "error": "该 PDF 已加密\n需要密码才能打开，暂不支持在线预览。可以下载后用其他应用输入密码查看。\n下载文件",
+   "notice": null,
+   "sw": 1440,
+   "newJs": 0
+  },
+  {
+   "name": "大文件-100页.pdf",
+   "state": "ok",
+   "kind": "pdf",
+   "box": [
+    120,
+    24,
+    1200,
+    852
+   ],
+   "download": true,
+   "error": null,
+   "notice": null,
+   "sw": 1440,
+   "newJs": 0
+  },
+  {
+   "name": "小文件-3页.pdf",
+   "state": "ok",
+   "kind": "pdf",
+   "box": [
+    120,
+    24,
+    1200,
+    852
+   ],
+   "download": true,
+   "error": null,
+   "notice": null,
+   "sw": 1440,
+   "newJs": 0
+  }
+ ]
+}

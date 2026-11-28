@@ -25,9 +25,10 @@ import type { MemberOption } from "@/lib/oa/types";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { EventDialog, type CalEvent, type EventDraft } from "./event-dialog";
+import { MobileCalendar, type CalendarViewKind, type ParsedEvent } from "./mobile-calendar";
 
-type View = "month" | "week";
-type Parsed = CalEvent & { start: Date; end: Date; multiDay: boolean };
+type View = CalendarViewKind;
+type Parsed = ParsedEvent;
 
 const HOUR = 48;
 const WEEK = { weekStartsOn: 1 as const };
@@ -83,7 +84,13 @@ export function CalendarView({
   );
 
   const go = (v: View, d: Date) => router.push(`${pathname}?view=${v}&date=${format(d, "yyyy-MM-dd")}`);
-  const step = (dir: -1 | 1) => go(view, view === "month" ? addMonths(anchorDate, dir) : addWeeks(anchorDate, dir));
+  // 桌面只有月 / 周网格：日视图按周显示，列表按月显示
+  const desktopView: "month" | "week" = view === "week" || view === "day" ? "week" : "month";
+  const step = (dir: -1 | 1) => go(desktopView, desktopView === "month" ? addMonths(anchorDate, dir) : addWeeks(anchorDate, dir));
+  // 手机上切换视图 / 翻页不进浏览历史，返回键直接回上一级
+  const goMobile = (v: View, d: Date) => router.replace(`${pathname}?view=${v}&date=${format(d, "yyyy-MM-dd")}`, { scroll: false });
+  const stepMobile = (dir: -1 | 1) =>
+    goMobile(view, view === "day" ? addDays(anchorDate, dir) : view === "week" ? addWeeks(anchorDate, dir) : addMonths(anchorDate, dir));
 
   const eventsOn = (day: Date) => parsed.filter((e) => e.start <= endOfDay(day) && e.end >= startOfDay(day));
 
@@ -99,7 +106,7 @@ export function CalendarView({
 
   const weekStart = startOfWeek(anchorDate, WEEK);
   const title =
-    view === "month"
+    desktopView === "month"
       ? format(anchorDate, "yyyy年 M月")
       : `${format(weekStart, "yyyy年 M月d日")} – ${format(addDays(weekStart, 6), isSameMonth(weekStart, addDays(weekStart, 6)) ? "d日" : "M月d日")}`;
 
@@ -107,6 +114,21 @@ export function CalendarView({
 
   return (
     <div>
+      <div className="md:hidden">
+        <MobileCalendar
+          view={view}
+          anchor={anchorDate}
+          now={now}
+          eventsOn={eventsOn}
+          events={parsed}
+          meId={meId}
+          onNavigate={goMobile}
+          onStep={stepMobile}
+          onNew={(d, h) => newAt(d, h ?? Math.min(((now ?? d).getHours() || 8) + 1, 22))}
+          onOpen={(id) => setDialog({ kind: "event", id })}
+        />
+      </div>
+      <div className="max-md:hidden">
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <h2 className="mr-2 text-xl font-semibold text-ink">{title}</h2>
         <div className="flex items-center">
@@ -127,7 +149,7 @@ export function CalendarView({
                 key={v}
                 type="button"
                 onClick={() => go(v, anchorDate)}
-                className={cn("rounded px-3 py-1 transition-colors", view === v ? "bg-white font-medium text-ink shadow-card" : "text-ink-2 hover:text-ink")}
+                className={cn("rounded px-3 py-1 transition-colors", desktopView === v ? "bg-white font-medium text-ink shadow-card" : "text-ink-2 hover:text-ink")}
               >
                 {v === "month" ? "月" : "周"}
               </button>
@@ -140,7 +162,7 @@ export function CalendarView({
         </div>
       </div>
 
-      {view === "month" ? (
+      {desktopView === "month" ? (
         <MonthGrid
           anchor={anchorDate}
           now={now}
@@ -160,6 +182,7 @@ export function CalendarView({
           onOpen={(id) => setDialog({ kind: "event", id })}
         />
       )}
+      </div>
 
       {dialog?.kind === "new" && (
         <EventDialog key="new" draft={dialog.draft} members={members} meId={meId} onClose={closeDialog} />

@@ -1,10 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useImperativeHandle, useRef, useState, type Ref } from "react";
-import { Download, Loader2 } from "lucide-react";
+import { Copy, Download, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { useIsMobileLayout } from "@/components/mobile/use-mobile-layout";
+import { copyTextNative, useIsMobileApp } from "@/lib/mobile-bridge";
 import { downloadWhiteboardFile } from "@/lib/docs/whiteboard/canvas";
 import { parseWhiteboard, type WhiteboardElement, type WhiteboardPayload, type WhiteboardScene } from "@/lib/docs/whiteboard/content";
+import { randomId } from "@/lib/client-id";
 import { WhiteboardCanvas } from "./whiteboard-canvas";
 
 export type WhiteboardWorkspaceHandle = { flush: () => Promise<boolean> };
@@ -26,7 +30,7 @@ function loadDraft(payload: WhiteboardPayload): Draft | null {
     const sessionKey = "oa:whiteboard:tab";
     let tabId = sessionStorage.getItem(sessionKey);
     if (!tabId) {
-      tabId = crypto.randomUUID();
+      tabId = randomId();
       sessionStorage.setItem(sessionKey, tabId);
     }
     const key = `oa:whiteboard:${payload.userId}:${payload.id}:${tabId}`;
@@ -127,6 +131,8 @@ function WhiteboardSession({
     pending: null as Promise<boolean> | null,
   });
   const draftKey = draft?.key;
+  const mobile = useIsMobileLayout();
+  const mobileApp = useIsMobileApp();
 
   const rememberDraft = useCallback(() => {
     if (!draftKey) return;
@@ -213,6 +219,18 @@ function WhiteboardSession({
     `${title || "白板"}-草稿.json`,
   );
 
+  // App 的 WebView 不支持 blob 下载，改为把草稿 JSON 复制到剪贴板
+  const copyDraft = async () => {
+    const json = JSON.stringify({ version: 1, revision: sync.current.revision, elements }, null, 2);
+    const ok = await copyTextNative(json) ||
+      await navigator.clipboard?.writeText(json).then(() => true, () => false);
+    if (ok) toast.success("草稿已复制到剪贴板");
+    else toast.error("复制失败，草稿仍保留在本机");
+  };
+  const saveDraft = mobileApp ? () => { void copyDraft(); } : downloadDraft;
+  const saveDraftLabel = mobileApp ? "复制草稿" : "下载草稿";
+  const SaveDraftIcon = mobileApp ? Copy : Download;
+
   const loadLatest = () => {
     if (!window.confirm("载入最新白板会清除当前草稿。是否继续？")) return;
     sync.current.current = sync.current.confirmed;
@@ -222,21 +240,34 @@ function WhiteboardSession({
 
   return (
     <div className="space-y-2">
+      {mobile && status === "conflict" ? (
+        <div role="alert" className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+          <p className="font-medium">版本冲突：白板已被其他人更新</p>
+          <p className="mt-1 text-[13px] leading-5 text-amber-800">
+            你在本机的修改没有覆盖对方，已作为草稿保留在本机。可先{saveDraftLabel}留底，再载入最新版本继续编辑。
+          </p>
+          <div className="mt-2.5 flex gap-2">
+            <Button size="md" className="h-10 flex-1" onClick={saveDraft}><SaveDraftIcon className="size-4" />{saveDraftLabel}</Button>
+            <Button size="md" variant="primary" className="h-10 flex-1" onClick={loadLatest}>载入最新版本</Button>
+          </div>
+        </div>
+      ) : (
       <div className="flex min-h-6 flex-wrap items-center justify-end gap-2 text-xs text-ink-3" role="status">
         {status === "conflict" ? (
           <>
             <span className="text-amber-700">白板已在其他位置更新，当前草稿可下载。</span>
-            <Button size="sm" onClick={downloadDraft}><Download className="size-3.5" />下载草稿</Button>
+            <Button size="sm" onClick={saveDraft}><SaveDraftIcon className="size-3.5" />{saveDraftLabel}</Button>
             <Button size="sm" onClick={loadLatest}>载入最新版本</Button>
           </>
         ) : status === "error" ? (
           <>
             <span className="text-rose-700">{error}</span>
-            <Button size="sm" onClick={downloadDraft}>下载草稿</Button>
+            <Button size="sm" onClick={saveDraft}>{saveDraftLabel}</Button>
             <Button size="sm" onClick={() => { void flush(); }}>重试保存</Button>
           </>
         ) : canWrite ? labels[status] : "只读"}
       </div>
+      )}
       <WhiteboardCanvas
         boardId={payload.id}
         title={title}

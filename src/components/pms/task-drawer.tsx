@@ -6,6 +6,7 @@ import { Dialog as D } from "radix-ui";
 import {
   CalendarClock,
   CalendarDays,
+  ChevronLeft,
   CircleDot,
   Clock,
   CornerLeftUp,
@@ -20,7 +21,7 @@ import {
   UserRound,
   X,
 } from "lucide-react";
-import { toast } from "sonner";
+import { copyWithToast } from "@/lib/clipboard";
 import { Button, IconButton } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, UserChip } from "@/components/ui/avatar";
@@ -30,7 +31,7 @@ import { useAction } from "@/components/ui/use-action";
 import { InlineDate, InlineSelect, InlineText } from "@/components/crm/inline";
 import { formatDate, formatDateTime, formatNumber, formatRelative, toDateInput } from "@/lib/format";
 import { TASK_STATUS } from "@/lib/labels";
-import { asTagColor, isOverdue } from "@/lib/pms/utils";
+import { asTagColor, commentPlaceholder, isOverdue } from "@/lib/pms/utils";
 import { Badge } from "@/components/ui/badge";
 import type { UserOption } from "@/lib/crm/types";
 import { cn } from "@/lib/utils";
@@ -45,6 +46,8 @@ import {
   type TaskInput,
 } from "@/app/(app)/pms/actions";
 import { priorityOptions, statusOptions } from "@/components/pms/task-list";
+import { navigateBack } from "@/components/mobile/nav-stack";
+import { useIsMobileLayout } from "@/components/mobile/use-mobile-layout";
 
 type Person = { name: string; avatarColor: string };
 
@@ -91,6 +94,7 @@ function MentionText({ text, names }: { text: string; names: string[] }) {
 
 function CommentBox({ taskId, members, disabled }: { taskId: string; members: UserOption[]; disabled?: boolean }) {
   const ref = useRef<HTMLTextAreaElement>(null);
+  const mobile = useIsMobileLayout();
   const [value, setValue] = useState("");
   const [mention, setMention] = useState<{ start: number; query: string } | null>(null);
   const [active, setActive] = useState(0);
@@ -129,7 +133,7 @@ function CommentBox({ taskId, members, disabled }: { taskId: string; members: Us
         rows={3}
         value={value}
         disabled={disabled || pending}
-        placeholder="写评论，输入 @ 提及成员，Ctrl + Enter 发送"
+        placeholder={commentPlaceholder(mobile)}
         onChange={(e) => {
           setValue(e.target.value);
           detect(e.target.value, e.target.selectionStart);
@@ -231,22 +235,29 @@ export function TaskDrawer({
     router.replace(`${pathname}${qs ? `?${qs}` : ""}`, { scroll: false });
   };
 
+  const mobile = useIsMobileLayout();
+  // 手机上任务详情是全屏页：关闭 = 返回项目（与返回键、顶栏返回同一套层级）
+  const close = () => (mobile ? navigateBack(router) : go(null));
+
   const memberOptions = members.map((u) => ({ value: u.id, label: <UserChip name={u.name} color={u.avatarColor} /> }));
   const totalHours = t.timeLogs.reduce((s, l) => s + l.hours, 0);
   const subDone = t.subtasks.filter((s) => s.status === "DONE").length;
   const memberNames = members.map((m) => m.name);
 
   return (
-    <D.Root open onOpenChange={(v) => !v && go(null)}>
+    <D.Root open onOpenChange={(v) => !v && close()}>
       <D.Portal>
-        <D.Overlay className="fixed inset-0 z-40 bg-black/15 animate-fade-in" />
+        <D.Overlay className="fixed inset-0 z-40 bg-black/15 animate-fade-in max-md:hidden" />
         <D.Content
           aria-describedby={undefined}
-          className="fixed bottom-0 right-0 top-app z-40 flex w-[min(640px,100vw)] flex-col bg-white shadow-pop animate-fade-in focus:outline-none"
+          className="fixed bottom-0 right-0 top-app z-40 flex w-[min(640px,100vw)] flex-col bg-white shadow-pop animate-fade-in focus:outline-none max-md:top-0 max-md:w-full max-md:pt-[var(--sat)] max-md:pb-[var(--sab)] max-md:shadow-none"
           onOpenAutoFocus={(e) => e.preventDefault()}
         >
-          <div className="flex h-11 shrink-0 items-center justify-between gap-2 border-b border-line px-4">
+          <div className="flex h-11 shrink-0 items-center justify-between gap-2 border-b border-line px-4 max-md:px-2">
             <div className="flex min-w-0 items-center gap-1.5 text-sm text-ink-2">
+              <button type="button" onClick={close} className="shrink-0 rounded-md p-1 text-ink-2 active:bg-hover md:hidden" aria-label="返回">
+                <ChevronLeft className="size-6" />
+              </button>
               {t.parent && (
                 <>
                   <button onClick={() => go(t.parent!.id)} className="inline-flex min-w-0 items-center gap-1 rounded px-1 hover:bg-hover hover:text-ink">
@@ -263,8 +274,7 @@ export function TaskDrawer({
                 aria-label="复制链接"
                 title="复制链接"
                 onClick={() => {
-                  navigator.clipboard?.writeText(`${window.location.origin}/pms/projects/${projectId}?task=${t.id}`);
-                  toast.success("链接已复制");
+                  void copyWithToast(`${window.location.origin}/pms/projects/${projectId}?task=${t.id}`, "链接已复制");
                 }}
               >
                 <Link2 className="size-4" />
@@ -293,14 +303,14 @@ export function TaskDrawer({
                 </Menu>
               )}
               <D.Close asChild>
-                <IconButton aria-label="关闭">
+                <IconButton aria-label="关闭" className="max-md:hidden">
                   <X className="size-4" />
                 </IconButton>
               </D.Close>
             </div>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-16">
+          <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-16 max-md:px-4">
             <D.Title asChild>
               <div className="pt-5">
                 <InlineText
@@ -480,15 +490,15 @@ export function TaskDrawer({
               ) : null}
               {canEdit && (
                 <form
-                  className="mb-2 flex items-center gap-2"
+                  className="mb-2 flex items-center gap-2 max-md:flex-wrap"
                   onSubmit={(e) => {
                     e.preventDefault();
                     run(() => addTimeLog(t.id, log), { success: "工时已登记", onSuccess: () => setLog((l) => ({ ...l, hours: "", note: "" })) });
                   }}
                 >
                   <Input type="number" min={0.5} max={24} step={0.5} placeholder="小时" value={log.hours} onChange={(e) => setLog((l) => ({ ...l, hours: e.target.value }))} className="h-7 w-20 text-[13px]" />
-                  <Input type="date" value={log.date} onChange={(e) => setLog((l) => ({ ...l, date: e.target.value }))} className="h-7 w-36 text-[13px]" />
-                  <Input placeholder="工作内容（可选）" value={log.note} onChange={(e) => setLog((l) => ({ ...l, note: e.target.value }))} className="h-7 flex-1 text-[13px]" />
+                  <Input type="date" value={log.date} onChange={(e) => setLog((l) => ({ ...l, date: e.target.value }))} className="h-7 w-36 text-[13px] max-md:w-auto max-md:min-w-0 max-md:flex-1" />
+                  <Input placeholder="工作内容（可选）" value={log.note} onChange={(e) => setLog((l) => ({ ...l, note: e.target.value }))} className="h-7 min-w-0 flex-1 text-[13px] max-md:order-last max-md:basis-full" />
                   <Button type="submit" size="sm" disabled={!log.hours} loading={pending}>
                     登记
                   </Button>

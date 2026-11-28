@@ -4,10 +4,11 @@ import { useState } from "react";
 import type { UserOption } from "@/lib/crm/types";
 import { TaskBoard, type BoardTask, type TaskTypeOption } from "./task-board";
 import { TaskList } from "./task-list";
+import { MobileTaskList } from "./mobile-task-list";
 import { EMPTY_TASK_FILTER, isTaskFilterActive, matchTask, TaskFilterBar } from "./task-filter";
 import { TaskTypesDialog } from "./task-types-dialog";
 
-/** 项目的看板 / 列表视图与共用的筛选栏（切换视图时筛选条件保留） */
+/** 项目的看板 / 列表视图与共用的筛选栏（切换视图时筛选条件保留）；手机上统一为按状态分组的任务列表 */
 export function ProjectTasks({
   view,
   projectId,
@@ -19,7 +20,7 @@ export function ProjectTasks({
   canManage,
   meId,
 }: {
-  view: "board" | "list";
+  view: "board" | "list" | "mobile";
   projectId: string;
   tasks: BoardTask[];
   members: UserOption[];
@@ -46,11 +47,16 @@ export function ProjectTasks({
         summary={active ? `筛选出 ${matched.length} / ${tasks.length} 个任务` : `共 ${tasks.length} 个任务`}
         actions={canManage ? <TaskTypesDialog projectId={projectId} types={types} usage={usage} /> : undefined}
       />
-      {view === "board" ? (
-        <TaskBoard projectId={projectId} tasks={matched} canEdit={canEdit} />
-      ) : (
-        <TaskList tasks={tasks} visible={active ? new Set(matched.map((t) => t.id)) : null} members={members} types={types} canEdit={canEdit} />
+      {view !== "mobile" && (
+        <div className="max-md:hidden">
+          {view === "board" ? (
+            <TaskBoard projectId={projectId} tasks={matched} canEdit={canEdit} />
+          ) : (
+            <TaskList tasks={tasks} visible={active ? new Set(matched.map((t) => t.id)) : null} members={members} types={types} canEdit={canEdit} />
+          )}
+        </div>
       )}
+      <MobileTaskList tasks={matched} className="md:hidden" />
     </>
   );
 }

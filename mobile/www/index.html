@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>协作平台 OA</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f7f7f5;
+        --card: #ffffff;
+        --ink: #37352f;
+        --ink-2: #6b6a65;
+        --ink-3: #9b9a97;
+        --line: #e9e9e7;
+        --line-strong: #d9d9d6;
+        --brand: #2383e2;
+        --brand-soft: #e8f1fb;
+        --ok: #10b981;
+        --warn: #f59e0b;
+        --danger: #e03e3e;
+      }
+      * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+      [hidden] { display: none !important; }
+      html, body { margin: 0; min-height: 100%; }
+      body {
+        background: var(--bg);
+        color: var(--ink);
+        font: 15px/1.5 system-ui, "PingFang SC", "Microsoft YaHei", sans-serif;
+        padding: calc(env(safe-area-inset-top) + 28px) 16px calc(env(safe-area-inset-bottom) + 28px);
+      }
+      main { max-width: 480px; margin: 0 auto; }
+      .logo { width: 52px; height: 52px; border-radius: 14px; background: var(--ink); color: #fff; font-weight: 700; font-size: 20px; display: grid; place-items: center; margin: 8px auto 14px; }
+      h1 { font-size: 21px; text-align: center; margin: 0 0 4px; }
+      .lead { text-align: center; color: var(--ink-2); margin: 0 0 22px; font-size: 13.5px; }
+      .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-bottom: 12px; }
+      .card h2 { font-size: 14px; margin: 0 0 10px; color: var(--ink-2); font-weight: 600; }
+      label { display: block; font-size: 13px; font-weight: 600; color: var(--ink-2); margin-bottom: 6px; }
+      input[type="url"] { width: 100%; height: 44px; padding: 0 12px; border: 1px solid var(--line-strong); border-radius: 10px; font: inherit; color: var(--ink); background: #fff; outline: none; }
+      input[type="url"]:focus { border-color: var(--brand); box-shadow: 0 0 0 3px rgba(35, 131, 226, 0.15); }
+      .btn { height: 42px; border-radius: 10px; border: 1px solid var(--line-strong); background: #fff; font: inherit; color: var(--ink); padding: 0 14px; }
+      .btn:active { background: #f1f1ef; }
+      .btn.primary { background: var(--brand); border-color: var(--brand); color: #fff; font-weight: 600; }
+      .btn.block { width: 100%; margin-top: 12px; }
+      .btn:disabled { opacity: 0.55; }
+      .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+      .row .btn { flex: 1 1 auto; height: 38px; font-size: 13.5px; }
+      .msg { min-height: 20px; margin-top: 10px; font-size: 13px; color: var(--ink-2); word-break: break-all; }
+      .msg.error { color: var(--danger); }
+      .msg.ok { color: var(--ok); }
+      .recent-item { display: flex; align-items: center; gap: 8px; padding: 10px 4px; border-top: 1px solid var(--line); }
+      .recent-item:first-of-type { border-top: 0; }
+      .recent-item span { flex: 1; font: 13.5px ui-monospace, Consolas, monospace; word-break: break-all; }
+      .recent-item button { border: 0; background: none; color: var(--ink-3); font-size: 20px; width: 32px; height: 32px; }
+      .current { font: 13.5px ui-monospace, Consolas, monospace; word-break: break-all; }
+      .switch-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+      .switch-row .hint { font-size: 12.5px; color: var(--ink-3); margin-top: 2px; }
+      .switch { position: relative; width: 44px; height: 26px; flex: none; }
+      .switch input { position: absolute; inset: 0; opacity: 0; margin: 0; }
+      .switch span { position: absolute; inset: 0; border-radius: 999px; background: var(--line-strong); transition: background 0.15s; pointer-events: none; }
+      .switch span::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.2); transition: transform 0.15s; }
+      .switch input:checked + span { background: var(--brand); }
+      .switch input:checked + span::after { transform: translateX(18px); }
+      .status { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 13px; color: var(--ink-2); }
+      .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--ink-3); flex: none; }
+      .dot.connected { background: var(--ok); }
+      .dot.connecting { background: var(--warn); }
+      .dot.unauthorized, .dot.disconnected { background: var(--danger); }
+      dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0; font-size: 12.5px; }
+      dt { color: var(--ink-3); }
+      dd { margin: 0; word-break: break-all; }
+      .tips { font-size: 12.5px; color: var(--ink-2); margin: 0; padding-left: 18px; }
+      .tips li + li { margin-top: 4px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="logo">OA</div>
+      <h1>协作平台 OA</h1>
+      <p class="lead">连接到你所在团队的 OA 服务器</p>
+
+      <section class="card" id="current-card" hidden>
+        <h2>当前服务器</h2>
+        <div class="current" id="current-url"></div>
+        <button class="btn primary block" id="resume-btn" type="button">继续使用</button>
+      </section>
+
+      <form class="card" id="connect-form" autocomplete="off">
+        <label for="url-input">服务器地址</label>
+        <input id="url-input" type="url" inputmode="url" placeholder="http://192.168.1.20:3000 或 https://oa.example.com" />
+        <button class="btn primary block" id="connect-btn" type="submit">连接</button>
+        <div class="msg" id="connect-msg"></div>
+      </form>
+
+      <section class="card" id="recent-card" hidden>
+        <h2>最近使用</h2>
+        <div id="recent-list"></div>
+      </section>
+
+      <section class="card">
+        <div class="switch-row">
+          <div>
+            <div><b>后台接收新消息</b></div>
+            <div class="hint">常驻通知栏保持连接；国产手机还需允许自启动、关闭电池优化</div>
+          </div>
+          <label class="switch"><input id="keepalive-input" type="checkbox" /><span></span></label>
+        </div>
+        <div class="status"><span class="dot" id="svc-dot"></span><span id="svc-text">未启动</span></div>
+        <div class="row">
+          <button class="btn" type="button" id="perm-btn">通知权限</button>
+          <button class="btn" type="button" id="battery-btn">忽略电池优化</button>
+          <button class="btn" type="button" id="appsettings-btn">应用设置</button>
+        </div>
+        <div class="row">
+          <button class="btn" type="button" id="notify-btn">测试本地通知</button>
+        </div>
+        <div class="msg" id="svc-msg"></div>
+      </section>
+
+      <section class="card">
+        <h2>诊断信息</h2>
+        <dl id="diag"></dl>
+      </section>
+
+      <section class="card">
+        <h2>说明</h2>
+        <ul class="tips">
+          <li>局域网 HTTP 地址只在办公室网络内可用：消息、图片、文件都能正常收发，但流量未加密，也用不了音视频通话（摄像头、麦克风需要 HTTPS）。</li>
+          <li>正式使用请让管理员配置 HTTPS 域名（公共 CA 证书，例如 Let's Encrypt 自动续期；反向代理需开启 WebSocket）。App 不信任自签证书。</li>
+          <li>连接后如需更换服务器：长按桌面图标选择「切换服务器」。</li>
+        </ul>
+      </section>
+    </main>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+      const Plugins = (window.Capacitor && window.Capacitor.Plugins) || {};
+      const Shell = Plugins.OAShell;
+      const LocalNotifications = Plugins.LocalNotifications;
+      let state = null;
+
+      function setMsg(id, text, kind) {
+        $(id).textContent = text || "";
+        $(id).className = "msg" + (kind ? " " + kind : "");
+      }
+
+      function hostOf(url) {
+        try { return new URL(url).host; } catch { return url; }
+      }
+
+      const SERVICE_TEXT = {
+        stopped: "未启动",
+        connecting: "正在连接…",
+        connected: "已连接",
+        unauthorized: "未登录：连接服务器并登录后自动开始",
+        disconnected: "连接中断，正在重试",
+      };
+
+      function render() {
+        $("current-card").hidden = !state.serverUrl;
+        $("current-url").textContent = state.serverUrl || "";
+        if (!$("url-input").value && state.serverUrl) $("url-input").value = state.serverUrl;
+
+        const list = $("recent-list");
+        list.innerHTML = "";
+        $("recent-card").hidden = state.recent.length === 0;
+        for (const url of state.recent) {
+          const item = document.createElement("div");
+          item.className = "recent-item";
+          item.innerHTML = '<span></span><button type="button" aria-label="移除">×</button>';
+          item.querySelector("span").textContent = url;
+          item.querySelector("span").addEventListener("click", () => {
+            $("url-input").value = url;
+            connect(url);
+          });
+          item.querySelector("button").addEventListener("click", async () => {
+            await Shell.forget({ url });
+            await refresh();
+          });
+          list.appendChild(item);
+        }
+
+        $("keepalive-input").checked = !!state.keepAlive;
+        const svc = state.service || {};
+        $("svc-dot").className = "dot " + (svc.state || "stopped");
+        $("svc-text").textContent = (SERVICE_TEXT[svc.state] || svc.state || "未启动") + (svc.lastError && svc.state !== "connected" ? "（" + svc.lastError + "）" : "");
+
+        const rows = [
+          ["App", state.appVersion + (state.debug ? "（debug）" : "")],
+          ["Android", state.release + "（API " + state.sdkInt + "）"],
+          ["设备", state.manufacturer + " " + state.model],
+          ["WebView", (state.webViewPackage || "?") + " " + (state.webViewVersion || "")],
+          ["通知", state.notificationsEnabled ? "已允许" : "未允许"],
+          ["电池优化", state.ignoringBatteryOptimizations ? "已忽略" : "受限制"],
+          ["后台连接", (svc.connects || 0) + " 次连接 / " + (svc.events || 0) + " 个事件 / " + (svc.notified || 0) + " 条提醒"],
+        ];
+        $("diag").innerHTML = "";
+        for (const [k, v] of rows) {
+          const dt = document.createElement("dt");
+          dt.textContent = k;
+          const dd = document.createElement("dd");
+          dd.textContent = v;
+          $("diag").append(dt, dd);
+        }
+      }
+
+      async function refresh() {
+        state = await Shell.getState();
+        render();
+      }
+
+      async function connect(raw) {
+        const value = (raw || "").trim();
+        if (!value) return setMsg("connect-msg", "请输入服务器地址", "error");
+        $("connect-btn").disabled = true;
+        setMsg("connect-msg", "正在检测 " + hostOf(value) + "…");
+        try {
+          const res = await Shell.probe({ url: value });
+          if (!res.ok) {
+            const why = res.error || ("HTTP " + (res.loginStatus || res.healthStatus));
+            setMsg("connect-msg", "无法连接到 " + hostOf(res.url) + "：" + why + "。请确认地址、端口，且手机与服务器在同一网络。", "error");
+            return;
+          }
+          setMsg("connect-msg", "已连接（" + res.elapsedMs + " ms），正在打开…", "ok");
+          await Shell.connect({ url: res.url });
+        } catch (e) {
+          setMsg("connect-msg", String(e.message || e), "error");
+        } finally {
+          $("connect-btn").disabled = false;
+        }
+      }
+
+      $("connect-form").addEventListener("submit", (e) => {
+        e.preventDefault();
+        connect($("url-input").value);
+      });
+      $("resume-btn").addEventListener("click", () => Shell.connect({ url: state.serverUrl }));
+      $("keepalive-input").addEventListener("change", async (e) => {
+        await Shell.setKeepAlive({ enabled: e.target.checked });
+        setTimeout(refresh, 300);
+      });
+      $("perm-btn").addEventListener("click", async () => {
+        const res = await LocalNotifications.requestPermissions();
+        if (res.display !== "granted") await Shell.openNotificationSettings();
+        await refresh();
+      });
+      $("battery-btn").addEventListener("click", () => Shell.requestIgnoreBatteryOptimizations().catch((e) => setMsg("svc-msg", e.message, "error")));
+      $("appsettings-btn").addEventListener("click", () => Shell.openAppSettings());
+      $("notify-btn").addEventListener("click", async () => {
+        try {
+          const perm = await LocalNotifications.requestPermissions();
+          if (perm.display !== "granted") return setMsg("svc-msg", "通知权限未授予", "error");
+          await LocalNotifications.schedule({
+            notifications: [{ id: Date.now() % 100000, title: "协作平台 OA", body: "这是一条本地测试通知（5 秒后）", schedule: { at: new Date(Date.now() + 5000), allowWhileIdle: true }, isExactNotification: false }],
+          });
+          setMsg("svc-msg", "已安排，5 秒后弹出（可先切到后台）", "ok");
+        } catch (e) {
+          setMsg("svc-msg", "本地通知失败：" + (e.message || e), "error");
+        }
+      });
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") refresh().catch(() => {});
+      });
+
+      if (!Shell) {
+        document.querySelector("main").innerHTML = '<p class="msg error">未检测到原生桥接（OAShell），请在 App 内打开本页。</p>';
+      } else {
+        refresh().catch((e) => setMsg("connect-msg", "初始化失败：" + e, "error"));
+        setInterval(() => refresh().catch(() => {}), 3000);
+      }
+    </script>
+  </body>
+</html>

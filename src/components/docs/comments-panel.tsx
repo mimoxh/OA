@@ -276,7 +276,7 @@ export function CommentsPanel({
   );
 
   return (
-    <aside className="sticky top-11 flex h-[calc(100vh-var(--titlebar-h,0px)-2.75rem)] w-[330px] shrink-0 flex-col border-l border-line bg-white max-lg:fixed max-lg:top-app max-lg:bottom-0 max-lg:right-0 max-lg:z-40 max-lg:h-app max-lg:shadow-pop">
+    <aside className="sticky top-11 flex h-[calc(100vh-var(--titlebar-h,0px)-2.75rem)] w-[330px] shrink-0 flex-col border-l border-line bg-white max-lg:fixed max-lg:top-app max-lg:bottom-0 max-lg:right-0 max-lg:z-40 max-lg:h-app max-lg:shadow-pop max-md:top-0 max-md:h-auto max-md:w-full max-md:pt-[var(--sat)] max-md:pb-[var(--sab)]">
       <div className="flex h-10 shrink-0 items-center justify-between border-b border-line px-3">
         <span className="text-[13px] font-semibold text-ink">
           评论{open.length > 0 && <span className="ml-1 font-normal text-ink-3">{open.length} 待解决</span>}

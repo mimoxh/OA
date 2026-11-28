@@ -123,6 +123,7 @@ pnpm next dev --port 3103
 - P4 桌面客户端
   - `desktop/` 中的 Tauri v2 桌面壳支持系统托盘、单实例、原生通知和未读数同步。桌面命令限于已连接的工作空间。
   - 根目录执行 `pnpm install` 后可运行 `pnpm desktop:dev`、`pnpm desktop:check` 和 `pnpm desktop:build`。前置依赖见 `desktop/README.md`。
+- 手机后台推送（M2，`src/lib/push/`）：`im/service.ts` 写消息后 `queueMessagePush` 按 `rules.ts` 算出每个接收人的提醒（本人、机器人账号不提醒；免打扰只在 @ 时提醒；渠道 `dm` / `group` / `mention` / `system`），标记已读或本人发言时 `queuePushClear`；事务提交后由 `PUSH_DRIVERS` 选择的驱动投递（默认 `realtime`：并入同一批实时事件发 `push.notify` / `push.clear`；`jpush` / `getui` 为预留桩）。实时连接用 `?client=web|app|bg` 区分：`push.*` 只发给 `app`（App 内页面）和 `bg`（App 后台服务），`bg` 不计入在线状态、也不接收其他事件；`web` 连接上报 `activity`，用户 3 分钟内在电脑上操作过时 `push.notify` 带 `silent: true`（该判断只看本实例的连接）。断线补拉：`GET /api/push/missed?since=`（`missed.ts`）。详见 `docs/mobile/M2-report.md`。
 - `notify()` 除写 Notification 表外，还会派发 `notification.new` 并向对应机器人会话投递卡片；审批状态变化时 `approval.ts` 末尾调用 `refreshApprovalCards` 刷新所有相关卡片。
 - Webhook 机器人运行配置（`payload.metadata = { agent, model, effort }`）的选项来自同机 Orca：
   - `GET /api/im/webhooks/orca-catalog`（需登录，`?refresh=1` 强制刷新，服务端缓存 60s）合并 `orca agent installed --json` 与 Orca 模型目录 `agent-model-catalog.db`（`src/lib/im/orca-catalog.ts`）。模型目录以 better-sqlite3 只读打开（不用 `immutable`，数据主要在 `-wal` 中），只读打开失败时复制主库与 `-wal` 到临时目录读取；CLI / 目录缺失或格式变化时降级为静态预设并返回 `warnings`。
@@ -145,6 +146,7 @@ pnpm next dev --port 3103
 | `S3_BUCKET` / `S3_REGION` / `S3_ENDPOINT` / `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` / `S3_FORCE_PATH_STYLE` | 未设置 | S3 兼容对象存储配置（`STORAGE_DRIVER=s3`） |
 | `ICE_SERVERS` | Google 公共 STUN | 自定义 WebRTC STUN/TURN 列表（JSON 数组） |
 | `LIVEKIT_URL` / `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET` | 未设置 | 配置后可通过通话令牌接口显式申请 LiveKit SFU JWT |
+| `PUSH_DRIVERS` | `realtime` | 手机推送驱动，逗号分隔；`jpush` / `getui` 目前只是预留桩 |
 
 `docker-compose.yml` 提供可选的 `redis:7` 与 `postgres:16`（默认开发不需要启动）。
 
@@ -155,4 +157,4 @@ pnpm next dev --port 3103
 
 ### 事件类型（服务端 → 客户端）
 
-`message.new` / `message.updated` / `conversation.updated` / `conversation.removed` / `read` / `notification.new` / `typing` / `presence` / `presence.snapshot` / `call.invite` / `call.updated` / `call.ended` / `call.peers` / `call.join-rejected` / `call.peer-joined` / `call.peer-left` / `call.peer-media` / `call.signal`。主要载荷定义见 `src/lib/im/types.ts`。
+`message.new` / `message.updated` / `conversation.updated` / `conversation.removed` / `read` / `notification.new` / `typing` / `presence` / `presence.snapshot` / `call.invite` / `call.updated` / `call.ended` / `call.peers` / `call.join-rejected` / `call.peer-joined` / `call.peer-left` / `call.peer-media` / `call.signal`，以及只发给手机连接的 `push.hello` / `push.notify` / `push.clear`（`src/lib/push/types.ts`）。主要载荷定义见 `src/lib/im/types.ts`。

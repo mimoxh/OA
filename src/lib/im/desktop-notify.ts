@@ -1,6 +1,7 @@
 "use client";
 
 import { isDesktopApp, showDesktopAppNotification } from "@/lib/desktop-bridge";
+import { isMobileApp, showMobileNotification } from "@/lib/mobile-bridge";
 
 const STORAGE_KEY = "oa_im_desktop_notify";
 let swRegistered = false;
@@ -79,6 +80,11 @@ export async function registerServiceWorker() {
 }
 
 export function showDesktopNotification(opts: { title: string; body: string; url: string; tag?: string }) {
+  // 手机 App 内走原生本地通知（总开关与渠道由原生层管理，见 我的 → 通知）
+  if (isMobileApp()) {
+    void showMobileNotification({ title: opts.title, body: opts.body.slice(0, 120), path: opts.url, channel: "dm" });
+    return;
+  }
   if (getDesktopNotifyState() !== "on") return;
   if (isDesktopApp()) {
     void showDesktopAppNotification(opts.title, opts.body);

@@ -14,6 +14,7 @@ import { formatRelative } from "@/lib/format";
 import { getActiveUsers } from "@/lib/crm/queries";
 import { UrlSelect } from "@/components/crm/url-select";
 import { CustomerDialog } from "@/components/crm/customer-dialog";
+import { MobileCard, MobileList } from "@/components/mobile/mobile-list";
 
 const str = (v: string | string[] | undefined) => (typeof v === "string" ? v : "");
 
@@ -83,7 +84,27 @@ export default async function CustomersPage({ searchParams }: PageProps<"/crm/cu
         {total === 0 ? (
           <EmptyState icon="🏢" title="还没有客户" description="从新建第一个客户开始，记录联系人和跟进情况。" />
         ) : (
-          <Table>
+          <>
+          <MobileList empty="没有符合条件的客户">
+            {rows.map((c) => (
+              <MobileCard
+                key={c.id}
+                href={`/crm/customers/${c.id}`}
+                title={c.name}
+                badge={<StatusBadge map={CUSTOMER_STATUS} value={c.status} />}
+                subtitle={[c.code, c.industry].filter(Boolean).join(" · ")}
+                meta={
+                  <>
+                    <UserChip name={c.owner?.name} color={c.owner?.avatarColor} />
+                    <StatusBadge map={CUSTOMER_LEVEL} value={c.level as keyof typeof CUSTOMER_LEVEL} />
+                    <span className="text-ink-3">{c.followUps[0] ? `${formatRelative(c.followUps[0].createdAt)}跟进` : "未跟进"}</span>
+                  </>
+                }
+                aside={<span className="text-[13px] font-normal text-ink-2">商机 {c._count.opportunities}</span>}
+              />
+            ))}
+          </MobileList>
+          <Table className="max-md:hidden">
             <THead>
               <TR>
                 <TH>编码</TH>
@@ -124,6 +145,7 @@ export default async function CustomersPage({ searchParams }: PageProps<"/crm/cu
               ))}
             </TBody>
           </Table>
+          </>
         )}
       </Page>
     </>

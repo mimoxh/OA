@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="switch_server"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_server"
+        android:shortcutShortLabel="@string/shortcut_switch_server"
+        android:shortcutLongLabel="@string/shortcut_switch_server_long">
+        <intent
+            android:action="com.oa.suite.mobile.OPEN_LAUNCHER"
+            android:targetPackage="com.oa.suite.mobile"
+            android:targetClass="com.oa.suite.mobile.MainActivity" />
+    </shortcut>
+</shortcuts>

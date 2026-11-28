@@ -379,10 +379,12 @@ type PaintOptions = {
   selectedId?: string | null;
   editingId?: string | null;
   showResizeHandle?: boolean;
+  /** 缩放手柄半边长（屏幕像素），触屏时放大 */
+  handleSize?: number;
 };
 
 export function paintWhiteboard(ctx: CanvasRenderingContext2D, elements: WhiteboardElement[], options: PaintOptions) {
-  const { width, height, view, references, images, grid, selectedId, editingId, showResizeHandle } = options;
+  const { width, height, view, references, images, grid, selectedId, editingId, showResizeHandle, handleSize = 4 } = options;
   ctx.fillStyle = grid ? "#f8fafc" : "#ffffff";
   ctx.fillRect(0, 0, width, height);
   if (grid) {
@@ -418,8 +420,9 @@ export function paintWhiteboard(ctx: CanvasRenderingContext2D, elements: Whitebo
     if (showResizeHandle && selected.type !== "arrow") {
       ctx.setLineDash([]);
       ctx.fillStyle = "#ffffff";
-      ctx.fillRect(x + w - inset, y + h - inset, inset * 2, inset * 2);
-      ctx.strokeRect(x + w - inset, y + h - inset, inset * 2, inset * 2);
+      const half = handleSize / view.scale;
+      ctx.fillRect(x + w - half, y + h - half, half * 2, half * 2);
+      ctx.strokeRect(x + w - half, y + h - half, half * 2, half * 2);
     }
   }
   ctx.restore();

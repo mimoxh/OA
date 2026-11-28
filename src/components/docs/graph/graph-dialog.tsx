@@ -23,7 +23,7 @@ export function GraphDialog({ open, onOpenChange, docId, docTitle, spaceId }: Pr
     <D.Root open={open} onOpenChange={onOpenChange}>
       <D.Portal>
         <D.Overlay className="fixed inset-0 z-50 bg-black/35 animate-fade-in" />
-        <D.Content className="fixed left-1/2 top-1/2 z-50 flex h-[88vh] w-[94vw] max-w-[1440px] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-line bg-white shadow-pop animate-pop-in focus:outline-none">
+        <D.Content className="fixed left-1/2 top-1/2 z-50 flex h-[88vh] w-[94vw] max-w-[1440px] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-line bg-white shadow-pop animate-pop-in focus:outline-none max-md:top-[calc(50%+(var(--sat)-var(--sab))/2)] max-md:h-[min(88dvh,calc(100dvh-var(--sat)-var(--sab)-1.5rem))]">
           <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-2.5">
             <div className="flex min-w-0 items-center gap-2">
               <GitFork className="size-4 shrink-0 text-accent" />

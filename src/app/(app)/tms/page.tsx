@@ -10,6 +10,7 @@ import { Button, LinkButton } from "@/components/ui/button";
 import { Page, PageHeader, Section, StatCard, TopBar } from "@/components/ui/page";
 import { AssignDialog, DeliverButton, DepartButton, ReportButton } from "@/components/tms/transport-actions";
 import { TransportCard, boardOrderSelect } from "@/components/tms/transport-card";
+import { ModuleEntries } from "@/components/mobile/module-entries";
 
 export default async function DispatchBoardPage() {
   const user = await requireUser();
@@ -48,6 +49,7 @@ export default async function DispatchBoardPage() {
   return (
     <>
       <TopBar
+        mobileTitle="TMS 运输"
         crumbs={[{ label: "TMS 运输", href: "/tms" }, { label: "调度中心" }]}
         actions={
           <LinkButton href="/tms/orders" variant="ghost">
@@ -57,6 +59,7 @@ export default async function DispatchBoardPage() {
       />
       <Page wide>
         <PageHeader icon="🚚" title="调度中心" description="待调度运输单一键派车，实时查看在途与签收情况" />
+        <ModuleEntries moduleKey="tms" permissions={user.permissions} />
 
         {me && (
           <Section title={`我的运输任务（${myTasks.length}）`} className="mt-0 mb-8">

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { LayoutGrid, List, Plus } from "lucide-react";
+import { ChevronRight, LayoutGrid, ListTodo, List, Plus } from "lucide-react";
 import type { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { can, requireUser } from "@/lib/auth/dal";
@@ -93,9 +93,22 @@ export default async function ProjectsPage({ searchParams }: PageProps<"/pms">) 
 
   return (
     <>
-      <TopBar crumbs={[{ label: "PMS 项目", href: "/pms" }, { label: "全部项目" }]} actions={createButton} />
+      <TopBar mobileTitle="项目" crumbs={[{ label: "PMS 项目", href: "/pms" }, { label: "全部项目" }]} actions={createButton} />
       <Page wide>
-        <PageHeader icon="🗂️" title="项目" description={`共 ${total} 个项目，跟踪任务、里程碑与工时`} />
+        <div className="max-md:hidden">
+          <PageHeader icon="🗂️" title="项目" description={`共 ${total} 个项目，跟踪任务、里程碑与工时`} />
+        </div>
+        {/* 手机上 /pms 直接是项目列表（模块菜单不显示），「我的任务」入口放在列表上方 */}
+        <Link href="/pms/my-tasks" className="mb-3 mt-2 flex items-center gap-3 rounded-xl border border-line bg-white p-3 active:bg-sidebar md:hidden">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
+            <ListTodo className="size-5" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-medium text-ink">我的任务</span>
+            <span className="block truncate text-xs text-ink-3">共 {total} 个项目 · 查看分配给我的任务</span>
+          </span>
+          <ChevronRight className="size-4 text-ink-3" />
+        </Link>
         <div className="mb-4 flex flex-wrap items-center gap-2">
           <FilterPills
             options={Object.entries(PROJECT_STATUS).map(([k, v]) => ({
@@ -104,8 +117,8 @@ export default async function ProjectsPage({ searchParams }: PageProps<"/pms">) 
               count: statusCounts.find((s) => s.status === k)?._count._all ?? 0,
             }))}
           />
-          <SearchInput placeholder="搜索名称或编码" className="w-52" />
-          <div className="ml-auto">
+          <SearchInput placeholder="搜索名称或编码" className="w-52 max-md:w-full" />
+          <div className="ml-auto max-md:hidden">
             <ViewSwitch
               items={[
                 { href: hrefWith("/pms", sp, { view: null }), label: "卡片", icon: <LayoutGrid />, active: view === "card" },
@@ -117,8 +130,11 @@ export default async function ProjectsPage({ searchParams }: PageProps<"/pms">) 
 
         {total === 0 ? (
           <EmptyState icon="🗂️" title="还没有项目" description="新建一个项目，开始用看板管理任务。" action={createButton} />
-        ) : view === "card" ? (
-          projects.length === 0 ? (
+        ) : (
+          <>
+          {/* 手机上始终用卡片（表格放不下），桌面端按所选视图 */}
+          <div className={view === "card" ? undefined : "md:hidden"}>
+          {projects.length === 0 ? (
             <div className="rounded-lg border border-dashed border-line-strong py-10 text-center text-sm text-ink-3">
               没有符合条件的项目
               {filtered && (
@@ -166,8 +182,10 @@ export default async function ProjectsPage({ searchParams }: PageProps<"/pms">) 
                 );
               })}
             </div>
-          )
-        ) : (
+          )}
+          </div>
+          {view === "list" && (
+          <div className="max-md:hidden">
           <Table>
             <THead>
               <TR>
@@ -221,6 +239,9 @@ export default async function ProjectsPage({ searchParams }: PageProps<"/pms">) 
               })}
             </TBody>
           </Table>
+          </div>
+          )}
+          </>
         )}
       </Page>
     </>

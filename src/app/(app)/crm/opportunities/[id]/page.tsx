@@ -62,40 +62,52 @@ export default async function OpportunityDetailPage({ params }: PageProps<"/crm/
   for (const inv of inventories) (stock[inv.warehouseId] ??= {})[inv.productId] = inv.quantity - inv.reservedQty;
   const primary = opp.customer.contacts.find((c) => c.isPrimary) ?? opp.customer.contacts[0];
 
+  const followUpButton = canEdit && (
+    <FollowUpDialog
+      customerId={opp.customerId}
+      opportunities={[{ id: opp.id, name: opp.name, customerId: opp.customerId }]}
+      defaultOpportunityId={opp.id}
+      trigger={
+        <Button size="sm">
+          <MessageSquarePlus className="size-3.5" />
+          新增跟进
+        </Button>
+      }
+    />
+  );
+  const convertButton = canConvert && opp.stage !== "LOST" && (
+    <ConvertOrderDialog
+      opportunity={{ id: opp.id, name: opp.name, amount: opp.amount }}
+      defaults={{
+        shippingAddress: opp.customer.address ?? "",
+        consignee: primary?.name ?? opp.customer.name,
+        consigneePhone: primary?.phone ?? opp.customer.phone ?? "",
+      }}
+      warehouses={warehouses}
+      products={products}
+      stock={stock}
+    />
+  );
+  const bizGroupButton = <BizGroupButton bizType="opportunity" bizId={opp.id} existingConversationId={bizGroup?.id} />;
+
   return (
     <>
       <TopBar
         crumbs={[{ label: "CRM 客户", href: "/crm" }, { label: "商机", href: "/crm/opportunities" }, { label: opp.name }]}
+        mobileActions={followUpButton}
+        mobileMore={
+          <>
+            {bizGroupButton}
+            {convertButton}
+            {canEdit && <DeleteOpportunityButton id={opp.id} name={opp.name} />}
+          </>
+        }
         actions={
           <>
-            <BizGroupButton bizType="opportunity" bizId={opp.id} existingConversationId={bizGroup?.id} />
-            {canEdit && (
-              <FollowUpDialog
-                customerId={opp.customerId}
-                opportunities={[{ id: opp.id, name: opp.name, customerId: opp.customerId }]}
-                defaultOpportunityId={opp.id}
-                trigger={
-                  <Button size="sm">
-                    <MessageSquarePlus className="size-3.5" />
-                    新增跟进
-                  </Button>
-                }
-              />
-            )}
+            {bizGroupButton}
+            {followUpButton}
             {canEdit && <DeleteOpportunityButton id={opp.id} name={opp.name} />}
-            {canConvert && opp.stage !== "LOST" && (
-              <ConvertOrderDialog
-                opportunity={{ id: opp.id, name: opp.name, amount: opp.amount }}
-                defaults={{
-                  shippingAddress: opp.customer.address ?? "",
-                  consignee: primary?.name ?? opp.customer.name,
-                  consigneePhone: primary?.phone ?? opp.customer.phone ?? "",
-                }}
-                warehouses={warehouses}
-                products={products}
-                stock={stock}
-              />
-            )}
+            {convertButton}
           </>
         }
       />

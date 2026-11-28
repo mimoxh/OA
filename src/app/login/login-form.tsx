@@ -1,12 +1,17 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/input";
+import { isMobileApp, setMobileSessionUser } from "@/lib/mobile-bridge";
 import { login } from "./actions";
 
 export function LoginForm({ next, demo }: { next: string; demo: boolean }) {
   const [state, action, pending] = useActionState(login, undefined);
+  // 能看到登录页说明当前没有有效会话（会话过期、在别处退出）：App 的后台推送随之停止并撤销旧账号的提醒
+  useEffect(() => {
+    if (isMobileApp()) void setMobileSessionUser(null);
+  }, []);
   return (
     <form action={action} className="space-y-3 rounded-lg border border-line bg-white p-5 shadow-card">
       <input type="hidden" name="next" value={next} />

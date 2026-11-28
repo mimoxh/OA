@@ -1,0 +1,6 @@
+bot-bottom.png: 0 px (y 99999--1, x 99999--1)
+bot-up1.png: 0 px (y 99999--1, x 99999--1)
+bot-up2.png: 0 px (y 99999--1, x 99999--1)
+dm-bottom.png: 7 px (y 14-46, x 38-80)
+dm-up1.png: 7 px (y 14-46, x 38-80)
+dm-up2.png: 7 px (y 14-46, x 38-80)

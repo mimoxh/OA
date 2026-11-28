@@ -20,6 +20,7 @@ RUN corepack enable && corepack prepare "pnpm@${PNPM_VERSION}" --activate
 # 先复制锁文件与 Prisma Schema 以复用依赖层缓存
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml prisma.config.ts ./
 COPY desktop/package.json ./desktop/package.json
+COPY mobile/package.json ./mobile/package.json
 COPY prisma/schema.prisma ./prisma/schema.prisma
 
 # Prisma 7 postinstall（prisma generate）会读取 prisma.config.ts 中的 DATABASE_URL
@@ -46,6 +47,7 @@ ENV NODE_ENV=production \
     ATTACHMENT_DIR=/data/attachments \
     STORAGE_DRIVER=local \
     STORAGE_LOCAL_DIR=/data/uploads \
+    MOBILE_RELEASE_DIR=/data/mobile \
     COLLAB_PUBLIC_URL=/collab \
     REALTIME_PUBLIC_URL=/rt
 
@@ -55,9 +57,10 @@ COPY scripts/docker/entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 # 清除 Windows 检出可能引入的 CRLF 并预建挂载目录
 RUN sed -i 's/\r$//' /usr/local/bin/docker-entrypoint.sh \
   && chmod +x /usr/local/bin/docker-entrypoint.sh \
-  && mkdir -p /data/db /data/attachments /data/uploads
+  && mkdir -p /data/db /data/attachments /data/uploads /data/mobile
 
 EXPOSE 3000
+# /data/mobile（Android 安装包与 release.json）不打进镜像，也不声明为匿名卷：需要手机下载页时由 compose 挂载宿主机目录
 VOLUME ["/data/db", "/data/attachments", "/data/uploads"]
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \

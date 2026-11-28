@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
+import { copyWithToast } from "@/lib/clipboard";
 import { ArrowLeft, ArrowRight, Copy, FolderOpen, Monitor, RotateCw, Search, Server, Settings2, Wifi, WifiOff } from "lucide-react";
 import { Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger } from "@/components/ui/menu";
 import { openCommandPalette } from "@/components/shell/command-palette";
@@ -82,12 +82,7 @@ function WorkspaceStatus() {
   const dot = isServer && server?.status === "error" ? "bg-danger" : connected ? "bg-emerald-500" : "bg-amber-400";
 
   const copy = async (url: string) => {
-    try {
-      await navigator.clipboard.writeText(url);
-      toast.success("已复制访问地址");
-    } catch {
-      toast.error("复制失败");
-    }
+    await copyWithToast(url, "已复制访问地址");
   };
 
   return (

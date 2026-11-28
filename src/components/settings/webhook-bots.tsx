@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
+import { copyWithToast } from "@/lib/clipboard";
 import { Activity, Bot, ChevronDown, Copy, KeyRound, MessageSquare, Pencil, Plus, Power, SquareTerminal, Trash2 } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -274,10 +275,7 @@ function RunConfigSummary({ bot }: { bot: WebhookBotRow }) {
 }
 
 function copy(text: string, label = "已复制") {
-  navigator.clipboard.writeText(text).then(
-    () => toast.success(label),
-    () => toast.error("复制失败，请手动选择复制"),
-  );
+  void copyWithToast(text, label);
 }
 
 function BotFields({ form, setForm, editing }: { form: FormState; setForm: (f: FormState) => void; editing?: WebhookBotRow }) {

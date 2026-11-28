@@ -1,0 +1,2 @@
+calendar-month.png: 0 px (y 99999--1, x 99999--1)
+event-detail.png: 0 px (y 99999--1, x 99999--1)

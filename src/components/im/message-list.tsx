@@ -89,6 +89,28 @@ export function MessageList({
     };
   }, [conv.id, focusSeq, onClearFocusSeq]);
 
+  // 软键盘弹出 / 收起会改变列表高度：原本停在底部时继续贴底，避免最新消息被输入框挡住
+  useEffect(() => {
+    const box = boxRef.current;
+    if (!box || typeof ResizeObserver === "undefined") return;
+    let lastHeight = box.clientHeight;
+    let atBottom = true;
+    const onScroll = () => {
+      atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 24;
+    };
+    const ro = new ResizeObserver(() => {
+      const h = box.clientHeight;
+      if (h !== lastHeight && atBottom) box.scrollTop = box.scrollHeight;
+      lastHeight = h;
+    });
+    box.addEventListener("scroll", onScroll, { passive: true });
+    ro.observe(box);
+    return () => {
+      ro.disconnect();
+      box.removeEventListener("scroll", onScroll);
+    };
+  }, []);
+
   const items = ms?.items;
   const pending = ms?.pending;
   const hasNewer = Boolean(ms?.hasNewer);

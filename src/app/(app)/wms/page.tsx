@@ -9,11 +9,12 @@ import { LinkButton } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/badge";
 import { Card, EmptyState, Page, PageHeader, Section, StatCard, TopBar } from "@/components/ui/page";
 import { MovementTable, movementInclude } from "@/components/wms/movement-table";
+import { ModuleEntries } from "@/components/mobile/module-entries";
 
 const BAR_COLORS = ["#9065b0", "#2383e2", "#448361", "#cb912f", "#d44c47", "#337ea9"];
 
 export default async function WmsOverviewPage() {
-  await requireUser();
+  const user = await requireUser();
   const today = startOfDay(new Date());
   const [inventories, products, warehouses, pendingIn, pendingOut, todayMoves, recent] = await Promise.all([
     db.inventory.findMany({ include: { product: { select: { cost: true } } } }),
@@ -56,6 +57,7 @@ export default async function WmsOverviewPage() {
   return (
     <>
       <TopBar
+        mobileTitle="WMS 仓储"
         crumbs={[{ label: "WMS 仓储", href: "/wms" }, { label: "仓储概览" }]}
         actions={
           <>
@@ -70,6 +72,7 @@ export default async function WmsOverviewPage() {
       />
       <Page>
         <PageHeader icon="🏭" title="仓储概览" description="库存总览、待处理出入库与最新库存动态" />
+        <ModuleEntries moduleKey="wms" permissions={user.permissions} />
 
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <StatCard

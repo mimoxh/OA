@@ -8,6 +8,7 @@ import { LinkButton } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { FlowToggle } from "./flow-toggle";
+import { MobileCard, MobileList } from "@/components/mobile/mobile-list";
 
 export default async function FlowsPage() {
   const flows = await db.approvalFlow.findMany({
@@ -27,7 +28,35 @@ export default async function FlowsPage() {
       />
       <Page wide>
         <PageHeader icon="🧭" title="流程管理" description="设计审批表单与审批节点；停用后将不再出现在「发起审批」中" />
-        <Table>
+        <MobileList>
+          {flows.map((f) => {
+            const steps = parseSteps(f.steps);
+            return (
+              <MobileCard
+                key={f.id}
+                icon={<span className="flex size-8 items-center justify-center rounded-md bg-hover text-lg">{f.icon}</span>}
+                title={
+                  <Link href={`/oa/flows/${f.id}`} className="flex flex-wrap items-center gap-1.5">
+                    {f.name}
+                    {f.system && <Badge color="purple">业务单据</Badge>}
+                  </Link>
+                }
+                badge={<FlowToggle id={f.id} enabled={f.enabled} name={f.name} />}
+                subtitle={`${f.category} · ${f._count.instances} 单 · ${formatRelative(f.updatedAt)}更新`}
+              >
+                <div className="mt-2 flex flex-wrap items-center gap-1 text-[13px] text-ink-2">
+                  {steps.map((s, i) => (
+                    <span key={i} className="inline-flex items-center gap-1">
+                      {i > 0 && <ArrowRight className="size-3 text-ink-3" />}
+                      {s.name}
+                    </span>
+                  ))}
+                </div>
+              </MobileCard>
+            );
+          })}
+        </MobileList>
+        <Table className="max-md:hidden">
           <THead>
             <TR>
               <TH>流程</TH>

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { copyWithToast } from "@/lib/clipboard";
 import type { Editor } from "@tiptap/react";
 import type { Range } from "@tiptap/core";
 import {
@@ -64,6 +65,7 @@ import { useCollab } from "./editor/use-collab";
 import { RowPropertiesBar, type RowPropertiesContext } from "./database/row-properties-bar";
 import type { CommentThread, Member } from "./types";
 import { ShareToChatButton } from "@/components/im/share-to-chat";
+import { useIsMobileLayout } from "@/components/mobile/use-mobile-layout";
 
 export type DocViewProps = {
   doc: {
@@ -134,12 +136,15 @@ export function DocView({
   threads,
   members,
   me,
-  canWrite,
+  canWrite: canWriteProp,
   canAdmin,
   favorite: favorite0,
   focusComment,
 }: DocViewProps) {
   const router = useRouter();
+  // 手机端文档只读：不出现编辑器光标、模板、新建子页面、回收站等写操作
+  const mobile = useIsMobileLayout();
+  const canWrite = canWriteProp && !mobile;
   const { run, pending } = useAction();
   const [title, setTitle] = useState(doc.title);
   const [icon, setIcon] = useState(doc.icon);
@@ -419,10 +424,7 @@ export function DocView({
   };
 
   const copyLink = () => {
-    navigator.clipboard.writeText(`${location.origin}/docs/${doc.id}`).then(
-      () => toast.success("链接已复制"),
-      () => toast.error("复制失败"),
-    );
+    void copyWithToast(`${location.origin}/docs/${doc.id}`, "链接已复制");
   };
 
   const mentionItems = useMemo(() => members.map((m) => ({ id: m.id, label: m.name, color: m.avatarColor, title: m.title })), [members]);
@@ -451,9 +453,13 @@ export function DocView({
               className="flex h-7 items-center gap-1.5 rounded px-1.5 text-xs text-ink-3"
             >
               {status === "disconnected" ? <WifiOff className="size-3.5 text-danger/70" /> : <Wifi className={cn("size-3.5", status === "connected" ? "text-tag-green-ink/80" : "text-ink-3")} />}
-              {STATUS_LABEL[status]}
+              <span className="max-md:hidden">{STATUS_LABEL[status]}</span>
             </span>
-            {peers.length > 0 && <AvatarStack users={peers.map((p) => ({ name: p.name, avatarColor: p.color }))} max={5} />}
+            {peers.length > 0 && (
+              <span className="contents max-md:hidden">
+                <AvatarStack users={peers.map((p) => ({ name: p.name, avatarColor: p.color }))} max={5} />
+              </span>
+            )}
             <IconButton
               title={favorite ? "取消收藏" : "收藏"}
               onClick={() =>
@@ -491,10 +497,10 @@ export function DocView({
                 {openCount > 0 && <span className="absolute -right-1.5 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-accent px-0.5 text-[9px] font-semibold text-white">{openCount}</span>}
               </span>
             </IconButton>
-            <IconButton title="关系图" onClick={() => setGraphOpen(true)}>
+            <IconButton title="关系图" className="max-md:hidden" onClick={() => setGraphOpen(true)}>
               <GitFork className="size-4" />
             </IconButton>
-            <IconButton title="历史版本" onClick={() => setHistoryOpen(true)}>
+            <IconButton title="历史版本" className="max-md:hidden" onClick={() => setHistoryOpen(true)}>
               <History className="size-4" />
             </IconButton>
             <Menu>
@@ -567,7 +573,7 @@ export function DocView({
       <div className="flex min-h-0 flex-1 items-start">
         <div className="min-w-0 flex-1 pb-24">
           {coverCss && (
-            <div className="group/cover relative h-44" style={{ background: coverCss }}>
+            <div className="group/cover relative h-44 max-md:h-28" style={{ background: coverCss }}>
               {canWrite && (
                 <div className="absolute bottom-3 right-6 flex gap-1 opacity-0 transition-opacity group-hover/cover:opacity-100">
                   <Popover>
@@ -585,13 +591,13 @@ export function DocView({
             </div>
           )}
 
-          <div className={cn("mx-auto w-full px-6 sm:px-10", fullWidth ? "max-w-[1400px] lg:px-16" : "max-w-[800px]")}>
-            <div className={cn("group/head relative z-10", coverCss ? "-mt-10" : "pt-12")}>
+          <div className={cn("mx-auto w-full px-6 sm:px-10 max-md:px-4", fullWidth ? "max-w-[1400px] lg:px-16" : "max-w-[800px]")}>
+            <div className={cn("group/head relative z-10", coverCss ? "-mt-10" : "pt-12 max-md:pt-5")}>
               <EmojiPicker onSelect={onPickIcon} onRemove={canWrite && icon ? onRemoveIcon : undefined}>
                 <button
                   type="button"
                   disabled={!canWrite}
-                  className={cn("rounded-lg text-[64px] leading-none transition-colors", canWrite && "hover:bg-hover", !icon && "p-2 text-4xl text-ink-3")}
+                  className={cn("rounded-lg text-[64px] leading-none transition-colors max-md:text-[44px]", canWrite && "hover:bg-hover", !icon && "p-2 text-4xl text-ink-3")}
                   title={canWrite ? "更换图标" : undefined}
                 >
                   {icon || (canWrite ? "☺" : "📄")}
@@ -637,7 +643,7 @@ export function DocView({
               onBlur={flushTitle}
               placeholder="无标题"
               readOnly={!canWrite}
-              className="doc-title mt-2 w-full resize-none overflow-hidden bg-transparent text-[38px] font-bold leading-tight tracking-tight text-ink outline-none placeholder:text-ink-3/60"
+              className="doc-title mt-2 w-full resize-none overflow-hidden bg-transparent text-[38px] font-bold leading-tight tracking-tight text-ink outline-none placeholder:text-ink-3/60 max-md:text-[26px]"
             />
             <div className="mt-1 flex items-center gap-1.5 text-[13px] text-ink-3">
               {doc.updatedBy && (
@@ -647,7 +653,7 @@ export function DocView({
                 </>
               )}
               <span>最后编辑于 {formatRelative(doc.updatedAt)}</span>
-              {!canWrite && <span className="rounded bg-hover px-1.5 py-0.5 text-[11px]">只读</span>}
+              {!canWrite && <span className="rounded bg-hover px-1.5 py-0.5 text-[11px]">{canWriteProp ? "手机端只读" : "只读"}</span>}
             </div>
 
             {rowProperties && <RowPropertiesBar initial={rowProperties} />}

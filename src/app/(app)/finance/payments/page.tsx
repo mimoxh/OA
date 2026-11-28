@@ -11,6 +11,7 @@ import { FilterPills, SearchInput } from "@/components/ui/common";
 import { Page, PageHeader, StatCard, TopBar } from "@/components/ui/page";
 import { Table, TBody, TD, TEmpty, TH, THead, TR } from "@/components/ui/table";
 import { DateRangeFilter } from "@/components/finance/date-range-filter";
+import { MobileCard, MobileList } from "@/components/mobile/mobile-list";
 
 export default async function PaymentsPage({ searchParams }: PageProps<"/finance/payments">) {
   await requireUser();
@@ -47,7 +48,7 @@ export default async function PaymentsPage({ searchParams }: PageProps<"/finance
       <TopBar crumbs={[{ label: "财务", href: "/finance" }, { label: "收付款记录" }]} />
       <Page wide>
         <PageHeader icon="💳" title="收付款记录" description="在发票详情中登记收付款，系统自动生成记账凭证" />
-        <div className="mb-5 grid grid-cols-3 gap-3">
+        <div className="mb-5 grid grid-cols-3 gap-3 max-md:grid-cols-1 max-md:gap-2">
           <StatCard label="收款合计" value={<span className="text-[#448361]">{formatMoney(inflow)}</span>} hint="当前筛选条件" />
           <StatCard label="付款合计" value={<span className="text-[#d9730d]">{formatMoney(outflow)}</span>} hint="当前筛选条件" />
           <StatCard label="净流入" value={formatMoney(inflow - outflow)} />
@@ -65,7 +66,36 @@ export default async function PaymentsPage({ searchParams }: PageProps<"/finance
           </div>
           <SearchInput placeholder="搜索流水号、发票、往来单位…" />
         </div>
-        <Table>
+        <MobileList empty="没有符合条件的收付款记录">
+          {payments.map((p) => {
+            const recv = p.invoice.type === "RECEIVABLE";
+            return (
+              <MobileCard
+                key={p.id}
+                href={`/finance/invoices/${p.invoiceId}`}
+                title={p.invoice.customer?.name ?? p.invoice.supplier?.name ?? "—"}
+                badge={
+                  <StatusBadge map={{ RECEIVABLE: { ...INVOICE_TYPE.RECEIVABLE, label: "收款" }, PAYABLE: { ...INVOICE_TYPE.PAYABLE, label: "付款" } }} value={p.invoice.type} />
+                }
+                subtitle={`${p.no} · 发票 ${p.invoice.no}`}
+                meta={
+                  <>
+                    <span>{formatDate(p.paidAt)}</span>
+                    <span>{p.method}</span>
+                    <UserChip name={p.createdBy.name} color={p.createdBy.avatarColor} />
+                  </>
+                }
+                aside={
+                  <span className={recv ? "text-[#448361]" : "text-[#d9730d]"}>
+                    {recv ? "+" : "−"}
+                    {formatMoney(p.amount)}
+                  </span>
+                }
+              />
+            );
+          })}
+        </MobileList>
+        <Table className="max-md:hidden">
           <THead>
             <TR>
               <TH>流水号</TH>

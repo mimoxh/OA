@@ -9,7 +9,7 @@ import {
   CheckCheck,
   Copy,
   Download,
-  File as FileIcon,
+  Eye,
   MessageSquareReply,
   MessageSquareText,
   Pencil,
@@ -17,6 +17,7 @@ import {
   Undo2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { copyText } from "@/lib/clipboard";
 import { Avatar } from "@/components/ui/avatar";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/menu";
@@ -32,6 +33,12 @@ import { MessageContent } from "./content-render";
 import { CardView } from "./card-view";
 import { RefPreviewCard } from "./ref-preview";
 import { convTime } from "./time";
+import { ActionSheet, type SheetAction } from "@/components/mobile/action-sheet";
+import { ImageViewer } from "@/components/mobile/image-viewer";
+import { FilePreviewDialog, filePreviewMode } from "@/components/file-preview/file-preview-dialog";
+import { FileKindIcon } from "@/components/file-preview/file-kind-icon";
+import { useIsMobileLayout } from "@/components/mobile/use-mobile-layout";
+import { useLongPress } from "@/components/mobile/use-long-press";
 
 const RECALL_MS = 2 * 60 * 1000;
 const EDIT_MS = 24 * 60 * 60 * 1000;
@@ -41,8 +48,18 @@ function scrollToMsg(id: string) {
   document.getElementById(`msg-${id}`)?.scrollIntoView({ block: "center", behavior: "smooth" });
 }
 
+function downloadUrl(url: string, filename: string) {
+  const a = document.createElement("a");
+  a.href = `${url}?download=1`;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
 function ImageMessage({ img }: { img: ImageContent }) {
   const [open, setOpen] = useState(false);
+  const mobile = useIsMobileLayout();
   return (
     <>
       <button
@@ -55,50 +72,90 @@ function ImageMessage({ img }: { img: ImageContent }) {
           src={img.url}
           alt={img.filename}
           loading="lazy"
-          className="max-h-[280px] max-w-[320px] object-contain"
+          className="max-h-[280px] max-w-[320px] object-contain max-md:max-h-[240px] max-md:max-w-[60vw]"
         />
       </button>
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent
-          size="lg"
-          title={img.filename}
-          footer={
-            <a
-              href={`${img.url}?download=1`}
-              download={img.filename}
-              className="inline-flex h-8 items-center gap-1.5 rounded-md bg-accent px-3 text-[13px] font-medium text-white hover:bg-accent-hover"
-            >
-              <Download className="size-3.5" />
-              下载原图（{formatFileSize(img.size)}）
-            </a>
-          }
-        >
-          <div className="flex max-h-[70vh] items-center justify-center overflow-auto rounded-md bg-sidebar p-2">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={img.url} alt={img.filename} className="max-h-[65vh] max-w-full object-contain" />
-          </div>
-        </DialogContent>
-      </Dialog>
+      {mobile ? (
+        <ImageViewer
+          open={open}
+          onOpenChange={setOpen}
+          src={img.url}
+          alt={img.filename}
+          downloadHref={`${img.url}?download=1`}
+          downloadName={img.filename}
+          downloadLabel={`下载原图（${formatFileSize(img.size)}）`}
+        />
+      ) : (
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogContent
+            size="lg"
+            title={img.filename}
+            footer={
+              <a
+                href={`${img.url}?download=1`}
+                download={img.filename}
+                className="inline-flex h-8 items-center gap-1.5 rounded-md bg-accent px-3 text-[13px] font-medium text-white hover:bg-accent-hover"
+              >
+                <Download className="size-3.5" />
+                下载原图（{formatFileSize(img.size)}）
+              </a>
+            }
+          >
+            <div className="flex max-h-[70vh] items-center justify-center overflow-auto rounded-md bg-sidebar p-2">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={img.url} alt={img.filename} className="max-h-[65vh] max-w-full object-contain" />
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </>
   );
 }
 
 function FileMessage({ file }: { file: FileContent }) {
-  return (
-    <a
-      href={`${file.url}?download=1`}
-      download={file.filename}
-      className="flex w-[280px] max-w-[75vw] items-center gap-3 rounded-lg border border-line bg-white p-3 shadow-card transition-shadow hover:shadow-pop"
-    >
+  const [preview, setPreview] = useState(false);
+  // 能预览的文件（PDF、Office、表格、文本、图片、音视频、ZIP）点开页内预览，顶栏可下载；
+  // 旧版 Office、超大文件打开后说明原因并提供下载；未知类型仍直接下载
+  const mode = filePreviewMode({ fileName: file.filename, mimeType: file.mimeType, size: file.size });
+  const open = mode !== "download";
+  const body = (
+    <>
       <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
-        <FileIcon className="size-5" />
+        <FileKindIcon fileName={file.filename} mimeType={file.mimeType} className="size-5" />
       </span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-[13.5px] font-medium text-ink">{file.filename}</span>
-        <span className="mt-0.5 block text-xs text-ink-3">{formatFileSize(file.size)}</span>
+        <span className="mt-0.5 block text-xs text-ink-3">
+          {formatFileSize(file.size)}
+          {mode === "preview" && " · 点击预览"}
+        </span>
       </span>
-      <Download className="size-4 shrink-0 text-ink-3" />
-    </a>
+      {mode === "preview" ? <Eye className="size-4 shrink-0 text-ink-3" /> : <Download className="size-4 shrink-0 text-ink-3" />}
+    </>
+  );
+  // 手机上 75vw 比气泡列宽（88% − 头像列）大，窄屏时会盖住右侧自己的头像，所以改为跟随气泡宽度
+  const cls =
+    "flex w-[280px] max-w-[75vw] items-center gap-3 rounded-lg border border-line bg-white p-3 text-left shadow-card transition-shadow hover:shadow-pop max-md:max-w-full";
+  if (!open) {
+    return (
+      <a href={`${file.url}?download=1`} download={file.filename} className={cls} data-file-message="download">
+        {body}
+      </a>
+    );
+  }
+  return (
+    <>
+      <button type="button" onClick={() => setPreview(true)} className={cls} data-file-message={mode}>
+        {body}
+      </button>
+      {preview && (
+        <FilePreviewDialog
+          open
+          onOpenChange={setPreview}
+          file={{ url: file.url, fileName: file.filename, mimeType: file.mimeType, size: file.size, downloadHref: `${file.url}?download=1` }}
+        />
+      )}
+    </>
   );
 }
 
@@ -406,6 +463,8 @@ export function MessageItem({
   const { run } = useAction();
   const [copied, setCopied] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const longPress = useLongPress(() => setSheetOpen(true));
 
   if (msg.type === "SYSTEM") {
     return (
@@ -435,17 +494,48 @@ export function MessageItem({
   const canThread = !inThread && conv.type !== "BOT" && !!onOpenThread;
 
   const copy = () => {
-    void navigator.clipboard.writeText(msg.text).then(() => {
+    void copyText(msg.text).then((ok) => {
+      if (!ok) {
+        toast.error("当前连接不允许写入剪贴板，请长按文字手动复制");
+        return;
+      }
       setCopied(true);
       setTimeout(() => setCopied(false), 1200);
     });
   };
+  const startEdit = () => {
+    if (Date.now() - new Date(msg.createdAt).getTime() >= EDIT_MS) {
+      toast.error("发送超过 24 小时，无法编辑");
+      return;
+    }
+    setEditing(true);
+  };
+  const recall = () => {
+    if (Date.now() - new Date(msg.createdAt).getTime() >= RECALL_MS) {
+      toast.error("发送超过 2 分钟，无法撤回");
+      return;
+    }
+    void run(() => recallMessageAction(msg.id), { refresh: false });
+  };
+  const attachment = img ?? file;
+
+  const sheetActions: SheetAction[] = [
+    ...(onReply && !inThread ? [{ key: "reply", label: "回复", icon: <MessageSquareReply />, onSelect: () => onReply(msg) }] : []),
+    ...(canThread ? [{ key: "thread", label: "话题", icon: <MessageSquareText />, onSelect: () => onOpenThread(msg) }] : []),
+    ...(!isImage && !isFile ? [{ key: "copy", label: "复制", icon: <Copy />, onSelect: copy }] : []),
+    ...(attachment ? [{ key: "download", label: "下载", icon: <Download />, onSelect: () => downloadUrl(attachment.url, attachment.filename) }] : []),
+    ...(canEdit ? [{ key: "edit", label: "编辑", icon: <Pencil />, onSelect: startEdit }] : []),
+    ...(canRecall ? [{ key: "recall", label: "撤回", icon: <Undo2 />, danger: true, onSelect: recall }] : []),
+  ];
 
   const bubble = (
     <div
+      {...(editing ? {} : longPress)}
       className={cn(
-        "group/bubble relative w-fit max-w-[min(560px,75%)] rounded-xl px-3 py-2 text-[14px] leading-relaxed",
+        // 外层列宽由内容决定，气泡上的百分比上限会循环缩小导致短文本也折行，所以百分比限宽放在行容器上
+        "group/bubble relative w-fit max-w-[min(560px,100%)] rounded-xl px-3 py-2 text-[14px] leading-relaxed pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none]",
         inThread && "max-w-[270px]",
+        "max-md:max-w-full",
         mine ? "rounded-tr-sm bg-accent-soft text-ink" : "rounded-tl-sm border border-line bg-white text-ink",
         frameless && "border-none bg-transparent p-0",
       )}
@@ -523,13 +613,7 @@ export function MessageItem({
           )}
           {canEdit && (
             <button
-              onClick={() => {
-                if (Date.now() - new Date(msg.createdAt).getTime() >= EDIT_MS) {
-                  toast.error("发送超过 24 小时，无法编辑");
-                  return;
-                }
-                setEditing(true);
-              }}
+              onClick={startEdit}
               className="rounded p-1 text-ink-2 hover:bg-hover"
               title="编辑"
             >
@@ -543,13 +627,7 @@ export function MessageItem({
           )}
           {canRecall && (
             <button
-              onClick={() => {
-                if (Date.now() - new Date(msg.createdAt).getTime() >= RECALL_MS) {
-                  toast.error("发送超过 2 分钟，无法撤回");
-                  return;
-                }
-                void run(() => recallMessageAction(msg.id), { refresh: false });
-              }}
+              onClick={recall}
               className="rounded p-1 text-ink-2 hover:bg-hover"
               title="撤回"
             >
@@ -571,14 +649,21 @@ export function MessageItem({
       id={`msg-${msg.id}`}
       data-seq={msg.seq}
       className={cn(
-        "flex px-4 transition-colors duration-500",
+        "flex px-4 transition-colors duration-500 pointer-coarse:select-none",
         inThread && "px-3",
         mine ? "justify-end" : "justify-start",
         grouped ? "pt-0.5" : "pt-3",
         highlighted && "bg-accent-soft/60 py-1.5",
       )}
     >
-      <div className={cn("flex max-w-full gap-2", mine && "flex-row-reverse")}>
+      <div
+        className={cn(
+          // 75% 指气泡占消息区的比例，再加上头像列（w-8 + gap-2）
+          "flex max-w-full gap-2 max-md:max-w-[88%]",
+          !inThread && "md:max-w-[calc(75%+2.5rem)]",
+          mine && "flex-row-reverse",
+        )}
+      >
         {/* 头像占位保持对齐 */}
         <div className="w-8 shrink-0">
           {!grouped &&
@@ -658,6 +743,29 @@ export function MessageItem({
           {showGroupReceipt && <GroupReceiptStatus conv={conv} msg={msg} meId={me.id} members={members} />}
         </div>
       </div>
+      <ActionSheet
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+        title="消息操作"
+        actions={sheetActions}
+        header={
+          <div className="flex items-center justify-between">
+            {QUICK_EMOJIS.map((emoji) => (
+              <button
+                key={emoji}
+                type="button"
+                onClick={() => {
+                  setSheetOpen(false);
+                  void toggleReactionAction(conv.id, msg.id, emoji);
+                }}
+                className="flex size-10 items-center justify-center rounded-full text-2xl active:bg-hover"
+              >
+                {emoji}
+              </button>
+            ))}
+          </div>
+        }
+      />
     </div>
   );
 }
@@ -676,7 +784,7 @@ export function PendingItem({
 }) {
   return (
     <div className="flex justify-end px-4 pt-0.5">
-      <div className="flex items-center gap-1.5">
+      <div className="flex max-w-[75%] items-center gap-1.5 max-md:max-w-[88%]">
         {failed ? (
           <>
             <button onClick={onRetry} className="text-xs text-danger hover:underline">
@@ -689,7 +797,7 @@ export function PendingItem({
         ) : (
           <span className="size-3.5 animate-spin rounded-full border-2 border-line-strong border-t-accent" />
         )}
-        <div className="w-fit max-w-[min(560px,75%)] rounded-xl rounded-tr-sm bg-accent-soft px-3 py-2 text-[14px] leading-relaxed text-ink opacity-70">
+        <div className="w-fit min-w-0 max-w-[min(560px,100%)] rounded-xl rounded-tr-sm bg-accent-soft px-3 py-2 text-[14px] leading-relaxed text-ink opacity-70 max-md:max-w-full">
           <div className="whitespace-pre-wrap break-words">{text}</div>
         </div>
       </div>

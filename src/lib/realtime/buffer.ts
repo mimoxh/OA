@@ -1,9 +1,11 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+import { deliverPush, planPush } from "@/lib/push/drivers";
+import type { PushItem } from "@/lib/push/types";
 import { publish, type PublishItem } from "./publish";
 
 export type { PublishItem };
 
-type BufferStore = { items: PublishItem[] };
+type BufferStore = { items: PublishItem[]; push: PushItem[] };
 
 const storage = new AsyncLocalStorage<BufferStore>();
 
@@ -20,10 +22,25 @@ export function queueEvent(userIds: (string | null | undefined)[], event: Record
   store.items.push({ userIds: ids, event });
 }
 
+/** 与 queueEvent 相同的时机与丢弃规则，提交后交给推送驱动（src/lib/push/drivers） */
+export function queuePush(item: PushItem) {
+  storage.getStore()?.push.push(item);
+}
+
+export function hasRealtimeBuffer(): boolean {
+  return !!storage.getStore();
+}
+
 /** 在独立的实时事件缓冲区中运行 fn；返回结果与 flush（提交后才可调用） */
 export async function withRealtimeBuffer<T>(fn: () => Promise<T>): Promise<{ result: T; flush: () => Promise<void> }> {
-  const store: BufferStore = { items: [] };
+  const store: BufferStore = { items: [], push: [] };
   const result = await storage.run(store, fn);
-  const items = store.items;
-  return { result, flush: () => publish(items) };
+  const { items, push } = store;
+  return {
+    result,
+    flush: async () => {
+      const { events, others } = planPush(push);
+      await Promise.all([publish(events.length ? [...items, ...events] : items), deliverPush(push, others)]);
+    },
+  };
 }

@@ -4,14 +4,38 @@ import { useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import type { ConversationDTO, MessageDTO, UserLite } from "@/lib/im/types";
 import { showDesktopNotification } from "@/lib/im/desktop-notify";
+import { clearMobileNotifications, isMobileApp, showMobileNotification, type MobilePushChannelKey } from "@/lib/mobile-bridge";
+import { randomId } from "@/lib/client-id";
 import { subscribeRealtime, type RealtimeEvent } from "@/components/realtime/provider";
 import {
-  editMessageAction,
-  markConversationRead,
-  sendFileMessage,
-  sendMessage,
-  toggleMessageReaction,
+  editMessageAction as editMessageActionRaw,
+  markConversationRead as markConversationReadRaw,
+  sendFileMessage as sendFileMessageRaw,
+  sendMessage as sendMessageRaw,
+  toggleMessageReaction as toggleMessageReactionRaw,
 } from "@/app/(app)/messages/actions";
+import type { ActionResult } from "@/lib/action";
+import { handleStaleAction, isStaleActionError } from "@/lib/stale-action";
+
+/** Server Action 抛错（网络中断、服务升级后 Action 不存在）时转成失败结果，避免发送中的气泡一直转圈 */
+function safe<A extends unknown[], T>(fn: (...args: A) => Promise<ActionResult<T>>) {
+  return async (...args: A): Promise<ActionResult<T>> => {
+    try {
+      return await fn(...args);
+    } catch (e) {
+      if (isStaleActionError(e)) {
+        handleStaleAction();
+        return { ok: false, error: "" };
+      }
+      return { ok: false, error: "网络异常，请稍后重试" };
+    }
+  };
+}
+const sendMessage = safe(sendMessageRaw);
+const sendFileMessage = safe(sendFileMessageRaw);
+const editMessageAction = safe(editMessageActionRaw);
+const toggleMessageReaction = safe(toggleMessageReactionRaw);
+const markConversationRead = safe(markConversationReadRaw);
 
 export type PendingMsg = {
   clientMsgId: string;
@@ -351,7 +375,7 @@ export async function loadOlderThread(convId: string, rootId: string) {
 }
 
 export async function sendThreadText(convId: string, rootId: string, content: unknown) {
-  const clientMsgId = crypto.randomUUID();
+  const clientMsgId = randomId();
   const r = await sendMessage({ conversationId: convId, clientMsgId, content, threadRootId: rootId });
   if (r.ok) {
     insertMessage(convId, r.data);
@@ -365,7 +389,7 @@ export async function sendThreadText(convId: string, rootId: string, content: un
 }
 
 export async function sendThreadAttachment(convId: string, rootId: string, file: File) {
-  const clientMsgId = crypto.randomUUID();
+  const clientMsgId = randomId();
   const attachmentId = await uploadAttachment(convId, file);
   if (!attachmentId) return false;
   const r = await sendFileMessage({ conversationId: convId, attachmentId, clientMsgId, threadRootId: rootId });
@@ -383,7 +407,7 @@ export async function sendThreadAttachment(convId: string, rootId: string, file:
 // ── 发送 / 编辑 / 表态 ──
 
 export async function sendText(convId: string, content: unknown, replyToId: string | null) {
-  const clientMsgId = crypto.randomUUID();
+  const clientMsgId = randomId();
   const text = extractText(content);
   const ms = state.messages.get(convId) ?? { items: [], hasMore: true, hasNewer: false, loading: false, pending: [] };
   state.messages.set(convId, ms);
@@ -452,7 +476,7 @@ async function uploadAttachment(convId: string, file: File): Promise<string | nu
 }
 
 export async function sendAttachment(convId: string, file: File, replyToId: string | null) {
-  const clientMsgId = crypto.randomUUID();
+  const clientMsgId = randomId();
   const isImage = file.type.startsWith("image/") && file.type !== "image/svg+xml";
   const text = isImage ? `正在上传图片 ${file.name}…` : `正在上传文件 ${file.name}…`;
   const ms = state.messages.get(convId) ?? { items: [], hasMore: true, hasNewer: false, loading: false, pending: [] };
@@ -610,6 +634,8 @@ export function setDraft(convId: string, content: unknown) {
 // ── 事件 ──
 
 function maybeNotifyMessage(convId: string, msg: MessageDTO) {
+  // 手机 App 内改用服务端算好的 push.notify（见 maybeNotifyPush），与后台服务的提醒内容一致
+  if (isMobileApp()) return;
   const meId = state.meId;
   if (!meId || msg.type === "SYSTEM" || msg.sender?.id === meId) return;
   const conv = state.convs.get(convId);
@@ -629,9 +655,35 @@ function maybeNotifyMessage(convId: string, msg: MessageDTO) {
   });
 }
 
+type PushNotifyPayload = {
+  conversationId: string;
+  channel: MobilePushChannelKey;
+  title: string;
+  body: string;
+  path: string;
+};
+
+/**
+ * App 在前台时的提醒（只有 App 内页面会收到 push.notify）。退到后台后由原生后台服务提醒，这里不再重复；
+ * 停在该会话时不提醒；电脑端正在使用时服务端会标记 silent。
+ */
+function maybeNotifyPush(e: RealtimeEvent) {
+  const n = e.notification as PushNotifyPayload | undefined;
+  if (!n?.conversationId || e.silent === true) return;
+  if (typeof document !== "undefined" && document.hidden) return;
+  if (state.activeConvId === n.conversationId) return;
+  void showMobileNotification({ conversationId: n.conversationId, title: n.title, body: n.body, path: n.path, channel: n.channel });
+}
+
 function handleEvent(e: RealtimeEvent) {
   const meId = state.meId;
   switch (e.type) {
+    case "push.notify":
+      maybeNotifyPush(e);
+      break;
+    case "push.clear":
+      if (typeof e.conversationId === "string") void clearMobileNotifications(e.conversationId);
+      break;
     case "message.new": {
       const convId = e.conversationId as string;
       const msg = e.message as MessageDTO;
@@ -640,6 +692,21 @@ function handleEvent(e: RealtimeEvent) {
         putConv(summarize(conv, msg, meId));
       } else {
         void fetchConversation(convId);
+      }
+      // 服务端发消息时顺带把发送者的 lastReadSeq 推进到该 seq，但不另发 read 事件（卡片/系统消息的已读归属不同，跳过）
+      const senderId = msg.sender?.id;
+      if (senderId && senderId !== meId && msg.type !== "CARD" && msg.type !== "SYSTEM") {
+        const cur = state.convs.get(convId);
+        if (cur?.type === "DIRECT" && cur.peerId === senderId && (cur.peerLastReadSeq ?? 0) < msg.seq) {
+          patchConv(convId, { peerLastReadSeq: msg.seq });
+        }
+        const members = state.members.get(convId);
+        if (members?.some((m) => m.id === senderId && (m.lastReadSeq ?? 0) < msg.seq)) {
+          state.members.set(
+            convId,
+            members.map((m) => (m.id === senderId ? { ...m, lastReadSeq: msg.seq } : m)),
+          );
+        }
       }
       const ms = state.messages.get(convId);
       if (ms && !ms.hasNewer) {
@@ -784,7 +851,8 @@ export function initIm(meId: string) {
     window.addEventListener("focus", () => void bootstrap());
   }
   if (state.meId === meId) return;
-  resetIm();
+  // 首次初始化时不清空：子组件 effect 先于本调用执行，可能已写入当前用户的会话/成员（如直接打开 /messages/[id]）
+  if (state.meId !== null) resetIm();
   state.meId = meId;
   void bootstrap();
 }

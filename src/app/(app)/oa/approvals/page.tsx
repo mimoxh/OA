@@ -71,7 +71,8 @@ export default async function ApprovalsPage({ searchParams }: PageProps<"/oa/app
       <TopBar
         crumbs={[{ label: "OA 办公", href: "/oa" }, { label: "审批中心" }]}
         actions={
-          <LinkButton href="/oa/approvals/new" variant="primary">
+          // 手机端只处理审批，不在手机上发起
+          <LinkButton href="/oa/approvals/new" variant="primary" className="max-md:hidden">
             <Plus className="size-3.5" />
             发起审批
           </LinkButton>
@@ -79,7 +80,7 @@ export default async function ApprovalsPage({ searchParams }: PageProps<"/oa/app
       />
       <Page wide>
         <PageHeader icon="✅" title="审批中心" description="处理待办审批，跟踪你发起的申请进度" />
-        <QueryTabs items={tabs} defaultValue="todo" />
+        <QueryTabs items={tabs} defaultValue="todo" className="max-md:overflow-x-auto max-md:[scrollbar-width:none]" />
         <div className="flex flex-wrap items-center gap-2 py-3">
           <SearchInput placeholder="搜索标题、编号、申请人…" />
           <UrlSelect
@@ -101,13 +102,44 @@ export default async function ApprovalsPage({ searchParams }: PageProps<"/oa/app
                   title={q || flowKey || status ? "没有符合条件的审批" : EMPTY[tab]}
                   action={
                     tab === "mine" ? (
-                      <LinkButton href="/oa/approvals/new" variant="primary">
+                      <LinkButton href="/oa/approvals/new" variant="primary" className="max-md:hidden">
                         发起审批
                       </LinkButton>
                     ) : undefined
                   }
                 />
         ) : (
+        <>
+        <ul className="space-y-2 md:hidden" data-mobile-approval-list>
+          {rows.map((r) => {
+            const pending = r.tasks.filter((t) => t.status === "PENDING");
+            const mine = r.tasks.filter((t) => t.approverId === user.id && (t.status === "APPROVED" || t.status === "REJECTED")).at(-1);
+            return (
+              <li key={r.id}>
+                <Link
+                  href={`/oa/approvals/${r.id}`}
+                  className="block rounded-lg border border-line bg-white px-3.5 py-3 active:bg-hover"
+                >
+                  <div className="flex items-start gap-2">
+                    <span className="mt-0.5 shrink-0 text-base leading-none">{r.flow.icon}</span>
+                    <span className="min-w-0 flex-1 break-words text-[15px] font-medium leading-snug text-ink">{r.title}</span>
+                    <StatusBadge map={APPROVAL_STATUS} value={r.status} />
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-ink-2">
+                    <UserChip name={r.applicant.name} color={r.applicant.avatarColor} />
+                    <span>{r.flow.name}</span>
+                    {r.status === "PENDING" && pending.length > 0 && <span>当前：{pending[0].stepName}</span>}
+                    {tab === "done" && mine && (
+                      <Badge color={mine.status === "APPROVED" ? "green" : "red"}>{mine.status === "APPROVED" ? "已同意" : "已驳回"}</Badge>
+                    )}
+                    <span className="ml-auto text-xs text-ink-3" title={formatDateTime(r.createdAt)}>{formatRelative(r.createdAt)}</span>
+                  </div>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+        <div className="max-md:hidden">
         <Table>
           <THead>
             <TR>
@@ -166,6 +198,8 @@ export default async function ApprovalsPage({ searchParams }: PageProps<"/oa/app
             })}
           </TBody>
         </Table>
+        </div>
+        </>
         )}
       </Page>
     </>

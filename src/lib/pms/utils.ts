@@ -4,6 +4,9 @@ import type { TagColor } from "@/lib/labels";
 export const TASK_STATUS_ORDER = ["TODO", "IN_PROGRESS", "REVIEW", "DONE"] as const;
 export const TASK_PRIORITY_ORDER = ["URGENT", "HIGH", "MEDIUM", "LOW"] as const;
 
+/** 任务评论框的提示：手机上没有 Ctrl + Enter，只留简短提示 */
+export const commentPlaceholder = (mobile: boolean) => (mobile ? "输入评论…" : "写评论，输入 @ 提及成员，Ctrl + Enter 发送");
+
 export const PROJECT_MEMBER_ROLE: Record<string, string> = {
   owner: "负责人",
   member: "成员",

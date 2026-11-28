@@ -101,7 +101,7 @@ export function TaskBoard({ projectId, tasks, canEdit }: { projectId: string; ta
   };
 
   return (
-    <div className="-mx-6 overflow-x-auto px-6 pb-6 sm:-mx-12 sm:px-12">
+    <div className="-mx-6 overflow-x-auto px-6 pb-6 max-md:-mx-4 max-md:px-4 sm:-mx-12 sm:px-12">
       <div className="flex min-w-max gap-3">
         {TASK_STATUS_ORDER.map((status) => {
           const cards = column(status);

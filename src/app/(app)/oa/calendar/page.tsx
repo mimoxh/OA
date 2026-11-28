@@ -35,12 +35,15 @@ function serialize(e: Row, meetingGroupId: string | null): CalEvent {
 export default async function CalendarPage({ searchParams }: PageProps<"/oa/calendar">) {
   const user = await requireUser();
   const sp = await searchParams;
-  const view = str(sp.view) === "week" ? "week" : "month";
+  const v = str(sp.view);
+  // day / list 是手机视图；桌面分别按周 / 月网格显示，所以按周 / 月取数
+  const view = v === "week" || v === "day" || v === "list" ? v : "month";
+  const byWeek = view === "week" || view === "day";
   const parsed = parse(str(sp.date), "yyyy-MM-dd", new Date());
   const anchor = isValid(parsed) ? parsed : new Date();
   const opts = { weekStartsOn: 1 as const };
-  const rangeStart = view === "month" ? startOfWeek(startOfMonth(anchor), opts) : startOfWeek(anchor, opts);
-  const rangeEnd = view === "month" ? endOfWeek(endOfMonth(anchor), opts) : endOfWeek(anchor, opts);
+  const rangeStart = byWeek ? startOfWeek(anchor, opts) : startOfWeek(startOfMonth(anchor), opts);
+  const rangeEnd = byWeek ? endOfWeek(anchor, opts) : endOfWeek(endOfMonth(anchor), opts);
   const mine: Prisma.CalendarEventWhereInput = { OR: [{ organizerId: user.id }, { attendees: { some: { userId: user.id } } }] };
   const eventId = str(sp.event);
 
@@ -71,11 +74,15 @@ export default async function CalendarPage({ searchParams }: PageProps<"/oa/cale
     <>
       <TopBar crumbs={[{ label: "OA 办公", href: "/oa" }, { label: "日程会议" }]} />
       <Page wide>
-        <PageHeader
-          icon="📅"
-          title="日程会议"
-          description={pendingCount ? `你有 ${pendingCount} 个日程邀请待回复（斜体显示）` : "我组织和参与的日程，点击日期即可快速新建"}
-        />
+        {/* 手机上标题已在顶栏，省下的高度留给日历 */}
+        <div className="max-md:hidden">
+          <PageHeader
+            icon="📅"
+            title="日程会议"
+            description={pendingCount ? `你有 ${pendingCount} 个日程邀请待回复（斜体显示）` : "我组织和参与的日程，点击日期即可快速新建"}
+          />
+        </div>
+        <div className="h-2 md:hidden" />
         <CalendarView
           key={`${view}-${format(anchor, "yyyy-MM-dd")}-${eventId}`}
           view={view}

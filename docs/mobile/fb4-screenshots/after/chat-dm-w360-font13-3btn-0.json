@@ -1,0 +1,93 @@
+{
+ "iw": 360,
+ "ih": 800,
+ "sw": 360,
+ "fontPx": 18.2,
+ "dpr": 3.387500047683716,
+ "bad": 0,
+ "items": [
+  {
+   "id": "cmwys5re7000eb8wrudvyurtb",
+   "mine": true,
+   "kind": "file",
+   "label": "李娜：[文件] 关于2026年度华东华南区域渠道合作伙伴返利政策调整及结算流程优",
+   "avatar": {
+    "l": 312.2,
+    "r": 344.2,
+    "t": 3.9,
+    "b": 35.9,
+    "w": 32,
+    "h": 32
+   },
+   "avatarCol": {
+    "l": 312.2,
+    "r": 344.2,
+    "t": 3.9,
+    "b": 207.6,
+    "w": 32,
+    "h": 203.7
+   },
+   "content": {
+    "l": 55.4,
+    "r": 304.2
+   },
+   "fileBox": {
+    "l": 55.4,
+    "r": 304.2,
+    "t": 107.1,
+    "b": 184.2,
+    "w": 248.8,
+    "h": 77.1
+   },
+   "nameTruncated": true,
+   "overlapPx": -8,
+   "ok": true
+  },
+  {
+   "id": "cmwys5twk000fb8wr4mi0ttx6",
+   "mine": true,
+   "kind": "text",
+   "label": "李娜：[文件] Annual-Partner-Rebate-Policy-Adj",
+   "avatar": null,
+   "avatarCol": {
+    "l": 312.2,
+    "r": 344.2,
+    "t": 209.6,
+    "b": 395.4,
+    "w": 32,
+    "h": 185.8
+   },
+   "content": {
+    "l": 55.4,
+    "r": 304.2
+   },
+   "fileBox": null,
+   "nameTruncated": null,
+   "overlapPx": -8,
+   "ok": true
+  },
+  {
+   "id": "cmwys5v95000gb8wr4ck7dvz2",
+   "mine": true,
+   "kind": "ref",
+   "label": "文档放这里了 http://localhost:3440/docs/f42f68",
+   "avatar": null,
+   "avatarCol": {
+    "l": 312.2,
+    "r": 344.2,
+    "t": 397.4,
+    "b": 631.2,
+    "w": 32,
+    "h": 233.8
+   },
+   "content": {
+    "l": 55.4,
+    "r": 304.2
+   },
+   "fileBox": null,
+   "nameTruncated": null,
+   "overlapPx": -8,
+   "ok": true
+  }
+ ]
+}

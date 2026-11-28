@@ -160,6 +160,35 @@ function distanceToSegment(p: WhiteboardPoint, a: WhiteboardPoint, b: Whiteboard
   return Math.hypot(p.x - a.x - dx * t, p.y - a.y - dy * t);
 }
 
+/**
+ * 命中容差（屏幕像素）。手指接触面远大于鼠标指针，触屏下需要更宽的判定范围，
+ * 否则细线、连线和右下角缩放手柄几乎点不中。
+ */
+export const WHITEBOARD_POINTER_TOLERANCE = {
+  mouse: { hit: 7, bind: 5, handle: 4, handleHit: 7 },
+  pen: { hit: 10, bind: 8, handle: 6, handleHit: 12 },
+  touch: { hit: 16, bind: 12, handle: 9, handleHit: 22 },
+} as const;
+
+export type WhiteboardPointerKind = keyof typeof WHITEBOARD_POINTER_TOLERANCE;
+
+export function pointerKind(pointerType: string | null | undefined): WhiteboardPointerKind {
+  return pointerType === "touch" || pointerType === "pen" ? pointerType : "mouse";
+}
+
+/** 将屏幕像素容差换算成白板坐标（随缩放变化，保证手感一致） */
+export function pointerTolerance(
+  pointerType: string | null | undefined,
+  scale: number,
+  kind: keyof (typeof WHITEBOARD_POINTER_TOLERANCE)["mouse"] = "hit",
+) {
+  return WHITEBOARD_POINTER_TOLERANCE[pointerKind(pointerType)][kind] / scale;
+}
+
+export function hitsResizeHandle(element: WhiteboardBox, at: WhiteboardPoint, tolerance: number) {
+  return Math.hypot(at.x - element.x - element.width, at.y - element.y - element.height) <= tolerance;
+}
+
 export function hitElement(elements: WhiteboardElement[], at: WhiteboardPoint, tolerance: number, bindable = false) {
   const byId = new Map(elements.map((e) => [e.id, e]));
   for (let index = elements.length - 1; index >= 0; index -= 1) {

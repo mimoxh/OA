@@ -11,6 +11,7 @@ import { FilterPills, SearchInput } from "@/components/ui/common";
 import { Page, PageHeader, TopBar } from "@/components/ui/page";
 import { Table, TBody, TD, TEmpty, TH, THead, TR } from "@/components/ui/table";
 import { VehicleDialog, VehicleRowActions } from "@/components/tms/master-forms";
+import { MobileCard, MobileField, MobileList } from "@/components/mobile/mobile-list";
 
 export default async function VehiclesPage({ searchParams }: PageProps<"/tms/vehicles">) {
   const user = await requireUser();
@@ -77,7 +78,40 @@ export default async function VehiclesPage({ searchParams }: PageProps<"/tms/veh
           <div className="flex-1" />
           <SearchInput placeholder="车牌 / 车型" />
         </div>
-        <Table>
+        <MobileList empty="暂无车辆">
+          {vehicles.map((v) => (
+            <MobileCard
+              key={v.id}
+              title={v.plateNo}
+              badge={
+                <>
+                  <StatusBadge map={VEHICLE_STATUS} value={v.status} />
+                  {canEdit && (
+                    <VehicleRowActions
+                      vehicle={{ id: v.id, plateNo: v.plateNo, type: v.type, capacity: v.capacity, status: v.status, remark: v.remark }}
+                    />
+                  )}
+                </>
+              }
+              subtitle={[v.type, v.remark].filter(Boolean).join(" · ")}
+              meta={<MobileField label="历史运输单">{v._count.orders}</MobileField>}
+              aside={`${formatNumber(v.capacity)} kg`}
+            >
+              {v.orders.length > 0 && (
+                <div className="mt-2 space-y-1 border-t border-line pt-2">
+                  {v.orders.map((o) => (
+                    <Link key={o.id} href={`/tms/orders/${o.id}`} className="flex min-w-0 items-center gap-1.5 text-[13px]">
+                      <StatusBadge map={TRANSPORT_STATUS} value={o.status} />
+                      <span className="shrink-0 tabular-nums text-accent">{o.no}</span>
+                      <span className="min-w-0 truncate text-ink-2">→ {o.destination}</span>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </MobileCard>
+          ))}
+        </MobileList>
+        <Table className="max-md:hidden">
           <THead>
             <TR>
               <TH>车牌号</TH>

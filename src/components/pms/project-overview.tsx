@@ -7,6 +7,7 @@ import { StatusBadge } from "@/components/ui/badge";
 import { TASK_PRIORITY, TASK_STATUS } from "@/lib/labels";
 import { formatDate, formatNumber } from "@/lib/format";
 import { isOverdue, TASK_STATUS_ORDER } from "@/lib/pms/utils";
+import { MobileCard, MobileField, MobileList } from "@/components/mobile/mobile-list";
 
 const STATUS_COLOR: Record<string, string> = { TODO: "#a5a29c", IN_PROGRESS: "#337ea9", REVIEW: "#9065b0", DONE: "#448361" };
 
@@ -70,7 +71,7 @@ export function ProjectOverview({
           <div className="flex h-3 overflow-hidden rounded-full bg-hover">
             {byStatus.map(({ s, n }) => (total ? <span key={s} style={{ width: `${(n / total) * 100}%`, backgroundColor: STATUS_COLOR[s] }} title={`${TASK_STATUS[s].label} ${n}`} /> : null))}
           </div>
-          <div className="mt-3 grid grid-cols-4 gap-2">
+          <div className="mt-3 grid grid-cols-4 gap-2 max-md:grid-cols-2 max-md:gap-x-4">
             {byStatus.map(({ s, n }) => (
               <div key={s} className="flex items-center gap-2 text-sm">
                 <span className="size-2.5 rounded-sm" style={{ backgroundColor: STATUS_COLOR[s] }} />
@@ -84,7 +85,28 @@ export function ProjectOverview({
       </Section>
 
       <Section title="按负责人统计">
-        <Table>
+        <MobileList empty="暂无数据">
+          {rows.map((r) => (
+            <MobileCard
+              key={r.id}
+              title={r.person ? <UserChip name={r.person.name} color={r.person.avatarColor} /> : <span className="text-ink-3">未指派</span>}
+              aside={`${formatNumber(r.hours, 1)} h`}
+              meta={
+                <>
+                  <MobileField label="任务">{r.total}</MobileField>
+                  <MobileField label="未完成">{r.open}</MobileField>
+                  <MobileField label="已完成">{r.done}</MobileField>
+                  {r.overdue > 0 && <MobileField label="逾期" className="text-danger">{r.overdue}</MobileField>}
+                </>
+              }
+            >
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-hover">
+                <div className="h-full rounded-full bg-[#448361]" style={{ width: `${r.total ? (r.done / r.total) * 100 : 0}%` }} />
+              </div>
+            </MobileCard>
+          ))}
+        </MobileList>
+        <Table className="max-md:hidden">
           <THead>
             <TR>
               <TH>负责人</TH>
@@ -118,7 +140,24 @@ export function ProjectOverview({
       </Section>
 
       <Section title={`逾期任务（${overdue.length}）`}>
-        <Table>
+        <MobileList empty="没有逾期任务 🎉">
+          {overdue.map((t) => (
+            <MobileCard
+              key={t.id}
+              href={taskHref(t.id)}
+              title={t.title}
+              badge={<StatusBadge map={TASK_STATUS} value={t.status} />}
+              meta={
+                <>
+                  <StatusBadge map={TASK_PRIORITY} value={t.priority} />
+                  <UserChip name={t.assignee?.name} color={t.assignee?.avatarColor} />
+                </>
+              }
+              aside={<span className="text-danger">{formatDate(t.dueDate)}</span>}
+            />
+          ))}
+        </MobileList>
+        <Table className="max-md:hidden">
           <THead>
             <TR>
               <TH>任务</TH>
