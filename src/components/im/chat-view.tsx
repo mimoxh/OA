@@ -309,7 +309,7 @@ export function ChatView({
             me={me}
             replyTo={replyTo}
             onClearReply={() => setReplyTo(null)}
-            toolbar={
+            topBar={
               runConfig && runBots.length > 0 ? (
                 <WebhookRunConfigBar key={convId} conversationId={convId} bots={runBots} initialOverride={runConfig.override} />
               ) : undefined

@@ -1,0 +1,460 @@
+{
+ "bot-w360-override": {
+  "iw": 361,
+  "ih": 737,
+  "sw": 361,
+  "sat": 0,
+  "sab": 0,
+  "composer": {
+   "l": 0,
+   "r": 361,
+   "t": 606.1,
+   "b": 737.1,
+   "w": 361,
+   "h": 131
+  },
+  "box": {
+   "l": 12,
+   "r": 349,
+   "t": 649,
+   "b": 729.1,
+   "w": 337,
+   "h": 80.1
+  },
+  "editor": {
+   "l": 12.9,
+   "r": 348.2,
+   "t": 649.9,
+   "b": 690.2,
+   "w": 335.3,
+   "h": 40.4
+  },
+  "bar": {
+   "l": 12,
+   "r": 349,
+   "t": 615,
+   "b": 643,
+   "w": 337,
+   "h": 28
+  },
+  "barInsideBox": false,
+  "barAboveBox": true,
+  "barScroller": {
+   "sw": 345,
+   "cw": 345,
+   "ox": "auto"
+  },
+  "pills": [
+   {
+    "label": "基座（Agent）",
+    "text": "Claude",
+    "l": 12,
+    "r": 95,
+    "t": 615,
+    "b": 643,
+    "w": 83,
+    "h": 28,
+    "truncated": false
+   },
+   {
+    "label": "模型（Model）",
+    "text": "claude-opus-5-5-20261101-extended-context-preview",
+    "l": 97,
+    "r": 246.2,
+    "t": 615,
+    "b": 643,
+    "w": 149.3,
+    "h": 28,
+    "truncated": true
+   },
+   {
+    "label": "思考强度（Effort）",
+    "text": "xhigh",
+    "l": 248.2,
+    "r": 323,
+    "t": 615,
+    "b": 643,
+    "w": 74.8,
+    "h": 28,
+    "truncated": false
+   },
+   {
+    "label": "恢复机器人默认",
+    "text": "",
+    "l": 325,
+    "r": 349,
+    "t": 617,
+    "b": 641,
+    "w": 24,
+    "h": 24,
+    "truncated": false
+   }
+  ],
+  "emoji": {
+   "l": 20.9,
+   "r": 52.9,
+   "t": 690.2,
+   "b": 722.2,
+   "w": 32,
+   "h": 32
+  },
+  "send": {
+   "l": 276.2,
+   "r": 340.2,
+   "t": 692.2,
+   "b": 720.2,
+   "w": 64,
+   "h": 28
+  },
+  "toolsSameRow": true,
+  "popover": null
+ },
+ "bot-w360-override-pop-model": {
+  "iw": 361,
+  "ih": 737,
+  "sw": 361,
+  "sat": 0,
+  "sab": 0,
+  "composer": {
+   "l": 0,
+   "r": 361,
+   "t": 606.1,
+   "b": 737.1,
+   "w": 361,
+   "h": 131
+  },
+  "box": {
+   "l": 12,
+   "r": 349,
+   "t": 649,
+   "b": 729.1,
+   "w": 337,
+   "h": 80.1
+  },
+  "editor": {
+   "l": 12.9,
+   "r": 348.2,
+   "t": 649.9,
+   "b": 690.2,
+   "w": 335.3,
+   "h": 40.4
+  },
+  "bar": {
+   "l": 12,
+   "r": 349,
+   "t": 615,
+   "b": 643,
+   "w": 337,
+   "h": 28
+  },
+  "barInsideBox": false,
+  "barAboveBox": true,
+  "barScroller": {
+   "sw": 345,
+   "cw": 345,
+   "ox": "auto"
+  },
+  "pills": [
+   {
+    "label": "基座（Agent）",
+    "text": "Claude",
+    "l": 12,
+    "r": 95,
+    "t": 615,
+    "b": 643,
+    "w": 83,
+    "h": 28,
+    "truncated": false
+   },
+   {
+    "label": "模型（Model）",
+    "text": "claude-opus-5-5-20261101-extended-context-preview",
+    "l": 97,
+    "r": 246.2,
+    "t": 615,
+    "b": 643,
+    "w": 149.3,
+    "h": 28,
+    "truncated": true
+   },
+   {
+    "label": "思考强度（Effort）",
+    "text": "xhigh",
+    "l": 248.2,
+    "r": 323,
+    "t": 615,
+    "b": 643,
+    "w": 74.8,
+    "h": 28,
+    "truncated": false
+   },
+   {
+    "label": "恢复机器人默认",
+    "text": "",
+    "l": 325,
+    "r": 349,
+    "t": 617,
+    "b": 641,
+    "w": 24,
+    "h": 24,
+    "truncated": false
+   }
+  ],
+  "emoji": {
+   "l": 20.9,
+   "r": 52.9,
+   "t": 690.2,
+   "b": 722.2,
+   "w": 32,
+   "h": 32
+  },
+  "send": {
+   "l": 276.2,
+   "r": 340.2,
+   "t": 692.2,
+   "b": 720.2,
+   "w": 64,
+   "h": 28
+  },
+  "toolsSameRow": true,
+  "popover": {
+   "l": 33.1,
+   "r": 353.1,
+   "t": 290.8,
+   "b": 610.9,
+   "w": 320,
+   "h": 320.2,
+   "insideViewport": true,
+   "title": "模型（Model）"
+  }
+ },
+ "bot-w360-keyboard": {
+  "iw": 361,
+  "ih": 737,
+  "sw": 361,
+  "sat": 0,
+  "sab": 0,
+  "composer": {
+   "l": 0,
+   "r": 361,
+   "t": 606.1,
+   "b": 737.1,
+   "w": 361,
+   "h": 131
+  },
+  "box": {
+   "l": 12,
+   "r": 349,
+   "t": 649,
+   "b": 729.1,
+   "w": 337,
+   "h": 80.1
+  },
+  "editor": {
+   "l": 12.9,
+   "r": 348.2,
+   "t": 649.9,
+   "b": 690.2,
+   "w": 335.3,
+   "h": 40.4
+  },
+  "bar": {
+   "l": 12,
+   "r": 349,
+   "t": 615,
+   "b": 643,
+   "w": 337,
+   "h": 28
+  },
+  "barInsideBox": false,
+  "barAboveBox": true,
+  "barScroller": {
+   "sw": 345,
+   "cw": 345,
+   "ox": "auto"
+  },
+  "pills": [
+   {
+    "label": "基座（Agent）",
+    "text": "Claude",
+    "l": 12,
+    "r": 95,
+    "t": 615,
+    "b": 643,
+    "w": 83,
+    "h": 28,
+    "truncated": false
+   },
+   {
+    "label": "模型（Model）",
+    "text": "claude-opus-5-5-20261101-extended-context-preview",
+    "l": 97,
+    "r": 246.2,
+    "t": 615,
+    "b": 643,
+    "w": 149.3,
+    "h": 28,
+    "truncated": true
+   },
+   {
+    "label": "思考强度（Effort）",
+    "text": "xhigh",
+    "l": 248.2,
+    "r": 323,
+    "t": 615,
+    "b": 643,
+    "w": 74.8,
+    "h": 28,
+    "truncated": false
+   },
+   {
+    "label": "恢复机器人默认",
+    "text": "",
+    "l": 325,
+    "r": 349,
+    "t": 617,
+    "b": 641,
+    "w": 24,
+    "h": 24,
+    "truncated": false
+   }
+  ],
+  "emoji": {
+   "l": 20.9,
+   "r": 52.9,
+   "t": 690.2,
+   "b": 722.2,
+   "w": 32,
+   "h": 32
+  },
+  "send": {
+   "l": 276.2,
+   "r": 340.2,
+   "t": 692.2,
+   "b": 720.2,
+   "w": 64,
+   "h": 28
+  },
+  "toolsSameRow": true,
+  "popover": null
+ },
+ "bot-w360-keyboard-pop-model": {
+  "iw": 361,
+  "ih": 458,
+  "sw": 361,
+  "sat": 0,
+  "sab": 0,
+  "composer": {
+   "l": 0,
+   "r": 361,
+   "t": 327.1,
+   "b": 458.2,
+   "w": 361,
+   "h": 131
+  },
+  "box": {
+   "l": 12,
+   "r": 349,
+   "t": 370,
+   "b": 450.2,
+   "w": 337,
+   "h": 80.1
+  },
+  "editor": {
+   "l": 12.9,
+   "r": 348.2,
+   "t": 370.9,
+   "b": 411.3,
+   "w": 335.3,
+   "h": 40.4
+  },
+  "bar": {
+   "l": 12,
+   "r": 349,
+   "t": 336,
+   "b": 364,
+   "w": 337,
+   "h": 28
+  },
+  "barInsideBox": false,
+  "barAboveBox": true,
+  "barScroller": {
+   "sw": 345,
+   "cw": 345,
+   "ox": "auto"
+  },
+  "pills": [
+   {
+    "label": "基座（Agent）",
+    "text": "Claude",
+    "l": 12,
+    "r": 95,
+    "t": 336,
+    "b": 364,
+    "w": 83,
+    "h": 28,
+    "truncated": false
+   },
+   {
+    "label": "模型（Model）",
+    "text": "claude-opus-5-5-20261101-extended-context-preview",
+    "l": 97,
+    "r": 246.2,
+    "t": 336,
+    "b": 364,
+    "w": 149.3,
+    "h": 28,
+    "truncated": true
+   },
+   {
+    "label": "思考强度（Effort）",
+    "text": "xhigh",
+    "l": 248.2,
+    "r": 323,
+    "t": 336,
+    "b": 364,
+    "w": 74.8,
+    "h": 28,
+    "truncated": false
+   },
+   {
+    "label": "恢复机器人默认",
+    "text": "",
+    "l": 325,
+    "r": 349,
+    "t": 338,
+    "b": 362,
+    "w": 24,
+    "h": 24,
+    "truncated": false
+   }
+  ],
+  "emoji": {
+   "l": 20.9,
+   "r": 52.9,
+   "t": 411.3,
+   "b": 443.3,
+   "w": 32,
+   "h": 32
+  },
+  "send": {
+   "l": 276.2,
+   "r": 340.2,
+   "t": 413.3,
+   "b": 441.3,
+   "w": 64,
+   "h": 28
+  },
+  "toolsSameRow": true,
+  "popover": {
+   "l": 33.1,
+   "r": 353.1,
+   "t": 11.8,
+   "b": 332,
+   "w": 320,
+   "h": 320.2,
+   "insideViewport": true,
+   "title": "模型（Model）"
+  }
+ }
+}
