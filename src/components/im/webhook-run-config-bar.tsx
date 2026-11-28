@@ -9,6 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/menu";
 import { useAction } from "@/components/ui/use-action";
 import { resetConversationRunConfigAction, updateConversationRunConfig } from "@/app/(app)/messages/actions";
 import { useOrcaCatalog } from "@/components/im/use-orca-catalog";
+import { keepSoftKeyboardClosed } from "@/components/mobile/use-mobile-layout";
 import {
   AgentOptions,
   CatalogFooter,
@@ -260,10 +261,9 @@ export function WebhookRunConfigBar({
           mono={!modelEntry}
           warn={modelWarn}
         />
-        <PopoverContent side="top" align="start" collisionPadding={padding} className={cn("w-80 p-1", POPOVER_FIT)} onKeyDown={onRunListKeyDown}>
+        <PopoverContent side="top" align="start" collisionPadding={padding} className={cn("w-80 p-1", POPOVER_FIT)} onKeyDown={onRunListKeyDown} onOpenAutoFocus={keepSoftKeyboardClosed}>
           <PanelHeader field="model" who={who} />
           <ModelOptions
-            autoFocus
             catalog={catalog}
             agent={effective.agent}
             value={override.model}
