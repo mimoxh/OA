@@ -22,6 +22,7 @@ import { SELF_MANAGED_AGENT_HINT } from "@/lib/im/webhook-run-config";
 import { agentLabel, effortChoices, findAgent, findModel, type OrcaCatalog } from "@/lib/im/orca-catalog-shared";
 import { AgentOptions, CatalogFooter, ModelOptions, RUN_FIELD_META, RunDivider, RunOption, onRunListKeyDown } from "@/components/im/run-options";
 import { useOrcaCatalog } from "@/components/im/use-orca-catalog";
+import { keepSoftKeyboardClosed } from "@/components/mobile/use-mobile-layout";
 import { AgentIcon } from "@/components/im/agent-icon";
 import { ORCA_AGENT_LABELS } from "@/components/im/orca-agent-icons.generated";
 import { cn } from "@/lib/utils";
@@ -166,9 +167,8 @@ function ModelPicker({ form, setForm, orca }: { form: FormState; setForm: (f: Fo
           <ChevronDown className="size-4 shrink-0 text-ink-3" />
         </button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-80 p-1" onKeyDown={onRunListKeyDown}>
+      <PopoverContent align="start" className="w-80 p-1" onKeyDown={onRunListKeyDown} onOpenAutoFocus={keepSoftKeyboardClosed}>
         <ModelOptions
-          autoFocus
           catalog={orca.catalog}
           agent={agent}
           value={model}

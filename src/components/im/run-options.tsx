@@ -183,6 +183,8 @@ export function customModelId(text: string): string | null {
 /**
  * 模型面板：搜索框兼作自定义 ID 输入（回车应用）；列表为所选基座的真实模型，目录缺失时为常用预设。
  * 已保存但不在目录中的模型回显为选中项并标注。
+ * 搜索框不设 autoFocus：桌面由 Radix 弹层默认聚焦（它是第一个可聚焦项），手机 / 触屏由所在弹层的
+ * onOpenAutoFocus={keepSoftKeyboardClosed} 跳过。autoFocus 会在弹层挂载前抢先聚焦，使该回调不再触发。
  */
 export function ModelOptions({
   catalog,
@@ -190,7 +192,6 @@ export function ModelOptions({
   value,
   onSelect,
   clear,
-  autoFocus,
 }: {
   catalog: OrcaCatalog | null;
   agent: string | null;
@@ -198,7 +199,6 @@ export function ModelOptions({
   onSelect: (model: string | null) => void;
   /** “跟随默认 / 未指定”项 */
   clear: { label: string; meta?: ReactNode };
-  autoFocus?: boolean;
 }) {
   const [query, setQuery] = useState("");
   const { models, source } = modelChoices(catalog, agent);
@@ -223,7 +223,6 @@ export function ModelOptions({
         <div className="relative">
           <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-ink-3" />
           <input
-            autoFocus={autoFocus}
             value={query}
             maxLength={120}
             onChange={(e) => setQuery(e.target.value)}
