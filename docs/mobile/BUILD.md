@@ -148,6 +148,8 @@ cd mobile\android
 
 `-PoaVersionName` 只用于构建测试包，正式发版不要用。测试包同样用正式密钥签名，可以与正式包互相覆盖升级。
 
+可以同时加 `'-PoaVersionCode=<N>'` 核对 versionCode：它不会单独改 versionCode，与按 §2 规则算出的值不一致时构建直接失败。
+
 ## 7. 常见问题
 
 | 现象 | 原因 / 处理 |

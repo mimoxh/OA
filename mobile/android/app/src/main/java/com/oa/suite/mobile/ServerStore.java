@@ -26,19 +26,24 @@ final class ServerStore {
         return c.getApplicationContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE);
     }
 
-    /** 规范化为 scheme://host[:port][/path]（无结尾斜杠），只接受 http / https；无效时返回 null。 */
+    /**
+     * 规范化为 scheme://host[:port][/path]（无结尾斜杠），只接受 http / https；无效时返回 null。
+     * 没写协议时补 http://（与启动页 www/server-url.js 一致）。
+     */
     static String normalize(String raw) {
         if (raw == null) return null;
         String v = raw.trim();
+        boolean hasScheme = v.matches("(?is)^[a-z][a-z0-9+.-]*://.*");
         while (v.endsWith("/")) v = v.substring(0, v.length() - 1);
         if (v.isEmpty()) return null;
-        if (!v.matches("(?i)^[a-z][a-z0-9+.-]*://.*")) v = "http://" + v;
+        if (!hasScheme) v = "http://" + v;
         try {
             URI u = new URI(v);
             String scheme = u.getScheme() == null ? "" : u.getScheme().toLowerCase(Locale.ROOT);
             if (!scheme.equals("http") && !scheme.equals("https")) return null;
             String host = u.getHost();
-            if (host == null || host.isEmpty()) return null;
+            if (host == null || host.isEmpty() || u.getRawUserInfo() != null) return null;
+            if (u.getPort() > 65535) return null;
             StringBuilder sb = new StringBuilder(scheme).append("://").append(host.toLowerCase(Locale.ROOT));
             if (u.getPort() > 0) sb.append(':').append(u.getPort());
             String path = u.getRawPath();

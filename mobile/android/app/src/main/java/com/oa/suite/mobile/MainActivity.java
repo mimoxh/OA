@@ -5,9 +5,21 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.SystemClock;
+import android.util.TypedValue;
+import android.view.Gravity;
+import android.view.View;
+import android.view.ViewGroup;
 import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
+import android.widget.Button;
+import android.widget.FrameLayout;
+import android.widget.LinearLayout;
+import android.widget.ProgressBar;
+import android.widget.TextView;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import com.getcapacitor.BridgeActivity;
@@ -30,12 +42,26 @@ public class MainActivity extends BridgeActivity {
 
     private static final String LOCAL_ORIGIN = "https://localhost";
     private static final int REQ_NOTIFICATIONS = 4101;
+    /** 加载超过这个时间还没出首帧才显示「正在连接」，正常打开时不闪一下 */
+    private static final long OVERLAY_DELAY_MS = 600;
 
     private String serverUrl;
     private volatile String mainFrameUrl;
     private volatile String failedUrl;
     private volatile String failedKind;
     private volatile String failedReason;
+
+    private final Handler handler = new Handler(Looper.getMainLooper());
+    private LoadWatchdog watchdog;
+    /** 当前显示的是已出首帧的远程页面（不是空白、也不是包内页面） */
+    private boolean remoteVisible;
+    /** 看门狗停止的那次加载：stopLoading 之后 WebView 可能再报 ERR_ABORTED，不能覆盖超时原因 */
+    private String timedOutUrl;
+    private View loadingOverlay;
+    private TextView loadingServer;
+    private final Runnable showOverlay = () -> {
+        if (loadingOverlay != null && watchdog != null && watchdog.isPending()) loadingOverlay.setVisibility(View.VISIBLE);
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -66,8 +92,17 @@ public class MainActivity extends BridgeActivity {
         if (bridge != null) {
             WebView webView = bridge.getWebView();
             bridge.setWebViewClient(new OAWebViewClient(bridge, this));
-            webView.setDownloadListener(new OADownloadListener(this));
+            OADownloadListener downloads = new OADownloadListener(this);
+            webView.setDownloadListener((url, userAgent, contentDisposition, mimeType, contentLength) -> {
+                // 主框架导航变成了下载：不会再出首帧，停止计时
+                if (watchdog != null && watchdog.isPending()) onMainFrameSettled(null);
+                downloads.onDownloadStart(url, userAgent, contentDisposition, mimeType, contentLength);
+            });
             webView.addJavascriptInterface(new ErrorPageBridge(), "OAShellNative");
+            watchdog = new LoadWatchdog(new MainThreadScheduler(handler), this::onLoadTimeout, LoadWatchdog.DEFAULT_TIMEOUT_MS);
+            addLoadingOverlay();
+            // Bridge 在 super.onCreate() 里已经对 appUrl 调用了 loadUrl，这里只补上计时
+            if (serverUrl != null) watchLoad(bridge.getAppUrl());
         }
 
         if (serverUrl != null && RtService.shouldRun(this)) {
@@ -137,14 +172,143 @@ public class MainActivity extends BridgeActivity {
 
     void onMainFrameError(String url, String kind, String reason) {
         if (url != null && url.startsWith(LOCAL_ORIGIN + "/")) return;
+        onMainFrameSettled(null);
         failedUrl = url;
         failedKind = kind;
         failedReason = reason;
     }
 
+    /** 看门狗主动停止的加载随后报的错（通常是 ERR_ABORTED）：忽略，错误页已经显示超时原因 */
+    boolean isAbortedByWatchdog(String url, String description) {
+        if (timedOutUrl == null) return false;
+        return timedOutUrl.equals(url) || (description != null && description.contains("ERR_ABORTED"));
+    }
+
     void showErrorPage() {
         String errorUrl = bridge == null ? null : bridge.getErrorUrl();
         if (errorUrl != null) runOnUiThread(() -> bridge.getWebView().loadUrl(errorUrl));
+    }
+
+    /** 壳层自己发起的远程主文档加载（重试、通知深链）都走这里，统一计时 */
+    void loadRemote(String url) {
+        if (bridge == null) return;
+        watchLoad(url);
+        bridge.getWebView().loadUrl(url);
+    }
+
+    private void watchLoad(String url) {
+        if (watchdog == null) return;
+        timedOutUrl = null;
+        watchdog.arm(url);
+        handler.removeCallbacks(showOverlay);
+        if (!watchdog.isPending()) return;
+        // 已经显示着远程页面时（例如点通知深链），WebView 会保留旧页面直到新页面出首帧，不需要遮罩
+        if (!remoteVisible) {
+            if (loadingServer != null) loadingServer.setText(serverUrl == null ? "" : serverUrl);
+            handler.postDelayed(showOverlay, OVERLAY_DELAY_MS);
+        }
+    }
+
+    /** 主框架出了首帧 / 加载完成（url 为 null 表示已转为下载或由 WebView 报错） */
+    void onMainFrameSettled(String url) {
+        if (url != null && !url.startsWith("http://") && !url.startsWith("https://")) return;
+        if (url != null) remoteVisible = LoadWatchdog.isRemoteDocument(url);
+        if (watchdog != null) watchdog.settle();
+        hideLoadingOverlay();
+    }
+
+    private void onLoadTimeout(String url) {
+        if (bridge == null || isFinishing() || isDestroyed()) return;
+        timedOutUrl = url;
+        failedUrl = url;
+        failedKind = "timeout";
+        failedReason = "服务器 " + (watchdog.timeoutMs() / 1000) + " 秒内没有响应";
+        remoteVisible = false;
+        hideLoadingOverlay();
+        WebView webView = bridge.getWebView();
+        webView.stopLoading();
+        String errorUrl = bridge.getErrorUrl();
+        if (errorUrl != null) webView.loadUrl(errorUrl);
+    }
+
+    private void hideLoadingOverlay() {
+        handler.removeCallbacks(showOverlay);
+        if (loadingOverlay != null) loadingOverlay.setVisibility(View.GONE);
+    }
+
+    /** 空白等待期间的轻量加载态：显示正在连接的地址，并直接提供「切换服务器」 */
+    private void addLoadingOverlay() {
+        FrameLayout root = new FrameLayout(this);
+        root.setBackgroundColor(0xFFF7F7F5);
+        root.setClickable(true);
+        root.setVisibility(View.GONE);
+
+        LinearLayout col = new LinearLayout(this);
+        col.setOrientation(LinearLayout.VERTICAL);
+        col.setGravity(Gravity.CENTER_HORIZONTAL);
+        int pad = dp(24);
+        col.setPadding(pad, pad, pad, pad);
+
+        ProgressBar spinner = new ProgressBar(this);
+        spinner.setIndeterminate(true);
+        col.addView(spinner, new LinearLayout.LayoutParams(dp(40), dp(40)));
+
+        TextView title = new TextView(this);
+        title.setText("正在连接 OA 服务器…");
+        title.setTextColor(0xFF37352F);
+        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 17);
+        title.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.topMargin = dp(16);
+        col.addView(title, lp);
+
+        loadingServer = new TextView(this);
+        loadingServer.setTextColor(0xFF6B6A65);
+        loadingServer.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        loadingServer.setGravity(Gravity.CENTER);
+        lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.topMargin = dp(6);
+        col.addView(loadingServer, lp);
+
+        Button change = new Button(this);
+        change.setText("切换服务器");
+        change.setAllCaps(false);
+        change.setOnClickListener(v -> switchTo(null));
+        lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.topMargin = dp(24);
+        col.addView(change, lp);
+
+        root.addView(col, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER));
+        addContentView(root, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        loadingOverlay = root;
+    }
+
+    private int dp(int v) {
+        return Math.round(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v, getResources().getDisplayMetrics()));
+    }
+
+    private static final class MainThreadScheduler implements LoadWatchdog.Scheduler {
+        private final Handler handler;
+
+        MainThreadScheduler(Handler handler) {
+            this.handler = handler;
+        }
+
+        @Override
+        public long now() {
+            return SystemClock.uptimeMillis();
+        }
+
+        @Override
+        public Object schedule(Runnable task, long delayMs) {
+            handler.postDelayed(task, delayMs);
+            return task;
+        }
+
+        @Override
+        public void cancel(Object handle) {
+            handler.removeCallbacks((Runnable) handle);
+        }
     }
 
     @Override
@@ -168,7 +332,7 @@ public class MainActivity extends BridgeActivity {
         }
         intent.removeExtra(EXTRA_PATH);
         clearConversationNotification(path);
-        bridge.getWebView().loadUrl(serverUrl + path);
+        loadRemote(serverUrl + path);
     }
 
     @Override
@@ -176,6 +340,7 @@ public class MainActivity extends BridgeActivity {
         super.onStart();
         AppState.setForeground(true);
         RtService.kick();
+        if (watchdog != null) watchdog.resume();
     }
 
     @Override
@@ -190,6 +355,14 @@ public class MainActivity extends BridgeActivity {
         super.onStop();
         AppState.setForeground(false);
         RtService.kick();
+        if (watchdog != null) watchdog.pause();
+    }
+
+    @Override
+    public void onDestroy() {
+        if (watchdog != null) watchdog.settle();
+        handler.removeCallbacksAndMessages(null);
+        super.onDestroy();
     }
 
     /** 点通知打开会话时立即撤销该会话的提醒（页面标记已读后服务端还会发 push.clear） */
@@ -236,7 +409,7 @@ public class MainActivity extends BridgeActivity {
         public void retry() {
             if (!fromLocalPage() || serverUrl == null) return;
             String target = failedUrl != null && failedUrl.startsWith(serverUrl) ? failedUrl : serverUrl;
-            runOnUiThread(() -> bridge.getWebView().loadUrl(target));
+            runOnUiThread(() -> loadRemote(target));
         }
 
         @JavascriptInterface

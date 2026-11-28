@@ -38,6 +38,8 @@ import java.util.Locale;
 )
 public class OAShellPlugin extends Plugin {
 
+    static final String INVALID_URL = "地址格式不正确，例如 192.168.1.20:3000 或 https://oa.example.com";
+
     /** 各厂商“自启动 / 后台运行”管理页（不同系统版本路径不同，依次尝试） */
     private static final String[][] AUTOSTART = {
         { "xiaomi", "com.miui.securitycenter", "com.miui.permcenter.autostart.AutoStartManagementActivity" },
@@ -264,7 +266,7 @@ public class OAShellPlugin extends Plugin {
     public void probe(PluginCall call) {
         String url = ServerStore.normalize(call.getString("url"));
         if (url == null) {
-            call.reject("请输入有效的服务器地址（http:// 或 https://）");
+            call.reject(INVALID_URL);
             return;
         }
         new Thread(() -> {
@@ -318,7 +320,7 @@ public class OAShellPlugin extends Plugin {
     public void connect(PluginCall call) {
         String url = ServerStore.normalize(call.getString("url"));
         if (url == null) {
-            call.reject("请输入有效的服务器地址（http:// 或 https://）");
+            call.reject(INVALID_URL);
             return;
         }
         call.resolve();
