@@ -14,6 +14,7 @@ import com.getcapacitor.BridgeWebViewClient;
  * 在 Capacitor 默认行为上收窄错误页：BridgeWebViewClient 对主框架的任意 HTTP 错误（含 404/401）
  * 都会跳到 errorPath，远程 OA 的 404 页、登录跳转等会被误判为“连不上服务器”。
  * 这里只在网络错误、证书错误与网关类 5xx 时显示包内错误页，并记录失败地址供“重试”使用。
+ * 首帧 / 加载完成时通知 MainActivity 停止加载看门狗（见 LoadWatchdog）。
  */
 class OAWebViewClient extends BridgeWebViewClient {
 
@@ -39,15 +40,26 @@ class OAWebViewClient extends BridgeWebViewClient {
     }
 
     @Override
+    public void onPageCommitVisible(WebView view, String url) {
+        super.onPageCommitVisible(view, url);
+        activity.onMainFrameSettled(url);
+    }
+
+    @Override
     public void onPageFinished(WebView view, String url) {
         super.onPageFinished(view, url);
+        activity.onMainFrameSettled(url);
         CookieManager.getInstance().flush();
     }
 
     @Override
     public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
         if (request.isForMainFrame()) {
-            activity.onMainFrameError(request.getUrl().toString(), "network", String.valueOf(error.getDescription()));
+            String url = request.getUrl().toString();
+            String description = String.valueOf(error.getDescription());
+            // 看门狗已停止这次加载并切到错误页，不再重复跳转、也不覆盖「超时」原因
+            if (activity.isAbortedByWatchdog(url, description)) return;
+            activity.onMainFrameError(url, "network", description);
         }
         super.onReceivedError(view, request, error);
     }

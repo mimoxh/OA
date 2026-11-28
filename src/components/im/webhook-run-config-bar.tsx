@@ -80,8 +80,8 @@ function Pill({
         aria-label={`${RUN_FIELD_META[field].title}：${title}`}
         className={cn(
           "inline-flex h-7 min-w-11 max-w-48 items-center gap-1 rounded-md px-1.5 text-xs transition-colors outline-none",
-          // 窄屏时模型 ID 最先截断，基座次之，强度值很短保持完整
-          field === "model" ? "shrink-[4]" : field === "agent" ? "shrink" : "shrink-0",
+          // 窄屏时只压缩模型 ID；基座名较短，单独限宽，避免「Claude」这类短名也被截断
+          field === "model" ? "shrink" : field === "agent" ? "max-w-32 shrink-0" : "shrink-0",
           "focus-visible:ring-[3px] focus-visible:ring-accent/15 disabled:cursor-default",
           overridden
             ? "bg-accent-soft text-accent-hover hover:bg-accent-soft/70 data-[state=open]:bg-accent-soft/70"
@@ -102,8 +102,21 @@ function Pill({
   );
 }
 
+/** 弹层与屏幕边缘的最小间距（px） */
+const EDGE = 8;
+type Padding = number | { top: number; right: number; bottom: number; left: number };
+
+/** 弹层向上展开，顶部要让开手机状态栏：手机布局下 body 的 padding-top 就是 --sat（桌面为 0） */
+function popoverPadding(): Padding {
+  const top = parseFloat(getComputedStyle(document.body).paddingTop) || 0;
+  return { top: top + EDGE, right: EDGE, bottom: EDGE, left: EDGE };
+}
+
+// 弹层宽度不超过屏幕，高度不超过触发点上方的可用空间（放不下时内部滚动，不被状态栏 / 输入法裁切）
+const POPOVER_FIT = "max-h-(--radix-popover-content-available-height) max-w-[calc(100vw-16px)] overflow-y-auto";
+
 /**
- * 嵌入 IM 输入框工具栏的 Webhook 运行配置：选择结果按会话持久化，并在出站 payload.metadata 中生效。
+ * 显示在 IM 输入框正上方的 Webhook 运行配置条：选择结果按会话持久化，并在出站 payload.metadata 中生效。
  * 基座 / 模型 / 强度选项来自本机 Orca（模型随基座切换，强度随模型切换），读取失败时使用预设且可手动输入。
  * 未覆盖时显示机器人默认值（中性色），会话已覆盖的项以柔和强调色胶囊显示。
  */
@@ -121,6 +134,7 @@ export function WebhookRunConfigBar({
   const [override, setOverride] = useState<RunMetadata>(initialOverride);
   const [open, setOpen] = useState<Field | null>(null);
   const [agentDraft, setAgentDraft] = useState("");
+  const [padding, setPadding] = useState<Padding>(EDGE);
 
   const defaults = useMemo(
     () => ({ agent: sharedDefault(bots, "agent"), model: sharedDefault(bots, "model"), effort: sharedDefault(bots, "effort") }),
@@ -170,7 +184,10 @@ export function WebhookRunConfigBar({
   };
 
   const onOpenChange = (field: Field) => (next: boolean) => {
-    if (next) setAgentDraft("");
+    if (next) {
+      setAgentDraft("");
+      setPadding(popoverPadding());
+    }
     setOpen(next ? field : null);
   };
 
@@ -197,7 +214,7 @@ export function WebhookRunConfigBar({
           disabled={pending}
           title={stateTitle("agent")}
         />
-        <PopoverContent side="top" align="end" className="w-72 p-1" onKeyDown={onRunListKeyDown}>
+        <PopoverContent side="top" align="start" collisionPadding={padding} className={cn("w-72 p-1", POPOVER_FIT)} onKeyDown={onRunListKeyDown}>
           <PanelHeader field="agent" who={who} />
           <RunOption
             selected={!override.agent}
@@ -243,7 +260,7 @@ export function WebhookRunConfigBar({
           mono={!modelEntry}
           warn={modelWarn}
         />
-        <PopoverContent side="top" align="end" className="w-80 p-1" onKeyDown={onRunListKeyDown}>
+        <PopoverContent side="top" align="start" collisionPadding={padding} className={cn("w-80 p-1", POPOVER_FIT)} onKeyDown={onRunListKeyDown}>
           <PanelHeader field="model" who={who} />
           <ModelOptions
             autoFocus
@@ -268,7 +285,7 @@ export function WebhookRunConfigBar({
           title={effortWarn ? `${stateTitle("effort")}；不在当前模型支持的档位中` : stateTitle("effort")}
           warn={effortWarn}
         />
-        <PopoverContent side="top" align="end" className="w-60 p-1" onKeyDown={onRunListKeyDown}>
+        <PopoverContent side="top" align="start" collisionPadding={padding} className={cn("w-60 p-1", POPOVER_FIT)} onKeyDown={onRunListKeyDown}>
           <PanelHeader field="effort" who={who} />
           <EffortOptions
             catalog={catalog}

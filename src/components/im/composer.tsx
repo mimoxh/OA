@@ -80,7 +80,7 @@ export function Composer({
   onClearReply,
   threadRootId = null,
   compact = false,
-  toolbar,
+  topBar,
 }: {
   conv: ConversationDTO;
   me: UserLite;
@@ -88,8 +88,8 @@ export function Composer({
   onClearReply?: () => void;
   threadRootId?: string | null;
   compact?: boolean;
-  /** 附加在输入框工具栏（表情 / 图片 / 文件之后）的会话级控件 */
-  toolbar?: ReactNode;
+  /** 显示在圆角输入框正上方的会话级控件条（如 Webhook 运行配置），窄屏放不下时横向滚动 */
+  topBar?: ReactNode;
 }) {
   const convId = conv.id;
   const composerKey = threadRootId ? `${convId}:thread:${threadRootId}` : convId;
@@ -292,6 +292,12 @@ export function Composer({
           e.target.value = "";
         }}
       />
+      {topBar && (
+        // overflow-x 会连带裁剪纵向：留出 py 给胶囊的焦点环
+        <div className="-mx-1 -mt-0.5 mb-1 flex min-w-0 items-center overflow-x-auto px-1 py-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" data-composer-top-bar>
+          {topBar}
+        </div>
+      )}
       {!threadRootId && replyTo && (
         <div className="mb-1.5 flex items-center gap-1.5 rounded-md bg-sidebar px-2.5 py-1.5 text-xs text-ink-2">
           <CornerUpLeft className="size-3.5 shrink-0 text-ink-3" />
@@ -313,7 +319,7 @@ export function Composer({
         <div className="max-h-36 overflow-y-auto">
           <EditorContent editor={editor} />
         </div>
-        <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 px-2 pb-1.5">
+        <div className="flex items-center justify-between gap-2 px-2 pb-1.5">
           <div className="flex items-center gap-0.5">
             <EmojiPicker onSelect={(e) => editor?.chain().focus().insertContent(e).run()}>
               <button type="button" className="rounded-md p-1.5 text-ink-2 hover:bg-hover pointer-coarse:p-2" title="表情" aria-label="表情">
@@ -339,21 +345,18 @@ export function Composer({
               <Paperclip className="size-4" />
             </button>
           </div>
-          <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1">
-            {toolbar}
-            <button
-              type="button"
-              onClick={() => send()}
-              disabled={empty}
-              className={cn(
-                "flex h-7 shrink-0 items-center gap-1 rounded-md px-2.5 text-[13px] font-medium",
-                empty ? "text-ink-3" : "bg-accent text-white hover:bg-accent-hover",
-              )}
-            >
-              <SendHorizontal className="size-3.5" />
-              发送
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => send()}
+            disabled={empty}
+            className={cn(
+              "flex h-7 shrink-0 items-center gap-1 rounded-md px-2.5 text-[13px] font-medium",
+              empty ? "text-ink-3" : "bg-accent text-white hover:bg-accent-hover",
+            )}
+          >
+            <SendHorizontal className="size-3.5" />
+            发送
+          </button>
         </div>
       </div>
       {!compact && (

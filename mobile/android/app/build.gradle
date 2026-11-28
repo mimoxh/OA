@@ -11,7 +11,13 @@ def oaVersion = { ->
     def name = (project.findProperty('oaVersionName') ?: new JsonSlurper().parse(file('../../../package.json')).version).toString()
     def m = name =~ /^(\d{1,4})\.(\d{1,2})\.(\d{1,2})$/
     if (!m.matches()) throw new GradleException("版本号必须是 X.Y.Z 且 Y、Z 不超过 99：${name}")
-    return [name: name, code: (m.group(1) as int) * 10000 + (m.group(2) as int) * 100 + (m.group(3) as int)]
+    def code = (m.group(1) as int) * 10000 + (m.group(2) as int) * 100 + (m.group(3) as int)
+    // -PoaVersionCode 只用来核对，不能脱离统一规则单独指定
+    def expected = project.findProperty('oaVersionCode')
+    if (expected != null && expected.toString() != code.toString()) {
+        throw new GradleException("oaVersionCode=${expected} 与 versionName ${name} 不符，按规则应为 ${code}")
+    }
+    return [name: name, code: code]
 }()
 
 /*
